@@ -12,6 +12,7 @@
 
 const AU_KEY = 'sb.audio.v1', AU_STATE_KEY = 'sb.audio.state.v1', AU_HIDE_LS = 'sb.audio.cb.hidden', AU_ZOOM_LS = 'sb.audio.cbZoom';
 const AU_ISSUE_TYPES = ['要货', '定价', '配件', '认证', '促销', '其他'];
+const AU_ISSUE_STATUS = ['进行中', '待跟进', '有风险', '已闭环'];
 /* R1 产业切换(音频/平板):看板不再写死音频。
    exact = 优先精确命中的维度值(平板);re = 兜底的包含式匹配(音频没有统一写法,只能按"含音频")。
    同一套规则同时用于 财经 LV1 与 PSI 的 line/family 维度值探测。 */
@@ -65,6 +66,8 @@ function auDefaultData() {
       lineSel: [], familySel: [], seriesSel: [], prodSel: null, modelSel: [], from: '2026-01-01', to: '',
     },
     countries: [], title: { text: '', size: 15, bold: false },
+    // 收件人/抄送/主题：随存档走，下次开软件还在（用户从 Outlook 复制上一封的收件人粘进来）
+    mail: { to: '', cc: '', subject: '' },
     blocks: [],
   };
 }
@@ -73,6 +76,7 @@ function auLoad() {
   let d = null; try { d = JSON.parse(localStorage.getItem(AU_KEY)); } catch (e) { }
   auW.data = Object.assign(auDefaultData(), d || {});
   auW.data.bounty = Object.assign(auDefaultData().bounty, (d && d.bounty) || {});
+  auW.data.mail = Object.assign(auDefaultData().mail, (d && d.mail) || {});
   auW.data.title = Object.assign(auDefaultData().title, (d && d.title) || {});
   return auW.data;
 }
@@ -220,6 +224,7 @@ function renderAudio() {
       '  <label>产业</label><div class="seg" id="auIndSeg">' + AU_INDS.map(o => `<button data-ind="${o.key}">${o.label}</button>`).join('') + '</div>' +
       '  <span class="au-note" id="auIndNote"></span>' +
       '</div>' +
+      '<div class="au-toolbar" id="auMailBar" style="margin-bottom:2px;flex-wrap:wrap;gap:6px"></div>' +
       '<div class="au-toolbar" id="auExportBar" style="justify-content:flex-end;margin-bottom:2px">' +
       '  <span class="au-note">一键导出整份周报 ▸</span>' +
       '  <button class="btn" id="auExpPpt">📑 PPT</button>' +
@@ -239,6 +244,7 @@ function renderAudio() {
     if (seg) seg.querySelectorAll('button').forEach(b => b.onclick = () => auSwitchIndustry(b.dataset.ind));
   }
   auSyncIndSeg();
+  renderAuMail();
   renderAuIssues();
   renderAuFin();
   renderAuBounty();
@@ -257,32 +263,102 @@ function auSyncIndSeg() {
 /* ============================================================
    M1 遗留问题(可编辑表)
    ============================================================ */
+/* 收件人 / 抄送 / 主题 —— 存进存档，下次开软件还在。
+   用户的用法是：在工作电脑上打开上一封周报，把收件人栏整段复制粘贴进来。
+   所以这里不做任何格式校验，原样收下；到导出 .eml 时才由 formatAddrList 规范化
+   （分号转逗号、中文显示名按 RFC2047 编码），避免在输入时跟用户较劲。 */
+function renderAuMail() {
+  const host = $('#auMailBar'); if (!host) return;
+  const D = auLoad(), M = D.mail || (D.mail = { to: '', cc: '', subject: '' });
+  const defSubj = auIndustryLabel() + '产业周报 ' + auIsoWeekStr();
+  host.innerHTML =
+    '<label style="white-space:nowrap">收件人</label>'
+    + '<input id="auMailTo" value="' + auEsc(M.to) + '" placeholder="从 Outlook 复制粘贴即可，支持「张三 &lt;a@x.com&gt;; 李四 &lt;b@x.com&gt;」" style="flex:1;min-width:260px">'
+    + '<label style="white-space:nowrap">抄送</label>'
+    + '<input id="auMailCc" value="' + auEsc(M.cc) + '" placeholder="可留空" style="flex:1;min-width:200px">'
+    + '<label style="white-space:nowrap">主题</label>'
+    + '<input id="auMailSubj" value="' + auEsc(M.subject) + '" placeholder="' + auEsc(defSubj) + '" style="flex:1;min-width:200px" title="留空则用默认：' + auEsc(defSubj) + '">';
+  const bind = (id, k) => { const el = $(id); if (el) el.onchange = () => { M[k] = el.value; auSave(); }; };
+  bind('#auMailTo', 'to'); bind('#auMailCc', 'cc'); bind('#auMailSubj', 'subject');
+}
+// 当前 ISO 周标签（与导出模型同一口径）
+function auIsoWeekStr() {
+  const d = new Date();
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dn = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dn);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const wk = Math.ceil(((t - y0) / 86400000 + 1) / 7);
+  return t.getUTCFullYear() + '-W' + String(wk).padStart(2, '0');
+}
 function renderAuIssues() {
   const host = $('#auSecIssues'); if (!host) return;
   const D = auLoad();
   const today = todayStr();
-  const rowHtml = (r, i) => {
-    const over = r.due && r.due < today;
+  /* 排序：有风险 → 已超期 → 按截止时间近的在前 → 已闭环沉底。
+     周报第一段就是这张表，最该被看见的必须排在最上面，而不是按录入顺序。
+     排序只影响显示与导出，不动存档里的原始顺序（用 idx 回指原行）。 */
+  const rank = r => (r.status === '已闭环' ? 3 : (r.status === '有风险' ? 0 : ((r.due && r.due < today) ? 1 : 2)));
+  const view = D.issues.map((r, idx) => ({ r, idx })).sort((a, b) => {
+    const ra = rank(a.r), rb = rank(b.r);
+    if (ra !== rb) return ra - rb;
+    const da = a.r.due || '9999-12-31', db = b.r.due || '9999-12-31';
+    return da < db ? -1 : (da > db ? 1 : a.idx - b.idx);
+  });
+  const dayDiff = due => {
+    if (!due) return null;
+    return Math.round((Date.parse(due + 'T00:00:00') - Date.parse(today + 'T00:00:00')) / 86400000);
+  };
+  const rowHtml = ({ r, idx }) => {
+    const i = idx;
+    const dd = dayDiff(r.due), closed = r.status === '已闭环';
+    const over = dd != null && dd < 0 && !closed;
+    const soon = dd != null && dd >= 0 && dd <= 7 && !closed;
+    const tip = closed ? '已闭环' : (dd == null ? '' : (dd < 0 ? '已超期 ' + (-dd) + ' 天' : (dd === 0 ? '今天到期' : '还剩 ' + dd + ' 天')));
     const typeOpts = AU_ISSUE_TYPES.concat(AU_ISSUE_TYPES.includes(r.type) || !r.type ? [] : [r.type]);
-    return `<tr>
+    const stOpts = AU_ISSUE_STATUS.concat(AU_ISSUE_STATUS.includes(r.status) || !r.status ? [] : [r.status]);
+    return `<tr${closed ? ' style="opacity:.55"' : ''}>
       <td style="width:76px"><select data-i="${i}" data-k="type">${typeOpts.map(t => `<option ${t === r.type ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
       <td><input data-i="${i}" data-k="todo" value="${auEsc(r.todo)}" placeholder="待办事项"></td>
       <td><input data-i="${i}" data-k="prog" value="${auEsc(r.prog)}" placeholder="进展"></td>
-      <td style="width:120px" class="${over ? 'au-overdue' : ''}"><input type="date" data-i="${i}" data-k="due" value="${auEsc(r.due)}" title="${over ? '已超期' : ''}"></td>
+      <td style="width:84px"><select data-i="${i}" data-k="status">${stOpts.map(t => `<option ${t === (r.status || '进行中') ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td style="width:132px" class="${over ? 'au-overdue' : ''}"><input type="date" data-i="${i}" data-k="due" value="${auEsc(r.due)}" title="${auEsc(tip)}">${tip ? `<div style="font-size:10px;color:${over ? 'var(--c-brand)' : (soon ? '#C98A00' : 'var(--c-ink-3)')}">${auEsc(tip)}</div>` : ''}</td>
       <td style="width:150px"><input data-i="${i}" data-k="geo" value="${auEsc(r.geo)}" placeholder="所有国家/某国家办"></td>
       <td style="width:24px"><button class="au-del" data-del="${i}" title="删除此行">✕</button></td>
     </tr>`;
   };
-  host.innerHTML = '<div class="au-sec-t">M1 · 遗留问题<span class="au-note">直接在表格里录入/修改，自动保存进存档；截止时间已超期标红</span></div>'
-    + '<div class="fa-wrap"><table class="au-edit"><thead><tr><th>类型</th><th>待办</th><th>进展</th><th>截止时间</th><th>涉及国家/国家办</th><th></th></tr></thead><tbody>'
-    + (D.issues.length ? D.issues.map(rowHtml).join('') : '<tr><td colspan="6" class="au-empty">暂无遗留问题，点下方「＋加一行」</td></tr>')
+  const nOver = D.issues.filter(r => r.status !== '已闭环' && r.due && r.due < today).length;
+  const nRisk = D.issues.filter(r => r.status === '有风险').length;
+  const nOpen = D.issues.filter(r => r.status !== '已闭环').length;
+  const badge = D.issues.length
+    ? `　<b>${nOpen}</b> 项未闭环` + (nRisk ? `　<span style="color:var(--c-brand)"><b>${nRisk}</b> 项有风险</span>` : '')
+      + (nOver ? `　<span style="color:var(--c-brand)"><b>${nOver}</b> 项已超期</span>` : '')
+    : '';
+  host.innerHTML = '<div class="au-sec-t">M1 · 遗留问题<span class="au-note">直接在表格里录入/修改，自动保存进存档；有风险与已超期自动排到最上面，已闭环沉底' + badge + '</span></div>'
+    + '<div class="fa-wrap"><table class="au-edit"><thead><tr><th>类型</th><th>待办</th><th>进展</th><th>状态</th><th>截止时间</th><th>涉及国家/国家办</th><th></th></tr></thead><tbody>'
+    + (view.length ? view.map(rowHtml).join('') : '<tr><td colspan="7" class="au-empty">暂无遗留问题，点下方「＋加一行」</td></tr>')
     + '</tbody></table></div>'
     + '<button class="btn au-add" id="auIssueAdd">＋加一行</button>';
   host.querySelectorAll('input,select').forEach(el => {
-    el.onchange = () => { const i = +el.dataset.i, k = el.dataset.k; if (D.issues[i]) { D.issues[i][k] = el.value; auSave(); if (k === 'due') renderAuIssues(); } };
+    el.onchange = () => { const i = +el.dataset.i, k = el.dataset.k; if (D.issues[i]) { D.issues[i][k] = el.value; auSave(); if (k === 'due' || k === 'status') renderAuIssues(); } };
   });
   host.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { D.issues.splice(+b.dataset.del, 1); auSave(); renderAuIssues(); });
-  $('#auIssueAdd').onclick = () => { D.issues.push({ type: '要货', todo: '', prog: '', due: '', geo: '所有国家' }); auSave(); renderAuIssues(); };
+  $('#auIssueAdd').onclick = () => { D.issues.push({ type: '要货', todo: '', prog: '', status: '进行中', due: '', geo: '所有国家' }); auSave(); renderAuIssues(); };
+}
+/* 导出用：与界面同一套排序，外加「已超期 N 天」这种人读得懂的说明 */
+function auIssuesForExport() {
+  const D = auLoad(), today = todayStr();
+  const rank = r => (r.status === '已闭环' ? 3 : (r.status === '有风险' ? 0 : ((r.due && r.due < today) ? 1 : 2)));
+  return D.issues.slice().sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return (a.due || '9999-12-31') < (b.due || '9999-12-31') ? -1 : 1;
+  }).map(r => {
+    const dd = r.due ? Math.round((Date.parse(r.due + 'T00:00:00') - Date.parse(today + 'T00:00:00')) / 86400000) : null;
+    const note = r.status === '已闭环' ? '' : (dd == null ? '' : (dd < 0 ? '已超期' + (-dd) + '天' : (dd <= 7 ? '剩' + dd + '天' : '')));
+    return { type: r.type || '', todo: r.todo || '', prog: r.prog || '', status: r.status || '进行中',
+      due: (r.due || '') + (note ? '（' + note + '）' : ''), geo: r.geo || '' };
+  });
 }
 function auEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 
@@ -452,25 +528,28 @@ async function renderAuBountyImpl() {
   const D = auLoad(), B = D.bounty, AW = auAW();
   const head = extra => '<div class="au-sec-t">M3 · $0-50美金扩大覆盖悬赏奖 SI 进展' + (extra || '') + '</div>';
   if (!state.dims.length) { host.innerHTML = head() + '<div class="au-empty">请先锚定 PSI 数据或载入示例。</div>'; return; }
-  await auBountyOpts();
-  // 默认产品集:用户没手选过(prodSel===null)时,按 SE2/SE3/SE4 规则自动匹配
-  const defPick = (AW && B.prodSel === null) ? AW.defaultPick(auW.prodOpts) : null;
-  const selP = B.prodSel === null ? (defPick || []) : B.prodSel;
-  const selM = B.modelSel || [];
+  /* R3 五级筛选:产品线/Family/系列/产品/型号 逐级级联。
+     （auBountyOpts 是 R3 之前的两字段版本,重构时删掉了却漏改这两处调用,
+       导致 M3 与 M5 一渲染就抛 ReferenceError、整块出不来。现在改用 auBountyResolve。） */
+  await auEnsureCtryOpts();
+  const RES = await auBountyResolve(B);
   const toDate = B.to || todayStr();
   const prog = AW ? AW.timeProgress(toDate) : null;
-  host.innerHTML = head(`<span class="au-note">累计SI=Sell-in(渠道全加) · 截止 ${toDate} · 时间进度 <b>${prog == null ? '—' : Math.round(prog * 100) + '%'}</b>${B.prodSel === null ? ' · 产品集=默认规则(SE2/SE3/SE4)' : ' · 产品集=手选'}</span>`)
+  host.innerHTML = head(`<span class="au-note">累计SI=Sell-in(渠道全加) · 截止 ${toDate} · 时间进度 <b>${prog == null ? '—' : Math.round(prog * 100) + '%'}</b>${RES.defaulted ? ' · 产品集=默认规则(SE2/SE3/SE4)' : ' · 产品集=手选'}</span>`)
     + '<div class="au-toolbar" id="auBountyBar"></div>'
     + '<div class="fa-wrap" id="auBountyTable">取数中…</div>'
     + '<button class="btn au-add" id="auBountyAdd">＋加国家行</button>';
-  // 工具条:产品/型号多选 + 时间范围
+  // 工具条:五级产品筛选 + 时间范围。选了上游会自动收窄下游的可选值(auBountyResolve 逐级取 options)
   const bar = $('#auBountyBar');
-  if (auW.prodOpts.length) bar.appendChild(makeMultiSelect('SI产品(Product Name)', auW.prodOpts, selP.filter(v => auW.prodOpts.includes(v)), {
-    placeholder: '全部产品', onChange: () => { }, onCommit: vals => { B.prodSel = vals; auSave(); renderAuBounty(); },
-  }));
-  if (auW.modelOpts.length) bar.appendChild(makeMultiSelect('SI型号(可再收窄)', auW.modelOpts, selM.filter(v => auW.modelOpts.includes(v)), {
-    placeholder: '不限型号', onChange: () => { }, onCommit: vals => { B.modelSel = vals; auSave(); renderAuBounty(); },
-  }));
+  AU_BOUNTY_FIELDS.forEach(d => {
+    const list = RES.opts[d.f] || [];
+    if (!list.length) return;
+    const cur = (RES.eff[d.f] || []).filter(v => list.includes(v));
+    bar.appendChild(makeMultiSelect(d.lab, list, cur, {
+      placeholder: d.ph, onChange: () => { },
+      onCommit: vals => { B[AU_BOUNTY_SELKEY[d.f]] = vals; auSave(); renderAuBounty(); },
+    }));
+  });
   const dates = document.createElement('div');
   dates.innerHTML = `<label>SI时间范围</label> <input type="date" id="auBFrom" value="${auEsc(B.from)}"> ~ <input type="date" id="auBTo" value="${auEsc(B.to)}" title="留空=今天">`;
   dates.style.cssText = 'display:flex;align-items:center;gap:4px'; bar.appendChild(dates);
@@ -478,9 +557,7 @@ async function renderAuBountyImpl() {
   $('#auBTo').onchange = e => { B.to = e.target.value; auSave(); renderAuBounty(); };
   $('#auBountyAdd').onclick = () => { B.rows.push({ country: '', space: null, share: null, target: null }); auSave(); renderAuBounty(); };
   // 取数:按国家堆叠的 Sell-in 月序列(自设区间),求和成 各国累计SI
-  const filters = Object.assign({}, auLineFilter());
-  if (selP.length) filters.product = selP;
-  if (selM.length) filters.model = selM;
+  const filters = Object.assign({}, auLineFilter(), RES.eff);
   let siBy = {}, totalAll = 0;
   try {
     const q = await api.query({ metric: 'sellIn', gran: 'month', stackDim: 'country', filters, from: B.from || undefined, to: B.to || undefined });
@@ -657,7 +734,7 @@ async function renderAuCountryImpl() {
   const D = auLoad(), T = D.title;
   const head = '<div class="au-sec-t">M5 · 产品维度<span class="au-note">标题可自己写(字号/加粗可调) · 按国家逐块看产品销量(口径同国家看板,全流程/DOS 全移植;跟随当前产业:' + auIndustryLabel() + ') · Ctrl+滚轮缩放</span></div>';
   if (!state.dims.length) { host.innerHTML = head + '<div class="au-empty">请先锚定 PSI 数据或载入示例。</div>'; return; }
-  await auDetectIndustryDim(auW.industry); await auBountyOpts();
+  await auDetectIndustryDim(auW.industry); await auEnsureCtryOpts();
   host.innerHTML = head
     + `<div class="au-toolbar"><button class="btn" id="auTBold" style="${T.bold ? 'border-color:var(--c-brand);color:var(--c-brand)' : ''}">B 加粗</button>`
     + `<label>字号</label><select id="auTSize">${[12, 13, 14, 15, 16, 18, 20, 22, 26].map(s => `<option value="${s}" ${T.size === s ? 'selected' : ''}>${s}px</option>`).join('')}</select></div>`

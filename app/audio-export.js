@@ -69,11 +69,17 @@
     if (d) w[0] = Math.max(20, w[0] + d);            // 兜底:合计恒等于 total
     return w;
   }
-  // 宽表降级:按列切块,每块 ≤ maxCols 列并重复首列(标签列)
+  /* 宽表降级:按列切块,每块 ≤ maxCols 列并重复首列(标签列)。
+     列数**均摊**到各块,不是贪心填满。贪心的话 16 列会切成 8+8+2,
+     最后那块只有 2 列却同样撑满 1000px,列宽是前两块的四倍,难看得刺眼;
+     均摊后是 6+6+6(含重复首列),三块宽度节奏一致。 */
   function chunkCols(header, rows, maxCols) {
     const hdr = header || [], rws = rows || [];
     if (hdr.length <= maxCols) return [{ header: hdr, rows: rws }];
-    const per = Math.max(1, maxCols - 1), out = [];
+    const dataCols = hdr.length - 1;                       // 首列是标签列,每块都要重复
+    const nChunk = Math.ceil(dataCols / (maxCols - 1));
+    const per = Math.ceil(dataCols / nChunk);              // 均摊
+    const out = [];
     for (let s = 1; s < hdr.length; s += per) {
       const idx = [0];
       for (let j = s; j < Math.min(s + per, hdr.length); j++) idx.push(j);
@@ -88,7 +94,9 @@
     opts = opts || {};
     const hdr = header || [], rws = rows || [];
     if (!hdr.length) return '';
-    const al = colAligns(hdr, rws), cw = colWidths(hdr, rws, W_TOTAL);
+    // opts.widths / opts.aligns:同结构的一组表共用一套列宽与对齐（见 tblGroup）
+    const al = (opts.aligns && opts.aligns.length === hdr.length) ? opts.aligns : colAligns(hdr, rws);
+    const cw = (opts.widths && opts.widths.length === hdr.length) ? opts.widths : colWidths(hdr, rws, W_TOTAL);
     const thSty = i => 'border:1px solid ' + C.line + ';background:' + C.head + ';color:' + C.ink2 + ';font-size:12px;line-height:1.5;font-weight:bold;padding:6px 10px;white-space:nowrap;text-align:' + (al[i] === 'r' ? 'right' : 'left');
     const tdSty = (i, tot, zeb) => 'border:1px solid ' + C.line + ';font-size:12px;line-height:1.5;color:' + C.ink + ';padding:6px 10px;vertical-align:middle;'
       + (al[i] === 'r' ? 'text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;' : 'text-align:left;word-break:break-word;')
@@ -104,16 +112,51 @@
   }
   function tbl(header, rows, opts) {
     const parts = chunkCols(header || [], rows || [], WIDE_COLS);
-    return parts.map((p, i) => (i ? note('（上表续 · 第 ' + (i + 1) + '/' + parts.length + ' 段，首列重复）') : '') + oneTable(p.header, p.rows, opts)).join('');
+    return parts.map((p, i) => (i ? note('（上表续 · 第 ' + (i + 1) + '/' + parts.length + ' 段，首列重复）') : '')
+      + oneTable(p.header, p.rows, Object.assign({}, opts, { widths: null, aligns: null }))).join('');
+  }
+
+  /* 一组「同结构」的表（表头逐字相同）共用一套列宽 —— 否则各表按自己的内容算宽度，
+     上下叠在一起时左右边缘全是错位的：实测 M2 的「分产品系列」与「分国家办」首列差 171px。
+     做法：把这组表的所有数据行并起来算一次宽度和对齐，再发给组内每一张表。
+     只有一张表的组不处理（没有对齐对象）。返回 item -> 分段宽度数组 的取值函数。 */
+  function sharedSegs(items) {
+    const list = (items || []).filter(t => t && (t.header || []).length && !t.img);
+    /* 签名**不含首列标签**：M2 的两张表除了首列一个叫「系列」一个叫「国家办」，
+       其余 15 个数据列一模一样 —— 按整行表头比会判成两组，就白白错开了。
+       首列宽度由合并后的行内容决定，两种标签都放得下。 */
+    const sig = t => (t.header || []).slice(1).join('|~|') + '#' + (t.header || []).length;
+    const bySig = {};
+    list.forEach(t => { (bySig[sig(t)] = bySig[sig(t)] || []).push(t); });
+    const shared = {};
+    Object.keys(bySig).forEach(k => {
+      const grp = bySig[k];
+      if (grp.length < 2) return;
+      // 用组内最长的首列标签参与宽度计算,保证两种标签都放得下
+      const hdr = grp[0].header.slice();
+      grp.forEach(t => { if (String(t.header[0]).length > String(hdr[0]).length) hdr[0] = t.header[0]; });
+      const allRows = grp.reduce((a, t) => a.concat(t.rows || []), []);
+      // 切块后每段的列集合固定，所以按段号存一套宽度
+      shared[k] = chunkCols(hdr, allRows, WIDE_COLS)
+        .map(p => ({ widths: colWidths(p.header, p.rows, W_TOTAL), aligns: colAligns(p.header, p.rows) }));
+    });
+    return t => (t && !t.img) ? (shared[sig(t)] || null) : null;
+  }
+
+  // 带共享列宽的渲染：把 tblGroup 算出来的每段宽度发给对应的段
+  function tblShared(header, rows, opts, seg) {
+    const parts = chunkCols(header || [], rows || [], WIDE_COLS);
+    return parts.map((p, i) => (i ? note('（上表续 · 第 ' + (i + 1) + '/' + parts.length + ' 段，首列重复）') : '')
+      + oneTable(p.header, p.rows, Object.assign({}, opts, seg && seg[i] ? seg[i] : {}))).join('');
   }
   // 数据块:带 img(浏览器侧已渲成 2x PNG) → 图片;否则 HTML 表(必要时按列切块)
-  function unit(t, imgMode, opts) {
+  function unit(t, imgMode, opts, seg) {
     t = t || {};
     if (t.img) {
       const src = (imgMode === 'cid' && t.cid) ? ('cid:' + t.cid) : t.img;
       return '<img src="' + src + '" width="' + W_TOTAL + '" style="width:' + W_TOTAL + 'px;display:block;border:1px solid ' + C.line + ';margin:0 0 8px" alt="' + esc(t.title || '数据表') + '">';
     }
-    return tbl(t.header, t.rows, opts || {});
+    return seg ? tblShared(t.header, t.rows, opts || {}, seg) : tbl(t.header, t.rows, opts || {});
   }
   const secT = t => '<div style="font-size:15px;font-weight:bold;line-height:1.5;color:' + C.brand + ';margin:18px 0 6px;border-left:4px solid ' + C.brand + ';padding-left:8px">' + esc(t) + '</div>';
   const subT = t => t ? '<div style="font-size:12px;font-weight:bold;line-height:1.5;color:' + C.ink + ';margin:8px 0 4px">' + esc(t) + '</div>' : '';
@@ -143,13 +186,15 @@
     if (m.summary && m.summary.length) b += cardRow(m.summary, true);
     // M1
     b += secT('一 · 遗留问题');
-    if (m.issues && m.issues.length) b += tbl(['类型', '待办', '进展', '截止时间', '涉及国家/国家办'], m.issues.map(r => [r.type, r.todo, r.prog, r.due, r.geo]));
+    if (m.issues && m.issues.length) b += tbl(['类型', '待办', '进展', '状态', '截止时间', '涉及国家/国家办'],
+      m.issues.map(r => [r.type, r.todo, r.prog, r.status || '', r.due, r.geo]));
     else b += note('（本周无遗留问题）');
     // M2
     b += secT('二 · ' + lab + '产业经营进展');
     if (m.fin && m.fin.tables && m.fin.tables.length) {
       b += note(m.fin.note);
-      m.fin.tables.forEach(t => { b += subT(t.title) + unit(t, imgMode, { totalIdx: t.totalIdx }); });
+      const finSeg = sharedSegs(m.fin.tables);
+      m.fin.tables.forEach(t => { b += subT(t.title) + unit(t, imgMode, { totalIdx: t.totalIdx }, finSeg(t)); });
     } else b += note('（未接财经数据）');
     // M3
     b += secT('三 · $0-50美金扩大覆盖悬赏奖 SI 进展');
@@ -168,10 +213,13 @@
     // M5
     b += secT('五 · 产品维度');
     if (m.title && m.title.text) b += '<div style="font-size:' + (+(m.title.size) || 15) + 'px;' + (m.title.bold ? 'font-weight:bold;' : '') + 'line-height:1.5;color:' + C.ink + ';margin:4px 0 8px">' + escBr(m.title.text) + '</div>';
-    if (m.countries && m.countries.length) m.countries.forEach(c => {
-      b += '<div style="font-size:13px;font-weight:bold;line-height:1.5;color:' + C.ink + ';margin:10px 0 4px">' + esc(c.name) + '　<span style="font-weight:normal;font-size:11px;color:' + C.ink2 + '">' + esc(c.chips || '') + '</span></div>';
-      b += unit(c, imgMode, { totalLast: !!c.hasTotal });
-    });
+    if (m.countries && m.countries.length) {
+      const cbSeg = sharedSegs(m.countries);          // 各国块表头一样 → 共用列宽,上下逐列对齐
+      m.countries.forEach(c => {
+        b += '<div style="font-size:13px;font-weight:bold;line-height:1.5;color:' + C.ink + ';margin:10px 0 4px">' + esc(c.name) + '　<span style="font-weight:normal;font-size:11px;color:' + C.ink2 + '">' + esc(c.chips || '') + '</span></div>';
+        b += unit(c, imgMode, { totalLast: !!c.hasTotal }, cbSeg(c));
+      });
+    }
     else b += note('（未添加国家）');
     // M6
     b += secT('六 · 新品进展');
@@ -194,10 +242,42 @@
 
   /* ---------- .eml(X-Unsent:1 → Outlook 草稿;multipart/related 内嵌图表/宽表 PNG) ----------
      只出版式,不挂附件——用户明确要求邮件里不要附件,M6 的文件在正文里点名即可。 */
-  function buildEml(subject, html, images) {
+  /* 收件人 / 抄送 ----------------------------------------------------
+     用户从 Outlook 复制上一封周报的收件人粘进来，形态可能是：
+       张三 <zhang@x.com>; 李四 <li@x.com>     ← 最常见
+       zhang@x.com, li@x.com                   ← 纯地址
+       张三; 李四                               ← 只有显示名（Outlook 开成草稿时按通讯录解析）
+     MIME 头里不能出现非 ASCII，所以显示名按 RFC2047 编码、地址原样保留；
+     分隔符统一成逗号（RFC 5322 的地址列表分隔符，Outlook 习惯用的分号在头里不合法）。 */
+  function formatAddrList(raw) {
+    const txt = String(raw == null ? '' : raw).trim();
+    if (!txt) return '';
+    // 先按分号切；没有分号才按逗号切（避免把「姓, 名 <a@b>」这种显示名切坏）
+    const parts = (txt.indexOf(';') >= 0 ? txt.split(';') : txt.split(',')).map(x => x.trim()).filter(Boolean);
+    const enc = n => (/^[\x20-\x7E]*$/.test(n) ? '"' + n.replace(/"/g, '') + '"' : '=?UTF-8?B?' + b64Utf8(n) + '?=');
+    const out = [];
+    parts.forEach(one => {
+      const m = /^(.*?)<([^>]+)>\s*$/.exec(one);
+      if (m) {
+        const name = m[1].trim().replace(/^["']|["']$/g, ''), addr = m[2].trim();
+        out.push(name ? enc(name) + ' <' + addr + '>' : addr);
+      } else if (/^[^\s@]+@[^\s@]+$/.test(one)) {
+        out.push(one);
+      } else {
+        out.push(/^[\x20-\x7E]*$/.test(one) ? one : '=?UTF-8?B?' + b64Utf8(one) + '?=');
+      }
+    });
+    return out.join(', ');
+  }
+
+  function buildEml(subject, html, images, mail) {
     const BOUND = '----=_sb_audio_weekly_boundary';
     const wrap76 = s => s.replace(/(.{76})/g, '$1\r\n');
+    const M = mail || {};
     let e = '';
+    const to = formatAddrList(M.to), cc = formatAddrList(M.cc);
+    if (to) e += 'To: ' + to + '\r\n';
+    if (cc) e += 'Cc: ' + cc + '\r\n';
     e += 'Subject: =?UTF-8?B?' + b64Utf8(subject) + '?=\r\n';
     e += 'X-Unsent: 1\r\n';
     e += 'MIME-Version: 1.0\r\n';
@@ -214,7 +294,7 @@
     return e;
   }
 
-  return { b64Utf8, buildWeeklyHtml, buildEml, WIDE_COLS, W_TOTAL, _tbl: tbl, _align: colAligns, _widths: colWidths, _chunk: chunkCols };
+  return { b64Utf8, buildWeeklyHtml, buildEml, formatAddrList, WIDE_COLS, W_TOTAL, _tbl: tbl, _align: colAligns, _widths: colWidths, _chunk: chunkCols };
 });
 
 /* ============================================================
@@ -353,7 +433,8 @@ if (typeof window !== 'undefined') (function () {
       industry: auIndustryKey(), industryLabel: lab,
       version: V && V.version ? ('v' + V.version) : '', builtAt: (V && V.builtAt) || '',
       genTime: new Date().toTimeString().slice(0, 5),
-      issues: (D.issues || []).slice(), title: D.title || {}, blocks: [], fin: null, bounty: null, ind: null, countries: [], summary: [],
+      issues: (typeof auIssuesForExport === 'function' ? auIssuesForExport() : (D.issues || []).slice()),
+      mail: Object.assign({ to: '', cc: '', subject: '' }, D.mail || {}), title: D.title || {}, blocks: [], fin: null, bounty: null, ind: null, countries: [], summary: [],
     };
     // M2(读 auW 缓存的最近一次取数)
     const pb = (typeof auW !== 'undefined' && auW.finPb) || null;
@@ -410,7 +491,8 @@ if (typeof window !== 'undefined') (function () {
     };
     let s = pptx.addSlide();
     title(s, m.industryLabel + '周报 ' + m.week + ' · 一 遗留问题');
-    if (m.issues.length) addTbl(s, ['类型', '待办', '进展', '截止时间', '涉及国家/国家办'], m.issues.map(r => [r.type, r.todo, r.prog, r.due, r.geo]), 0.85, { fs: 11, align: 'left' });
+    if (m.issues.length) addTbl(s, ['类型', '待办', '进展', '状态', '截止时间', '涉及国家/国家办'],
+      m.issues.map(r => [r.type, r.todo, r.prog, r.status || '', r.due, r.geo]), 0.85, { fs: 11, align: 'left' });
     else s.addText('本周无遗留问题', { x: 0.4, y: 1, w: 6, h: 0.4, fontFace: F, fontSize: 12, color: '7A7F86' });
     if (m.fin) m.fin.tables.forEach(t => { s = pptx.addSlide(); title(s, '二 经营进展 · ' + t.title); s.addText(m.fin.note, { x: 0.4, y: 0.62, w: 12.5, h: 0.3, fontFace: F, fontSize: 10, color: '7A7F86' }); addTbl(s, t.header, t.rows, 0.95, { fs: 8 }); });
     if (m.bounty) { s = pptx.addSlide(); title(s, '三 悬赏奖 SI 进展'); s.addText(m.bounty.note, { x: 0.4, y: 0.62, w: 12.5, h: 0.3, fontFace: F, fontSize: 10, color: '7A7F86' }); addTbl(s, m.bounty.header, m.bounty.rows, 0.95, { fs: 11 }); }
@@ -466,8 +548,13 @@ if (typeof window !== 'undefined') (function () {
     }
     const m = auAttachTableImages(window.auBuildWeeklyModel());
     const html = AX.buildWeeklyHtml(m, 'cid');
-    const eml = AX.buildEml(m.industryLabel + '产业周报 ' + m.week, html, auCollectImages(m));
+    const mail = m.mail || {};
+    const subject = (mail.subject || '').trim() || (m.industryLabel + '产业周报 ' + m.week);
+    const eml = AX.buildEml(subject, html, auCollectImages(m), mail);
     const res = await api.saveFile('周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.eml', AX.b64Utf8(eml), 'eml');
-    if (res && res.path) toast('已导出 Outlook 邮件(.eml,双击成草稿)', 'ok');
+    if (res && res.path) {
+      const who = AX.formatAddrList(mail.to) ? '，收件人已填好' : '，还没填收件人';
+      toast('已导出 Outlook 邮件(.eml，双击成草稿' + who + ')', 'ok');
+    }
   };
 })();

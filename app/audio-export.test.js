@@ -130,4 +130,50 @@ const exp = fs.readFileSync(require('path').join(__dirname, 'audio-export.js'), 
 ok('R8-6 三个导出入口都先等就绪', (exp.match(/auEnsureWeeklyData\(\)/g) || []).length >= 3);
 ok('R8-7 model 里不再带附件本机路径(邮件不挂附件)', exp.indexOf('attFiles:') < 0);
 
+
+/* ---------- R9 上下表格对齐 + Outlook 收件人（用户 2026-08-21 反馈） ---------- */
+const grpModel = {
+  week: '2026-W34', industryLabel: '平板',
+  fin: { note: 'n', tables: [
+    { title: '分产品系列', header: ['系列', '25年收入', '26年收入'], rows: [['平板合计', '$8,191,846.0', '$12,445,134.0']], totalIdx: 0 },
+    { title: '分国家办', header: ['系列', '25年收入', '26年收入'], rows: [['中美加勒比国家办', '$1,000.0', '$2,000.0']], totalIdx: 0 }] },
+  countries: [
+    { name: '巴西', header: ['Product', '26累计SO', '库存'], rows: [['Slate SE 11', '8,492', '1,200']] },
+    { name: '墨西哥', header: ['Product', '26累计SO', '库存'], rows: [['SonicBuds SE4 ANC', '12', '9']] }],
+};
+const colsOf = html => [...html.matchAll(/<colgroup>([\s\S]*?)<\/colgroup>/g)]
+  .map(g => [...g[1].matchAll(/<col width="(\d+)"/g)].map(x => +x[1]))
+  .filter(a => a.length > 1);                       // 过滤掉外层 1 列容器
+const gw = colsOf(AX.buildWeeklyHtml(grpModel, 'data'));
+ok('R9-1 M2 的两张同结构表列宽完全一致(上下左右边缘对齐)',
+  JSON.stringify(gw[0]) === JSON.stringify(gw[1]), JSON.stringify(gw.slice(0, 2)));
+ok('R9-2 M5 的各国块列宽完全一致', JSON.stringify(gw[2]) === JSON.stringify(gw[3]), JSON.stringify(gw.slice(2, 4)));
+ok('R9-3 每张表列宽合计仍恒等于 1000', gw.every(a => a.reduce((x, y) => x + y, 0) === 1000));
+
+// 宽表切块均摊：16 列不能切成 8+8+2（最后一段 2 列撑满 1000px 极难看）
+const chunk16 = AX._chunk(Array.from({ length: 16 }, (_, i) => 'C' + i), [], 8).map(p => p.header.length);
+ok('R9-4 16 列均摊成 6/6/6 而不是贪心的 8/8/2', JSON.stringify(chunk16) === '[6,6,6]', JSON.stringify(chunk16));
+ok('R9-5 每段都 ≤8 列且都带回首列', chunk16.every(n => n <= 8 && n >= 2));
+const chunk9 = AX._chunk(Array.from({ length: 9 }, (_, i) => 'C' + i), [], 8).map(p => p.header.length);
+ok('R9-6 9 列切成两段 5/5 而不是 8/2', JSON.stringify(chunk9) === '[5,5]', JSON.stringify(chunk9));
+
+// 收件人
+ok('R9-7 中文显示名按 RFC2047 编码、地址原样、分号转逗号',
+  AX.formatAddrList('张三 <a@x.com>; 李四 <b@x.com>') === '=?UTF-8?B?5byg5LiJ?= <a@x.com>, =?UTF-8?B?5p2O5Zub?= <b@x.com>');
+ok('R9-8 纯地址原样保留', AX.formatAddrList('a@x.com, b@y.com') === 'a@x.com, b@y.com');
+ok('R9-9 只有显示名也收下(Outlook 开草稿时按通讯录解析)',
+  AX.formatAddrList('张三; 李四').split(', ').length === 2);
+ok('R9-10 空值不产生头', AX.formatAddrList('') === '' && AX.formatAddrList(null) === '');
+const emlTo = AX.buildEml('主题', '<div>x</div>', [], { to: '张三 <a@x.com>', cc: 'c@x.com' });
+ok('R9-11 .eml 带 To/Cc 头且在 Subject 之前', /^To: .+\r\nCc: .+\r\nSubject: /.test(emlTo));
+const emlNo = AX.buildEml('主题', '<div>x</div>', []);
+ok('R9-12 没填收件人时不出空的 To/Cc 头', emlNo.indexOf('To:') < 0 && emlNo.indexOf('Cc:') < 0);
+
+// M1 遗留问题：状态列进正文
+const issModel = { week: 'W1', issues: [{ type: '要货', todo: 'SE5 报要货', prog: '编码已出', status: '有风险', due: '2026-08-05（已超期16天）', geo: '所有国家' }] };
+const issHtml = AX.buildWeeklyHtml(issModel, 'data');
+ok('R9-13 M1 表带「状态」列', issHtml.indexOf('状态') >= 0 && issHtml.indexOf('有风险') >= 0);
+ok('R9-14 M1 的超期说明原样进正文', issHtml.indexOf('已超期16天') >= 0);
+
+
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS'); process.exit(f ? 1 : 0);

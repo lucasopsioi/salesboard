@@ -25,7 +25,7 @@ const DR = [{ key: 'A', dos: 130, flowDos: 210 }, { key: 'B', dos: 90, flowDos: 
 ok('D1 渠道DOS超120 → [A]', JSON.stringify(W.listDosOver(DR, 'dos', 120)) === '["A"]');
 ok('D2 null 不算超标(是「算不出」不是爆仓)', W.listDosOver(DR, 'dos', 0).length === 2);
 ok('D3 全流程DOS超200 → [A]', JSON.stringify(W.listDosOver(DR, 'flowDos', 200)) === '["A"]');
-ok('D4 名单格式: 空→—, 超4个→截断', W.fmtList([]) === '—' && W.fmtList(['a', 'b', 'c', 'd', 'e']) === 'a、b、c、d等5个');
+ok('D4 名单格式: 空→无(明确结论,不是留空), 超4个→截断', W.fmtList([]) === '无' && W.fmtList(['a', 'b', 'c', 'd', 'e']) === 'a、b、c、d等5个');
 
 /* ---------- 芯片解析 ---------- */
 const CTX = {
@@ -41,10 +41,11 @@ ok('R2 SO同比默认带符号', W.resolveChip({ id: 'soYoy', scope: { level: 't
 ok('R3 WoW 负号', W.resolveChip({ id: 'wow', scope: { level: 'total' } }, CTX) === '-5%');
 ok('R4 本周SO=weekly最后一格', W.resolveChip({ id: 'weekSo', scope: { level: 'total' } }, CTX) === '3,457');
 ok('R5 DOS 纯数字', W.resolveChip({ id: 'dos', scope: { level: 'total' } }, CTX) === '49');
-ok('R6 国家办涨幅最大', W.resolveChip({ id: 'topRise', scope: { level: 'rep' } }, CTX) === '墨西哥国家办');
+ok('R6 国家办涨幅最大(默认带幅度)', W.resolveChip({ id: 'topRise', scope: { level: 'rep' } }, CTX) === '墨西哥国家办(+8%)');
+ok('R6b showVal=false 只给名字', W.resolveChip({ id: 'topRise', showVal: false, scope: { level: 'rep' } }, CTX) === '墨西哥国家办');
 ok('R7 连续4周上涨名单', W.resolveChip({ id: 'streakUp', n: 4, scope: { level: 'rep' } }, CTX) === '墨西哥国家办');
-ok('R8 渠道DOS超120名单', W.resolveChip({ id: 'dosOver', x: 120, scope: { level: 'rep' } }, CTX) === '墨西哥国家办');
-ok('R9 国家 scope 下的产品维名单', W.resolveChip({ id: 'topFall', scope: { level: 'country', value: '墨西哥' } }, CTX) === 'Anchovy');
+ok('R8 渠道DOS超120名单(带天数)', W.resolveChip({ id: 'dosOver', x: 120, scope: { level: 'rep' } }, CTX) === '墨西哥国家办(130天)');
+ok('R9 国家 scope 下的产品维名单(带幅度)', W.resolveChip({ id: 'topFall', scope: { level: 'country', value: '墨西哥' } }, CTX) === 'Anchovy(-83%)');
 ok('R10 scope 缺数据 → —', W.resolveChip({ id: 'soYoy', scope: { level: 'country', value: '智利' } }, CTX) === '—');
 ok('R11 小数位可调', W.resolveChip({ id: 'soYoy', dp: 1, scope: { level: 'total' } }, CTX) === '+30.0%');
 

@@ -32,10 +32,11 @@
     const s = (v * 100).toFixed(dp == null ? 0 : dp) + '%';
     return (signed !== false && v >= 0) ? '+' + s : s;
   }
-  // 名单：空 → '—'；多个用顿号；上限截断防句子爆炸
+  /* 名单：空 → '无'（明确结论，不是留空——用户 2026-08-21：空着让人以为没算）；
+     多个用顿号；上限截断防句子爆炸 */
   function fmtList(names, max) {
     const a = (names || []).filter(Boolean);
-    if (!a.length) return '—';
+    if (!a.length) return '无';
     const m = max || 4;
     return a.length > m ? a.slice(0, m).join('、') + '等' + a.length + '个' : a.join('、');
   }
@@ -157,15 +158,22 @@
       }
       return '—';
     }
-    // list
+    // list（用户 2026-08-21：降幅最大的也要把数讲出来 → 默认带幅度/天数，cfg.showVal===false 可关）
     const max = cfg.max || 4;
+    const withVal = cfg.showVal !== false;
     switch (cfg.id) {
-      case 'topRise': { const t = topMover(rows, 'rise'); return t ? t.key : '—'; }
-      case 'topFall': { const t = topMover(rows, 'fall'); return t ? t.key : '—'; }
+      case 'topRise': { const t = topMover(rows, 'rise'); return t ? (t.key + (withVal ? '(' + fmtPct(t.wow, cfg.dp != null ? cfg.dp : 0) + ')' : '')) : '无'; }
+      case 'topFall': { const t = topMover(rows, 'fall'); return t ? (t.key + (withVal ? '(' + fmtPct(t.wow, cfg.dp != null ? cfg.dp : 0) + ')' : '')) : '无'; }
       case 'streakUp': return fmtList(listStreak(rows, cfg.n || 4, 'up'), max);
       case 'streakDown': return fmtList(listStreak(rows, cfg.n || 4, 'down'), max);
-      case 'dosOver': return fmtList(listDosOver(rows, 'dos', cfg.x || 120), max);
-      case 'flowDosOver': return fmtList(listDosOver(rows, 'flowDos', cfg.x || 200), max);
+      case 'dosOver': {
+        const hit = (rows || []).filter(r => r.dos != null && isFinite(r.dos) && r.dos > (cfg.x || 120));
+        return fmtList(hit.map(r => r.key + (withVal ? '(' + r.dos + '天)' : '')), max);
+      }
+      case 'flowDosOver': {
+        const hit = (rows || []).filter(r => r.flowDos != null && isFinite(r.flowDos) && r.flowDos > (cfg.x || 200));
+        return fmtList(hit.map(r => r.key + (withVal ? '(' + r.flowDos + '天)' : '')), max);
+      }
     }
     return '—';
   }

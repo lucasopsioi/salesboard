@@ -286,6 +286,8 @@ function renderAudio() {
   renderAuCountry();
   renderAuBounty();
   if (typeof renderAuNewprod === 'function') auTrack('np', renderAuNewprod());
+  // 兜底：等全部异步模块落地后统一重算所有芯片(单模块回调若有遗漏,这里保证句子不留「…」)
+  auEnsureWeeklyData().then(function () { auChipsRefresh(); }).catch(function () { });
 }
 
 /* ---------- v3 模板令牌：{week}=W周号、{产业}=音频/平板 ---------- */
@@ -380,9 +382,17 @@ function auMountNar(host, narKey, kind, value) {
     if (kind === 'country') D.nar.country[value] = doc; else D.nar[narKey] = doc;
     auSave();
   }
+  // 范围选项：整体/系列/国家办 + 每个已选国家(芯片配置弹窗里可切)
+  const scopeOpts = [
+    { level: 'total', label: '产业整体' },
+    { level: 'family', label: '按系列' },
+    { level: 'rep', label: '按国家办' },
+  ].concat((D.countries || []).map(function (c) { return { level: 'country', value: c, label: c + '（按产品）' }; }));
   window.WeeklyNarrative.mount(host, {
     doc: doc,
     palette: auNarPalette(kind === 'overall' ? 'total' : (kind === 'country' ? 'country' : kind), value),
+    scopeOpts: scopeOpts,
+    getCtx: auChipCtx,
     onChange: function (d) {
       if (kind === 'country') D.nar.country[value] = d; else D.nar[narKey] = d;
       auSave();
@@ -864,6 +874,19 @@ function auCbTableHtml(v, r) {
   if (r.total) { let tds = '<td></td>'; cols.forEach(c => { if (c.key === '__line') tds += '<td class="col-sep"></td>'; else tds += `<td class="${c.sep ? 'col-sep' : ''}">${c.key === 'key' ? '合计' : c.cell(r.total)}</td>`; }); body += '<tr class="total">' + tds + '</tr>'; }
   return thead + body;
 }
+/* 只重画某一国的卡片：用 auW.cbLast 里缓存的 report 结果原地替换 DOM。
+   隐藏/恢复行走这里——原来每点一次 ✕ 就 renderAuCountry() 整段重取数,
+   六个国家×report 全部重跑,闪一次屏(用户 2026-08-21 抱怨的就是这个)。 */
+function auRepaintCbCard(v) {
+  const hit = (auW.cbLast || []).find(function (x) { return x.v === v; });
+  const list = $('#auCbList');
+  if (!hit || !list) { renderAuCountry(); return; }
+  const oldCard = list.querySelector('.cb-card[data-v="' + (window.CSS && CSS.escape ? CSS.escape(v) : v) + '"]');
+  const fresh = auRenderCbCard(v, hit.r);
+  if (oldCard) { oldCard.replaceWith(fresh); auApplyZoom(); }
+  else renderAuCountry();
+}
+
 function auRenderCbCard(v, r) {
   const card = document.createElement('div'); card.className = 'cb-card'; card.dataset.v = v;
   const head = document.createElement('div'); head.className = 'cb-head'; head.style.position = 'relative';
@@ -892,14 +915,14 @@ function auRenderCbCard(v, r) {
       const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:2px 0;font-size:12px;color:var(--c-ink-1)';
       const nm = document.createElement('span'); nm.textContent = k; nm.style.flex = '1';
       const btn = document.createElement('button'); btn.textContent = '恢复'; btn.className = 'btn'; btn.style.cssText = 'padding:1px 8px;font-size:11px';
-      btn.onclick = () => { auSetHidden(v, auRH().remove(auHiddenList(v), k)); renderAuCountry(); };
+      btn.onclick = () => { auSetHidden(v, auRH().remove(auHiddenList(v), k)); auRepaintCbCard(v); };
       row.appendChild(nm); row.appendChild(btn); p.appendChild(row);
     });
     const all = document.createElement('button'); all.textContent = '全部恢复'; all.className = 'btn'; all.style.cssText = 'margin-top:6px;padding:2px 10px;font-size:11px;width:100%';
-    all.onclick = () => { auSetHidden(v, []); renderAuCountry(); };
+    all.onclick = () => { auSetHidden(v, []); auRepaintCbCard(v); };
     p.appendChild(all); head.appendChild(p);
   };
-  wrapEl.querySelectorAll('[data-hiderow]').forEach(b => b.onclick = () => { auSetHidden(v, auRH().add(auHiddenList(v), decodeURIComponent(b.dataset.hiderow))); renderAuCountry(); });
+  wrapEl.querySelectorAll('[data-hiderow]').forEach(b => b.onclick = () => { auSetHidden(v, auRH().add(auHiddenList(v), decodeURIComponent(b.dataset.hiderow))); auRepaintCbCard(v); });
   card.appendChild(head); card.appendChild(wrapEl);
   return card;
 }

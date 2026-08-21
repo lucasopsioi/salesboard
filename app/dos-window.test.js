@@ -106,6 +106,37 @@ let f = 0; const ok = (n, c, extra) => { console.log((c ? 'PASS ' : 'FAIL ') + n
   const eng2 = fs.readFileSync(path.join(__dirname, '..', 'engine-industry.js'), 'utf8');
   ok('⑤-7 引擎侧 dos 判 !=null(与同对象的 flowDos 写法一致)', /dos:t\.dos!=null\?t\.dos:null/.test(eng2.replace(/\s/g, '')));
 
+  /* ---------- ⑦ 音频全流程 DOS 口径（用户 2026-08-21 要求核对；历史原话出自 9010726a 会话）：
+     「DOS 计算方法是:最近一周有数的周,往前推 4 周…全流程 DOS 也用这个公式;
+       全流程库存还是用最新一期库存;渠道 DOS 用的库存用最后一周有数那周的渠道库存」
+     场景：音频 SO 手动报量停在 8/3 那周(W_last)，之后两周只有库存行。 */
+  await (async () => {
+    const rows2 = [HEAD.join(',')];
+    [['2026-07-13', 700], ['2026-07-20', 700], ['2026-07-27', 700], ['2026-08-03', 700]].forEach(x =>
+      rows2.push(['LATAM', 'RepX', 'Brazil', 'Online', 'SonicBuds', '音频与智能配件', 'S1', 'P1', 'P1-M', x[0], 'Sell Out', x[1]].join(',')));
+    rows2.push(['LATAM', 'RepX', 'Brazil', 'Online', 'SonicBuds', '音频与智能配件', 'S1', 'P1', 'P1-M', '2026-08-03', 'Inventory', 900].join(','));
+    rows2.push(['LATAM', 'RepX', 'Brazil', 'Online', 'SonicBuds', '音频与智能配件', 'S1', 'P1', 'P1-M', '2026-08-17', 'Inventory', 1200].join(','));
+    const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'audos-'));
+    fs.writeFileSync(path.join(dir2, 'psi.csv'), '\ufeff' + rows2.join('\n'), 'utf8');
+    const XLSX = require(path.join(__dirname, '..', 'node_modules', 'xlsx'));
+    const inv2 = fs.mkdtempSync(path.join(os.tmpdir(), 'flow2-'));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ['运行日期', '产品族', '产品系列', '产品型号', '要货国家办', '要货国家', '库存数量'],
+      ['2026-08-17', 'SonicBuds', 'S1', 'P1-M', 'RepX', 'Brazil', 600]]), '库龄');
+    XLSX.writeFile(wb, path.join(inv2, '全流程库龄表.xlsx'));
+    const eng = new E.Engine(fs.mkdtempSync(path.join(os.tmpdir(), 'ud2-')));
+    eng.setFolder(dir2); eng.setInvFolder(inv2);
+    await eng.refresh();
+    const t = eng.report({ groupDim: 'series' }).total;
+    ok('⑦-1 音频 last4 锁在 W_last(8/3)收尾 4 周 = 2800，不用当前周', t.last4 === 2800, 'last4=' + t.last4);
+    ok('⑦-2 渠道 DOS = W_last 那周库存 900 ÷ 日均 100 = 9', t.dos === 9, 'dos=' + t.dos);
+    ok('⑦-3 显示渠道库存仍用最新期 1200(显示/计算分离)', t.inv === 1200, 'inv=' + t.inv);
+    ok('⑦-4 全流程库存 = 最新一期 1200 + CDC/FDC 600 = 1800', t.flowInv === 1800, 'flowInv=' + t.flowInv);
+    ok('⑦-5 全流程 DOS = 1800 ÷ 同一日均 100 = 18(同一公式同一窗口)', t.flowDos === 18, 'flowDos=' + t.flowDos);
+  })();
+
+
   console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS');
   process.exit(f ? 1 : 0);
 })().catch(e => { console.log('FAIL 未捕获异常: ' + (e && e.stack || e)); process.exit(1); });

@@ -244,6 +244,7 @@ async function renderAuNewprod() {
     }
     window.WeeklyNarrative.mount(box.querySelector('[data-np-nar]'), {
       doc: D.nar.np[np.id],
+      getCtx: (typeof auChipCtx === 'function') ? auChipCtx : null,
       palette: [
         { cfg: { id: 'npCountries', scope: { value: np.id } } }, { cfg: { id: 'npCum', scope: { value: np.id } } },
         { cfg: { id: 'npTarget', scope: { value: np.id } } }, { cfg: { id: 'npAttain', scope: { value: np.id } } },

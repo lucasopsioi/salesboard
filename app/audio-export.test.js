@@ -226,6 +226,25 @@ ok('V3-11 标签间零空白(无 Word ↵)', !/>\s+</.test(v3h));
 ok('V3-12 悬赏奖不给就不出现(默认隐藏)', v3h.indexOf('悬赏奖') < 0);
 const v3b = AX.buildWeeklyV3Html(Object.assign({}, v3m, { bounty: { note: 'n', header: ['国家', 'SI'], rows: [['墨西哥', '1']] } }), 'data');
 ok('V3-13 悬赏奖给了才出现', v3b.indexOf('悬赏奖') >= 0);
+/* V3-15~17 整表自适应(用户 2026-08-21 第二轮拍板:任何表不许拆段,字号自动缩) */
+const wideH = ['系列'].concat(Array.from({ length: 15 }, (_, i) => '指标' + i));
+const wideR = t => [[t].concat(Array.from({ length: 15 }, () => '$12,445,134.0'))];
+const fitM = { title: 'T', greet1: 'g', finTitle: 'F', fin: { tables: [
+  { title: 'A', header: wideH, rows: wideR('平板合计'), totalIdx: 0 },
+  { title: 'B', header: ['国家办'].concat(wideH.slice(1)), rows: wideR('中美加勒比国家办'), totalIdx: 0 }] } };
+const fitH = AX.buildWeeklyV3Html(fitM, 'data');
+ok('V3-15 宽表绝不拆段(无「上表续」),单张 16 列完整表', fitH.indexOf('上表续') < 0 && (() => {
+  const cg = [...fitH.matchAll(/<colgroup>([^]*?)<\/colgroup>/g)].map(g => (g[1].match(/<col /g) || []).length);
+  return cg.filter(n => n === 16).length === 2;
+})());
+ok('V3-16 同结构两张宽表列宽逐列一致且合计=1000', (() => {
+  const cg = [...fitH.matchAll(/<colgroup>([^]*?)<\/colgroup>/g)].map(g => [...g[1].matchAll(/<col width=\"(\d+)\"/g)].map(x => +x[1])).filter(a => a.length === 16);
+  return cg.length === 2 && JSON.stringify(cg[0]) === JSON.stringify(cg[1]) && cg[0].reduce((a, b) => a + b, 0) === 1000;
+})());
+ok('V3-17 长金额宽表字号自动缩(<12px,而不是拆段)', (() => {
+  const fs = [...fitH.matchAll(/font-size:(\d+)px/g)].map(x => +x[1]);
+  return fs.length > 0 && Math.min.apply(null, fs) < 12 && Math.min.apply(null, fs) >= 7;
+})());
 ok('V3-14 空模型不炸且仍是合法骨架', (() => { const h = AX.buildWeeklyV3Html({}, 'data'); return h.indexOf('<table') >= 0 && /<\/table>$/.test(h); })());
 
 

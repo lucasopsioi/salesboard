@@ -97,8 +97,9 @@
     // opts.widths / opts.aligns:同结构的一组表共用一套列宽与对齐（见 tblGroup）
     const al = (opts.aligns && opts.aligns.length === hdr.length) ? opts.aligns : colAligns(hdr, rws);
     const cw = (opts.widths && opts.widths.length === hdr.length) ? opts.widths : colWidths(hdr, rws, W_TOTAL);
-    const thSty = i => 'border:1px solid ' + C.line + ';background:' + C.head + ';color:' + C.ink2 + ';font-size:12px;line-height:1.5;font-weight:bold;padding:6px 10px;white-space:nowrap;text-align:' + (al[i] === 'r' ? 'right' : 'left');
-    const tdSty = (i, tot, zeb) => 'border:1px solid ' + C.line + ';font-size:12px;line-height:1.5;color:' + C.ink + ';padding:6px 10px;vertical-align:middle;'
+    const FS = opts.fs || 12, PX = opts.padX != null ? opts.padX : 10, PY = Math.max(3, Math.round((opts.fs || 12) / 2));
+    const thSty = i => 'border:1px solid ' + C.line + ';background:' + C.head + ';color:' + C.ink2 + ';font-size:' + FS + 'px;line-height:1.4;font-weight:bold;padding:' + PY + 'px ' + PX + 'px;white-space:nowrap;text-align:' + (al[i] === 'r' ? 'right' : 'left');
+    const tdSty = (i, tot, zeb) => 'border:1px solid ' + C.line + ';font-size:' + FS + 'px;line-height:1.4;color:' + C.ink + ';padding:' + PY + 'px ' + PX + 'px;vertical-align:middle;'
       + (al[i] === 'r' ? 'text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;' : 'text-align:left;word-break:break-word;')
       + (tot ? 'font-weight:bold;background:' + C.soft + ';' : (zeb ? 'background:' + C.zebra + ';' : ''));
     let h = '<table ' + TBL_OPEN + 'margin:0 0 8px" width="' + W_TOTAL + '" border="0">';
@@ -141,6 +142,53 @@
         .map(p => ({ widths: colWidths(p.header, p.rows, W_TOTAL), aligns: colAligns(p.header, p.rows) }));
     });
     return t => (t && !t.img) ? (shared[sig(t)] || null) : null;
+  }
+
+  /* ---------- v3：整表自适应（用户 2026-08-21 拍板：任何表都不许拆段） ----------
+     估算 12px 下的自然宽度：每半角单位 ≈ 0.56×字号 px，CJK 记 2 个单位；
+     从 12px 往下试到 7px，找到第一个「自然宽 ≤ 1000」的字号（内边距随字号缩）。
+     7px 兜底——极端宽表也保持一张完整表，宁小勿拆。 */
+  function fitFont(header, rows) {
+    const hdr = header || [];
+    if (!hdr.length) return { fs: 12, padX: 10 };
+    const maxU = hdr.map((h, i) => {
+      let m = dispLen(h);
+      (rows || []).forEach(r => { const L = dispLen((r || [])[i]); if (L > m) m = L; });
+      return m;
+    });
+    for (let fs = 12; fs >= 7; fs--) {
+      const padX = Math.max(3, Math.round(fs * 0.7));
+      const w = maxU.reduce((a, u) => a + u * 0.56 * fs + padX * 2 + 1, 0);
+      if (w <= W_TOTAL || fs === 7) return { fs: fs, padX: padX };
+    }
+    return { fs: 7, padX: 5 };
+  }
+  /* 同结构组：共用 列宽 + 对齐 + 字号（合并全组行一起量），上下表逐列对齐且观感一致 */
+  function sharedFit(items) {
+    const list = (items || []).filter(t => t && (t.header || []).length && !t.img);
+    const sig = t => (t.header || []).slice(1).join('|~|') + '#' + (t.header || []).length;
+    const bySig = {};
+    list.forEach(t => { (bySig[sig(t)] = bySig[sig(t)] || []).push(t); });
+    const shared = {};
+    Object.keys(bySig).forEach(k => {
+      const grp = bySig[k];
+      if (grp.length < 2) return;
+      const hdr = grp[0].header.slice();
+      grp.forEach(t => { if (String(t.header[0]).length > String(hdr[0]).length) hdr[0] = t.header[0]; });
+      const allRows = grp.reduce((a, t) => a.concat(t.rows || []), []);
+      shared[k] = Object.assign({ widths: colWidths(hdr, allRows, W_TOTAL), aligns: colAligns(hdr, allRows) }, fitFont(hdr, allRows));
+    });
+    return t => (t && !t.img) ? (shared[sig(t)] || null) : null;
+  }
+  /* v3 数据块：图 → <img>；表 → **单张完整表**（共享参数或自算自适应） */
+  function v3Unit(t, imgMode, opts, fit) {
+    t = t || {};
+    if (t.img) {
+      const src = (imgMode === 'cid' && t.cid) ? ('cid:' + t.cid) : t.img;
+      return '<img src="' + src + '" width="' + W_TOTAL + '" style="width:' + W_TOTAL + 'px;display:block;border:1px solid ' + C.line + ';margin:0 0 8px" alt="' + esc(t.title || '数据表') + '">';
+    }
+    const f = fit || fitFont(t.header, t.rows);
+    return oneTable(t.header, t.rows, Object.assign({}, opts || {}, f));
   }
 
   // 带共享列宽的渲染：把 tblGroup 算出来的每段宽度发给对应的段
@@ -322,7 +370,7 @@
     });
     return '<tr>' + v3Cell(lines.join('<br>'), { sty: V3_TXT }) + '</tr>';
   }
-  function v3Visual(t, imgMode, opts, seg) { return '<tr>' + v3Cell(unit(t, imgMode, opts, seg), { pad: '6px' }) + '</tr>'; }
+  function v3Visual(t, imgMode, opts, fit) { return '<tr>' + v3Cell(v3Unit(t, imgMode, opts, fit), { pad: '6px' }) + '</tr>'; }
 
   function buildWeeklyV3Html(model, imgMode) {
     const m = model || {};
@@ -357,8 +405,8 @@
     // 二 · 全年达成进度
     if (m.finTitle) b += v3Section(m.finTitle);
     if (m.fin && m.fin.tables && m.fin.tables.length) {
-      const seg = sharedSegs(m.fin.tables);
-      m.fin.tables.forEach(t => { b += v3Visual(t, imgMode, { totalIdx: t.totalIdx }, seg(t)); });
+      const fit = sharedFit(m.fin.tables);
+      m.fin.tables.forEach(t => { b += v3Visual(t, imgMode, { totalIdx: t.totalIdx }, fit(t)); });
     }
 
     // 三 · 销售进展
@@ -369,20 +417,23 @@
       if (S.overall.kpis && S.overall.kpis.length) b += '<tr>' + v3Cell(cardRow(S.overall.kpis, true), { pad: '6px' }) + '</tr>';
       if (S.overall.img || S.overall.cid) b += v3Visual({ img: S.overall.img, cid: S.overall.cid, title: '周度销售进展' }, imgMode);
     }
+    const dimGroup = [S.family && S.family.table, S.rep && S.rep.table]
+      .concat((S.countries || []).map(c => c && c.table)).filter(Boolean);
+    const dimFit = sharedFit(dimGroup);
     if (S.family) {
       if (S.family.text) b += v3Narrative(S.family.text);
-      if (S.family.table) b += v3Visual(S.family.table, imgMode, { totalLast: !!S.family.table.hasTotal });
+      if (S.family.table) b += v3Visual(S.family.table, imgMode, { totalLast: !!S.family.table.hasTotal }, dimFit(S.family.table));
     }
     if (S.rep) {
       if (S.rep.text) b += v3Narrative(S.rep.text);
-      if (S.rep.table) b += v3Visual(S.rep.table, imgMode, { totalLast: !!S.rep.table.hasTotal });
+      if (S.rep.table) b += v3Visual(S.rep.table, imgMode, { totalLast: !!S.rep.table.hasTotal }, dimFit(S.rep.table));
     }
     const cbs = (S.countries || []).filter(c => c && (c.text || c.table));
     if (cbs.length) {
-      const seg = sharedSegs(cbs.map(c => c.table).filter(Boolean));
+      // 六国与系列/国家办同结构 → 用同一个 dimFit，整篇逐列对齐、字号一致
       cbs.forEach(c => {
         if (c.text) b += v3Narrative(c.text);
-        if (c.table) b += v3Visual(c.table, imgMode, { totalLast: !!c.table.hasTotal }, seg(c.table));
+        if (c.table) b += v3Visual(c.table, imgMode, { totalLast: !!c.table.hasTotal }, dimFit(c.table));
       });
     }
 
@@ -390,7 +441,7 @@
     if (m.bounty && m.bounty.rows && m.bounty.rows.length) {
       b += v3Section('$0-50美金扩大覆盖悬赏奖 SI 进展');
       if (m.bounty.note) b += v3Narrative(m.bounty.note);
-      b += v3Visual(m.bounty, imgMode, { totalLast: true });
+      b += v3Visual(m.bounty, imgMode, { totalLast: true }, null);
     }
 
     // 四 · 新品进展
@@ -422,7 +473,7 @@
     return b.replace(/>\s+</g, '><');
   }
 
-  return { b64Utf8, buildWeeklyHtml, buildWeeklyV3Html, buildEml, formatAddrList, WIDE_COLS, W_TOTAL, _tbl: tbl, _align: colAligns, _widths: colWidths, _chunk: chunkCols };
+  return { b64Utf8, buildWeeklyHtml, buildWeeklyV3Html, buildEml, formatAddrList, WIDE_COLS, W_TOTAL, _tbl: tbl, _align: colAligns, _widths: colWidths, _chunk: chunkCols, _fitFont: fitFont, _sharedFit: sharedFit };
 });
 
 /* ============================================================
@@ -744,26 +795,9 @@ if (typeof window !== 'undefined') (function () {
     return model;
   };
 
-  /* v3 宽表 → PNG（统一 1000px 版心、12px 字，与 HTML 表观感一致） */
-  function auAttachV3Images(m) {
-    let n = 0;
-    const conv = (t, title, opts) => {
-      if (!t || t.img || !(t.header || []).length || t.header.length <= AX.WIDE_COLS) return;
-      const url = window.auRenderTablePng(t.header, t.rows, Object.assign({ title: title }, opts || {}));
-      if (url) { t.img = url; t.cid = 'v3t' + (++n); }
-    };
-    if (m.fin && m.fin.tables) m.fin.tables.forEach(t => conv(t, t.title, { totalIdx: t.totalIdx }));
-    const S = m.sales || {};
-    if (S.family && S.family.table) conv(S.family.table, '系列销售', { totalLast: true });
-    if (S.rep && S.rep.table) conv(S.rep.table, '国家办销售', { totalLast: true });
-    (S.countries || []).forEach(c => conv(c.table, c.name, { totalLast: !!(c.table && c.table.hasTotal) }));
-    if (m.bounty) conv(m.bounty, '悬赏奖 SI 进展', { totalLast: true });
-    (m.newprods || []).forEach(np => {
-      conv(np.table, '新品首销达成', { totalLast: true });
-      if (np.info) { conv(np.info.main, null, {}); conv(np.info.plan, null, {}); }
-    });
-    return m;
-  }
+  /* v3：表格一律走「整表自适应」HTML(用户要求任何表不许拆、不许一图一个字号)，
+     只有 M4 趋势图仍是 PNG(echarts 画布)。 */
+  function auAttachV3Images(m) { return m; }
   function auCollectV3Images(m) {
     const out = [];
     const S = m.sales || {};

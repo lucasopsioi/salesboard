@@ -46,12 +46,10 @@ C.Engine.prototype.custom = function(p){
   const xC=p.xDim&&s.dimCode[p.xDim]?s.dimCode[p.xDim]:null;
   const yC=p.yDim&&s.dimCode[p.yDim]?s.dimCode[p.yDim]:null;
   const cC=p.colorDim&&s.dimCode[p.colorDim]?s.dimCode[p.colorDim]:null;
-  const chCode=s.dimCode.channel;
-  const excludeAll = chCode && !hasFilterVal(p.filters,'channel') && s.hasNonAllChannel && p.xDim!=='channel'&&p.yDim!=='channel'&&p.colorDim!=='channel';
+  // 渠道口径(用户 2026-08-21 拍板):渠道列视同不存在,ALL/Online/Offline 彼此无包含关系,一律全加,不再剔 ALL 行
   const agg=new Map();
   for(let i=0;i<s.n;i++){
     let ok=true; for(let j=0;j<fl.length;j++){ if(!fl[j][1].has(fl[j][0][i])){ok=false;break;} } if(!ok) continue;
-    if(excludeAll && s.allChan.has(chCode[i])) continue;
     const xv=xC?s.dimDict[p.xDim][xC[i]]:'(全部)';
     const yv=yC?s.dimDict[p.yDim][yC[i]]:'(全部)';
     const cv=cC?s.dimDict[p.colorDim][cC[i]]:'';

@@ -107,6 +107,22 @@ await (async ()=>{
   eq('S7 sellOut 全加 =13365', qv(eng.query({metric:'sellOut',stackDim:'series',gran:'month'}),'S1','2026-04'), 13365);
 })();
 
+// --- S8: psiUnits(库存FIFO底数) 渠道列视同不存在——ALL 行不再被剔(用户 2026-08-21 定稿:彼此无包含关系) ---
+await (async ()=>{
+  const eng=await buildEng([
+    {ch:'Online', per:'2026-04-10', type:'Sell Out', q:60},
+    {ch:'Offline',per:'2026-04-10', type:'Sell Out', q:40},
+    {ch:'ALL',    per:'2026-04-10', type:'Sell Out', q:18},
+    {ch:'Online', per:'2026-04-10', type:'Inventory', q:100},
+    {ch:'ALL',    per:'2026-04-10', type:'Inventory', q:50},
+  ]);
+  const u=eng.psiUnits();
+  eq('S8 psiUnits SO 全加(60+40+18)=118', u.length===1 ? u[0].sellOut : -1, 118);
+  eq('S8 psiUnits INV 全加(100+50)=150', u.length===1 ? u[0].inv : -1, 150);
+  // 与图表口径一致:query 也应给同一个数——两个接口对同一份数据绝不许给两个答案
+  eq('S8 psiUnits 与 query 同源同数', qv(eng.query({metric:'sellOut',stackDim:'series',gran:'month'}),'S1','2026-04'), 118);
+})();
+
 console.log(fail? ('CHANNEL TESTS: '+fail+' FAIL, '+pass+' pass') : ('CHANNEL TESTS: ALL PASS ('+pass+')'));
 process.exit(fail?1:0);
 })().catch(e => { console.error(e && e.stack || e); process.exit(1); });

@@ -74,28 +74,22 @@ C.Engine.prototype.query = function(p){
 
 /* ---------- 库存/SO 模拟:PSI 单元级行(country×model×日 渠道合计) ----------
    返回 [{region,rep,country,line,family,series,model,ymd,sellIn,sellOut,inv}],
-   每行 = 一个 country×model×日 的渠道合计(供渲染层 invFetchPsiUnits 经 IPC psiUnits 消费)。
-   渠道去重:store 的 channel 维含明细(Online/Offline)与可能的 ALL 汇总行,直接遍历会重复计数。
-   规则——有非 ALL 渠道(hasNonAllChannel)→ 只取非 ALL 行按 unit×日求和(得渠道合计);否则(只有 ALL)
-   → 取 ALL 行。ALL 判定用 store 预算的 allChan 码集(isAllChannel 正则口径,非裸 'ALL' 字符串)。
+   每行 = 一个 country×model×日 的全部行合计(供渲染层 invFetchPsiUnits 经 IPC psiUnits 消费)。
+   渠道口径(用户 2026-08-21 拍板)：**渠道列视同不存在**——ALL/Online/Offline 都是普通行标签，
+   彼此没有包含关系，一律直接相加，任何地方都不做渠道去重。
+   （旧版这里按组剔 ALL 行——那是把 ALL 当汇总行的旧认知，已被用户推翻：
+     剔行会让库存 FIFO 的 SO 分母系统性偏小，老批次消耗不掉。）
    跳过空型号/小计行(参照 query 用 subtotalCodes)。 */
 C.Engine.prototype.psiUnits = function(){
   const s=this.store; if(!s) return [];
   const d=s.dimDict, c=s.dimCode;
-  const allChan=s.allChan||new Set();
   const subModel=s.subtotalCodes && s.subtotalCodes.model;
-  // 预扫:记录每个 (国家×型号×期) 组是否有非ALL渠道行 → 有则该组取明细、否则取ALL。
-  // ★按组去重(不用全局 useAllOnly):否则"只有ALL行"的型号SO会被整个丢弃(算0)→FIFO无SO消耗→老发货永远留存。
-  const groupNonAll=new Set();
-  for(let j=0;j<s.n;j++){ const jm=c.model[j]; if(!d.model[jm]||(subModel&&subModel.has(jm)))continue; if(!allChan.has(c.channel[j])) groupNonAll.add(d.country[c.country[j]]+'|~|'+d.model[jm]+'|~|'+s.ymd[j]); }
   const agg=new Map();
   for(let i=0;i<s.n;i++){
     const mc=c.model[i], model=d.model[mc];
     if(!model || (subModel && subModel.has(mc))) continue;          // 空/小计型号
-    const isAll=allChan.has(c.channel[i]);
-    if(groupNonAll.has(d.country[c.country[i]]+'|~|'+model+'|~|'+s.ymd[i]) ? isAll : !isAll) continue;   // 按组渠道去重
     const country=d.country[c.country[i]], ymd=s.ymd[i];
-    const k=country+'\u0001'+model+'\u0001'+ymd;
+    const k=country+''+model+''+ymd;
     let r=agg.get(k);
     if(!r){ r={ region:d.region[c.region[i]], rep:d.repOffice[c.repOffice[i]], country:country,
       line:d.line[c.line[i]], family:d.family[c.family[i]], series:d.series[c.series[i]], model:model,

@@ -893,7 +893,7 @@ class Engine {
     const subtotalCodes={}; DIM_KEYS.forEach(k=>{ const s=new Set(); dimDict[k].forEach((v,c)=>{ if(isSubtotal(v)) s.add(c); }); subtotalCodes[k]=s; });
     const allChan=new Set(); let hasNonAll=false;
     (dimDict.channel||[]).forEach((v,c)=>{ if(isAllChannel(v)) allChan.add(c); else if(v!=='') hasNonAll=true; });
-    // 渠道列不做任何去重：online/offline/all 都是真实行,按所选维度/筛选直接汇总,与底表不筛渠道的平铺透视一致(用户底表 all 是独立渠道,非线上+线下的合计)。
+    // 渠道口径(用户 2026-08-21 定稿):**渠道列视同不存在**——ALL/Online/Offline 只是行标签,彼此没有包含与被包含关系,一律直接相加;全项目任何地方都不做渠道去重(psiUnits 曾按组剔 ALL,已移除)。
     let mn=Infinity,mx=-Infinity; for(let i=0;i<n;i++){ const y=ymd[i]; if(y){ if(y<mn)mn=y; if(y>mx)mx=y; } }
     // model -> [family,line,series,product,model] ; repOffice -> region  (for 全流程表 join)
     const modelToDims={}, repToRegion={};

@@ -69,9 +69,9 @@
         '【时间】日桶=真实日期；周桶=ISO 周（UTC 周四规则，跨年同周号分属不同 ISO 年）；月桶=自然日历月（不按周四归属）。from/to 是闭区间。',
         '【公式】流量(sellIn/sellOut)＝桶内求和；inv＝取桶内最新日期、再把该日所有行相加（不是保留最后一行）；DOS＝round(桶内最新期库存 ÷ (桶内SO ÷ dosDays))，dosDays 日1/周7/月30（30 写死，不是当月实际天数）——与汇总表 DOS（近4个ISO周÷28、音频走 W_last）不是同一个数，被问到差异要主动说明。纯音频桶 SO=0 → DOS=null 留空；桶里混了平板则返回 0。系列数 >14 时其余并入「其他」，「其他」对 DOS 是无意义相加，不要引用。库存/DOS 绝不能跨桶相加（导出合计行的库存合计是错数）。区间统计：流量报累计/峰值/均值；inv/dos 只报区间末值，DOS 合计恒为「—」。图上数据单位切 K/W 会把 DOS 也缩放，报数时一律回到「台 / 天」。',
         '【层级】Product Line(产业:平板/音频与智能配件) > Product Family(系列) > Product Series(产品代号) > Product(传播名) > Product Model(SKU)。判定产业一律用 contains「音频」（真实取值可能是「音频与智能配件」），不要用等号。',
-        '【易错】小计行只在 stackDim 上剔，其它维度的小计不剔；空串维度值会变成一个无名系列（options 查不到、图上却有）。filters 里任一取值拼错会静默返回空图，不报错。供库存 FIFO 的 psiUnits 是全项目唯一按「国家×型号×期」做渠道去重的口径，别和图上的全加口径混用。',
+        '【易错】小计行只在 stackDim 上剔，其它维度的小计不剔；空串维度值会变成一个无名系列（options 查不到、图上却有）。filters 里任一取值拼错会静默返回空图，不报错。psiUnits 与图表同口径：渠道列视同不存在、全部行直接相加（2026-08-21 起，旧版按组剔 ALL 已移除）。',
         '【取数】趋势 query({stackDim 必填, metric, gran, from:"YYYY-MM-DD", to, filters})，只想看整体也要挑一个维度（如 country）；某维度总量/同比/库存/DOS 用 report({groupDim, filters})；取值先 options({field, filters, contains}) 查精确写法；范围与数据日期用 meta；用户说「当前筛选」先 boardState({boardId:"psi"})。',
-        '【红线】① 库存/DOS 绝不跨期相加；② null 的 DOS 不当 0、不参与平均；③ 渠道不去重（Online/Offline/ALL 全加，ALL 是独立渠道不是合计）。',
+        '【红线】① 库存/DOS 绝不跨期相加；② null 的 DOS 不当 0、不参与平均；③ 渠道列视同不存在：ALL/Online/Offline 只是行标签、彼此无包含关系，一律全加，任何地方不做渠道去重。',
       ].join('\n'),
     },
     report: {

@@ -60,7 +60,7 @@ node -e "const E=require('./engine.js'),D=require('./app/roadmap-detect.js'),fs=
 | BP 年度计划表 | **USD** |
 
 与 `app/views/finance-view.js` 里 `finUnits` 的默认值一致，所以 BP 达成率开箱即是正常量级。
-（内置 `loadSample()` 的 BP 是 MUSD，在 USD 假设下会显示成 5,179,935% —— 真实底表到底是哪种，仍待确认。）
+（用户 2026-08-21 确认：真实 BP 底表就是 USD，此假设定稿。内置 `loadSample()` 的 BP 是 MUSD 属演示数据历史遗留，与真实口径无关。）
 
 ## 表头格式（改数据时别改错）
 

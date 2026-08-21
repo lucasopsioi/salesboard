@@ -132,33 +132,53 @@ function npRoadmapInfo(np) {
   const R = npReadRoadmap();
   const p = R.products.find(x => npNorm(x.name) === npNorm(np.name) || (x.psiLink && npNorm(x.psiLink) === npNorm(np.name)));
   if (!p) return null;
-  const smp = R.samples.filter(s => s.productId === p.id);
-  const skus = (p.skus || []).filter(s => s && (s.name || s.ean));
-  const main = {
-    title: np.name + ' 产品信息（来自路标）',
-    header: ['产品', '认证型号', '内部编码', '样机编码', 'SKU', 'EAN', '最早发货', '最晚发货(上市)', '综合RRP(USD)'],
-    rows: [[p.name || np.name, p.certModel || '—', p.internalCode || '—',
-      smp.length ? smp.map(s => s.code || s.name).filter(Boolean).join('、') : '—',
-      skus.length ? skus.map(s => [s.name, [s.ram, s.rom].filter(Boolean).join('+')].filter(Boolean).join(' ')).join('、') : '—',
-      skus.map(s => s.ean).filter(Boolean).join('、') || '—',
-      p.shipEarly || '—', p.shipLate || '—',
+  const dash = v => (v == null || v === '') ? '—' : String(v);
+  const tables = [];
+
+  /* 表A 产品主档：一行定位 */
+  tables.push({
+    title: np.name + ' 产品主档',
+    header: ['产品', '认证型号', '内部编码', 'SKU数', '样机数', '最早发货', '最晚发货(上市)', '销售结束', '综合RRP(USD)'],
+    rows: [[dash(p.name || np.name), dash(p.certModel), dash(p.internalCode),
+      String((p.skus || []).filter(x => x && (x.name || x.ean)).length),
+      String(R.samples.filter(x => x.productId === p.id).length),
+      dash(p.shipEarly), dash(p.shipLate), dash(p.salesEnd),
       p.compositeRrpUsd == null ? '—' : ('$' + p.compositeRrpUsd)]],
-  };
-  // 各国上市计划：上市节奏(模板不限)里该产品的 countryRows，全模板合并去重（同国取先出现的）
+  });
+
+  /* 表B SKU 明细：每 SKU 一行，各自的 EAN（用户要求分 SKU 写） */
+  const skus = (p.skus || []).filter(x => x && (x.name || x.ean));
+  if (skus.length) tables.push({
+    title: np.name + ' SKU 明细',
+    header: ['SKU', '颜色', 'RAM+ROM', '芯片', 'EAN'],
+    rows: skus.map(x => [dash(x.name), dash(x.color), dash([x.ram, x.rom].filter(Boolean).join('+')), dash(x.chip), dash(x.ean)]),
+  });
+
+  /* 表C 样机明细：每样机一行——VN1/VN2 分开，每个颜色编码不同（用户原话） */
+  const smp = R.samples.filter(x => x.productId === p.id)
+    .slice().sort((a, b) => String(a.type || '').localeCompare(String(b.type || '')) || String(a.color || '').localeCompare(String(b.color || '')));
+  if (smp.length) tables.push({
+    title: np.name + ' 样机明细',
+    header: ['批次', '样机名称', '样机编码', '颜色', '认证型号', '到样时间', '是否入库'],
+    rows: smp.map(x => [dash(x.type), dash(x.name), dash(x.code), dash(x.color), dash(x.certModel), dash(x.shipLate), dash(x.inbox)]),
+  });
+
+  /* 表D 各国上市计划（上市节奏） */
   const seen = new Set(); const planRows = [];
   R.launches.filter(l => l.productId === p.id).forEach(l => {
     (l.countryRows || []).forEach(r => {
       const c = (r.country || '').trim(); if (!c || seen.has(c)) return; seen.add(c);
-      planRows.push([c, r.presale || '—', r.online || '—', r.offline || '—', r.end || '—',
-        r.target || r.targetOn || r.targetOff ? [r.target, r.targetOn && ('线上' + r.targetOn), r.targetOff && ('线下' + r.targetOff)].filter(Boolean).join(' / ') : '—']);
+      planRows.push([c, dash(r.presale), dash(r.online), dash(r.offline), dash(r.end),
+        (r.target || r.targetOn || r.targetOff) ? [r.target, r.targetOn && ('线上' + r.targetOn), r.targetOff && ('线下' + r.targetOff)].filter(Boolean).join(' / ') : '—']);
     });
   });
-  const plan = planRows.length ? {
-    title: np.name + ' 各国上市计划（来自上市节奏）',
+  if (planRows.length) tables.push({
+    title: np.name + ' 各国上市计划',
     header: ['国家', '预售时间', '线上首销', '线下首销', '首销结束', '首销目标'],
     rows: planRows,
-  } : null;
-  return { main, plan, roadmapId: p.id };
+  });
+
+  return { tables, roadmapId: p.id };
 }
 
 /* ---------- 界面 ---------- */
@@ -241,8 +261,8 @@ async function renderAuNewprod() {
         const info = npRoadmapInfo(np);
         const iHost = box.querySelector('[data-np-info]');
         if (iHost) iHost.innerHTML = info
-          ? npInfoHtml(info)
-          : '<div class="au-note">路标里没找到「' + auEsc(np.name) + '」——去路标管理建卡并填 认证型号/样机/上市节奏 后这里自动带出</div>';
+          ? info.tables.map(t => npOneTableHtml(t)).join('')
+          : '<div class="au-note">路标里没找到「' + auEsc(np.name) + '」——去路标管理建卡并填 认证型号/SKU/样机/上市节奏 后这里自动带出</div>';
         if (typeof auChipsRefresh === 'function') auChipsRefresh();
       }).catch(() => { });
     } else {
@@ -261,15 +281,12 @@ function npTableHtml(tm) {
   });
   return h + '</tbody></table>';
 }
-function npInfoHtml(info) {
-  const one = t => {
-    if (!t) return '';
-    let h = '<div class="au-sec-t" style="font-size:12px;margin-top:6px">' + auEsc(t.title) + '</div>';
-    h += '<table class="rep-table" style="width:100%"><thead><tr>' + t.header.map(x => '<th>' + auEsc(x) + '</th>').join('') + '</tr></thead><tbody>';
-    t.rows.forEach(r => { h += '<tr>' + r.map(c => '<td>' + auEsc(c) + '</td>').join('') + '</tr>'; });
-    return h + '</tbody></table>';
-  };
-  return one(info.main) + one(info.plan);
+function npOneTableHtml(t) {
+  if (!t) return '';
+  let h = '<div class="au-sec-t" style="font-size:12px;margin-top:6px">' + auEsc(t.title) + '</div>';
+  h += '<table class="rep-table" style="width:100%"><thead><tr>' + t.header.map(x => '<th>' + auEsc(x) + '</th>').join('') + '</tr></thead><tbody>';
+  t.rows.forEach(r => { h += '<tr>' + r.map(c => '<td>' + auEsc(c) + '</td>').join('') + '</tr>'; });
+  return h + '</tbody></table>';
 }
 
 /* ---------- 首销设计器：每国一张日销量曲线，拖竖线定真实首销日 ---------- */
@@ -377,7 +394,7 @@ function auNpExportModels(ctx) {
     const text = doc ? window.WeeklyChips.resolveDoc(doc, ctx) : '';
     const table = npTableModel(np);
     const info = npRoadmapInfo(np);
-    return { name: np.name, text, table, info: info ? { main: info.main, plan: info.plan } : null };
+    return { name: np.name, text, table, info: info ? { tables: info.tables } : null };
   });
 }
 

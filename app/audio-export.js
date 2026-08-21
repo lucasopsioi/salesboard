@@ -94,15 +94,16 @@
     opts = opts || {};
     const hdr = header || [], rws = rows || [];
     if (!hdr.length) return '';
+    const TOT = opts.total || W_TOTAL;   // v3 内嵌在外层格子里 → 984(见 V3_INNER),否则顶破外框
     // opts.widths / opts.aligns:同结构的一组表共用一套列宽与对齐（见 tblGroup）
     const al = (opts.aligns && opts.aligns.length === hdr.length) ? opts.aligns : colAligns(hdr, rws);
-    const cw = (opts.widths && opts.widths.length === hdr.length) ? opts.widths : colWidths(hdr, rws, W_TOTAL);
+    const cw = (opts.widths && opts.widths.length === hdr.length) ? opts.widths : colWidths(hdr, rws, TOT);
     const FS = opts.fs || 12, PX = opts.padX != null ? opts.padX : 10, PY = Math.max(3, Math.round((opts.fs || 12) / 2));
     const thSty = i => 'border:1px solid ' + C.line + ';background:' + C.head + ';color:' + C.ink2 + ';font-size:' + FS + 'px;line-height:1.4;font-weight:bold;padding:' + PY + 'px ' + PX + 'px;white-space:nowrap;text-align:' + (al[i] === 'r' ? 'right' : 'left');
     const tdSty = (i, tot, zeb) => 'border:1px solid ' + C.line + ';font-size:' + FS + 'px;line-height:1.4;color:' + C.ink + ';padding:' + PY + 'px ' + PX + 'px;vertical-align:middle;'
       + (al[i] === 'r' ? 'text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;' : 'text-align:left;word-break:break-word;')
       + (tot ? 'font-weight:bold;background:' + C.soft + ';' : (zeb ? 'background:' + C.zebra + ';' : ''));
-    let h = '<table ' + TBL_OPEN + 'margin:0 0 8px" width="' + W_TOTAL + '" border="0">';
+    let h = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;width:' + TOT + 'px;margin:0 0 8px" width="' + TOT + '" border="0">';
     h += '<colgroup>' + cw.map(w => '<col width="' + w + '" style="width:' + w + 'px">').join('') + '</colgroup>';
     h += '<tr>' + hdr.map((x, i) => '<th width="' + cw[i] + '" style="' + thSty(i) + '">' + esc(x) + '</th>').join('') + '</tr>';
     rws.forEach((r, i) => {
@@ -148,9 +149,10 @@
      估算 12px 下的自然宽度：每半角单位 ≈ 0.56×字号 px，CJK 记 2 个单位；
      从 12px 往下试到 7px，找到第一个「自然宽 ≤ 1000」的字号（内边距随字号缩）。
      7px 兜底——极端宽表也保持一张完整表，宁小勿拆。 */
-  function fitFont(header, rows) {
+  function fitFont(header, rows, total) {
+    const TOT = total || V3_INNER;
     const hdr = header || [];
-    if (!hdr.length) return { fs: 12, padX: 10 };
+    if (!hdr.length) return { fs: 12, padX: 10, total: TOT };
     const maxU = hdr.map((h, i) => {
       let m = dispLen(h);
       (rows || []).forEach(r => { const L = dispLen((r || [])[i]); if (L > m) m = L; });
@@ -159,9 +161,9 @@
     for (let fs = 12; fs >= 7; fs--) {
       const padX = Math.max(3, Math.round(fs * 0.7));
       const w = maxU.reduce((a, u) => a + u * 0.56 * fs + padX * 2 + 1, 0);
-      if (w <= W_TOTAL || fs === 7) return { fs: fs, padX: padX };
+      if (w <= TOT || fs === 7) return { fs: fs, padX: padX, total: TOT };
     }
-    return { fs: 7, padX: 5 };
+    return { fs: 7, padX: 5, total: TOT };
   }
   /* 同结构组：共用 列宽 + 对齐 + 字号（合并全组行一起量），上下表逐列对齐且观感一致 */
   function sharedFit(items) {
@@ -176,7 +178,7 @@
       const hdr = grp[0].header.slice();
       grp.forEach(t => { if (String(t.header[0]).length > String(hdr[0]).length) hdr[0] = t.header[0]; });
       const allRows = grp.reduce((a, t) => a.concat(t.rows || []), []);
-      shared[k] = Object.assign({ widths: colWidths(hdr, allRows, W_TOTAL), aligns: colAligns(hdr, allRows) }, fitFont(hdr, allRows));
+      shared[k] = Object.assign({ widths: colWidths(hdr, allRows, V3_INNER), aligns: colAligns(hdr, allRows) }, fitFont(hdr, allRows, V3_INNER));
     });
     return t => (t && !t.img) ? (shared[sig(t)] || null) : null;
   }
@@ -185,9 +187,9 @@
     t = t || {};
     if (t.img) {
       const src = (imgMode === 'cid' && t.cid) ? ('cid:' + t.cid) : t.img;
-      return '<img src="' + src + '" width="' + W_TOTAL + '" style="width:' + W_TOTAL + 'px;display:block;border:1px solid ' + C.line + ';margin:0 0 8px" alt="' + esc(t.title || '数据表') + '">';
+      return '<img src="' + src + '" width="' + V3_INNER + '" style="width:' + V3_INNER + 'px;display:block;border:1px solid ' + C.line + ';margin:0 0 8px" alt="' + esc(t.title || '数据表') + '">';
     }
-    const f = fit || fitFont(t.header, t.rows);
+    const f = fit || fitFont(t.header, t.rows, V3_INNER);
     return oneTable(t.header, t.rows, Object.assign({}, opts || {}, f));
   }
 
@@ -210,11 +212,12 @@
   const subT = t => t ? '<div style="font-size:12px;font-weight:bold;line-height:1.5;color:' + C.ink + ';margin:8px 0 4px">' + esc(t) + '</div>' : '';
   const note = t => t ? '<div style="font-size:11px;line-height:1.5;color:' + C.ink2 + ';margin:0 0 6px">' + esc(t) + '</div>' : '';
   // KPI / 摘要卡:横排一行,同样用 table 布局(Outlook 不认 flex)
-  function cardRow(items, accent) {
+  function cardRow(items, accent, total) {
+    const TOT = total || W_TOTAL;
     const list = (items || []).slice(0, 4); const n = list.length;
     if (!n) return '';
-    const base = Math.floor(W_TOTAL / n), ws = list.map((_, i) => i === n - 1 ? W_TOTAL - base * (n - 1) : base);
-    let h = '<table ' + TBL_OPEN + 'margin:0 0 10px" width="' + W_TOTAL + '" border="0">';
+    const base = Math.floor(TOT / n), ws = list.map((_, i) => i === n - 1 ? TOT - base * (n - 1) : base);
+    let h = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;width:' + TOT + 'px;margin:0 0 10px" width="' + TOT + '" border="0">';
     h += '<colgroup>' + ws.map(w => '<col width="' + w + '" style="width:' + w + 'px">').join('') + '</colgroup><tr>';
     h += list.map((k, i) => '<td width="' + ws[i] + '" style="border:1px solid ' + C.line + ';' + (accent ? 'border-top:3px solid ' + C.brand + ';' : '') + 'padding:10px 12px;vertical-align:top">'
       + '<div style="font-size:11px;line-height:1.5;color:' + C.ink2 + '">' + esc(k.t) + '</div>'
@@ -351,6 +354,9 @@
      model 形态见 auBuildWeeklyV3Model(浏览器侧)。imgMode: 'cid' | 'data'。
      ============================================================ */
   const V3_COLS = 6;                                     // 类型/重点工作/进展/状态/截止时间/涉及
+  /* 内嵌内容宽度：外层格子有 6px 内边距 + 边框,嵌 1000px 会顶破右边(用户截图红框实锤,
+     财经表最后一列被切)。1000 − 2×6(padding) − 4(边框余量) = 984。 */
+  const V3_INNER = W_TOTAL - 16;
   const V3_BORDER = '#A6A6A6';
   const V3_TXT = 'font-family:' + FONT + ';font-size:12pt;line-height:1.6;color:' + C.ink + ';';
   function v3Cell(inner, opts) {
@@ -414,7 +420,7 @@
     if (S.overall || S.family || S.rep || (S.countries || []).length) b += v3Section('销售进展');
     if (S.overall) {
       if (S.overall.text) b += v3Narrative(S.overall.text);
-      if (S.overall.kpis && S.overall.kpis.length) b += '<tr>' + v3Cell(cardRow(S.overall.kpis, true), { pad: '6px' }) + '</tr>';
+      if (S.overall.kpis && S.overall.kpis.length) b += '<tr>' + v3Cell(cardRow(S.overall.kpis, true, V3_INNER), { pad: '6px' }) + '</tr>';
       if (S.overall.img || S.overall.cid) b += v3Visual({ img: S.overall.img, cid: S.overall.cid, title: '周度销售进展' }, imgMode);
     }
     const dimGroup = [S.family && S.family.table, S.rep && S.rep.table]
@@ -457,11 +463,12 @@
       if (infos.length) {
         b += v3Section('新品信息');
         infos.forEach(np => {
-          if (np.info.main) b += v3Visual(np.info.main, imgMode, {});
-          if (np.info.plan) {
-            b += v3Narrative((np.name || '') + ' 各国上市计划：');
-            b += v3Visual(np.info.plan, imgMode, {});
-          }
+          const tables = np.info.tables || [np.info.main, np.info.plan].filter(Boolean);   // 兼容旧形态
+          tables.forEach(t => {
+            if (!t) return;
+            if (t.title) b += v3Narrative(t.title + '：');
+            b += v3Visual(t, imgMode, {});
+          });
         });
       }
     }
@@ -789,7 +796,7 @@ if (typeof window !== 'undefined') (function () {
       table: auReportTableModel(x.r, auW.cb.dim, null),
     }));
     // 悬赏奖（可选，默认隐藏）
-    if (D.showBounty && typeof auW !== 'undefined' && auW._bountyExport) model.bounty = Object.assign({}, auW._bountyExport);
+    if (D.showBounty && D.showBounty[auIndustryKey()] && typeof auW !== 'undefined' && auW._bountyExport) model.bounty = Object.assign({}, auW._bountyExport);
     // 新品
     if (typeof auNpExportModels === 'function') model.newprods = auNpExportModels(ctx);
     return model;

@@ -22,7 +22,7 @@ const AU_INDS = [
 ];
 const auW = {
   data: null, shell: false, industry: 'audio',
-  finToM: 0, finUnit: 'USD', finDp: 1, finLv1: {}, finDims: null, finLv3Opts: {}, finLv3Sel: [], finRepSel: [], finPb: null, finRb: null,
+  finToM: 0, finUnit: 'MUSD', finDp: 1,   // 默认 MUSD:用户嫌 USD 全额数字太长(2026-08-21) finLv1: {}, finDims: null, finLv3Opts: {}, finLv3Sel: [], finRepSel: [], finPb: null, finRb: null,
   cb: { dim: 'product', weeks: 9, fromW: null, toW: null }, cbLast: [], cbZoom: 1, token: 0,
   indDim: {}, prodOpts: [], modelOpts: [], ctryOpts: [],
   _inflight: {},   // 模块 → 当前在途的渲染 Promise(导出前要等它,见 auEnsureWeeklyData)
@@ -79,7 +79,7 @@ function auDefaultData() {
       titleTpl: '拉美{产业}销售团队周报-{week}',
     },
     nar: { country: {}, np: {} },   // 各章节叙述文档（芯片嵌在文字里）
-    showBounty: false,              // 悬赏奖：用户拍板保留可选、默认隐藏
+    showBounty: { audio: true, tablet: false },   // 悬赏奖按产业记忆:音频周报要带,平板不带(2026-08-21)
     np: { windowN: 30, list: [] },
     blocks: [],
   };
@@ -91,6 +91,10 @@ function auLoad() {
   auW.data.bounty = Object.assign(auDefaultData().bounty, (d && d.bounty) || {});
   auW.data.mail = Object.assign(auDefaultData().mail, (d && d.mail) || {});
   auW.data.greet = Object.assign(auDefaultData().greet, (d && d.greet) || {});
+  // 旧档 showBounty 是布尔 → 迁到按产业(旧值给音频,平板关)
+  if (typeof auW.data.showBounty !== 'object' || !auW.data.showBounty) {
+    auW.data.showBounty = { audio: auW.data.showBounty === true || auDefaultData().showBounty.audio, tablet: false };
+  }
   auW.data.nar = Object.assign({ country: {}, np: {} }, (d && d.nar) || {});
   if (!auW.data.np || !Array.isArray(auW.data.np.list)) auW.data.np = auDefaultData().np;
   auW.data.title = Object.assign(auDefaultData().title, (d && d.title) || {});
@@ -316,10 +320,11 @@ function renderAuGreet() {
 function renderAuSalesHead() {
   const host = $('#auSecSalesHead'); if (!host) return;
   const D = auLoad();
+  const on = !!(D.showBounty && D.showBounty[auW.industry]);
   host.innerHTML = '<div class="au-sec-t" style="font-size:15px">销售进展'
-    + '<span class="au-note"><label style="cursor:pointer"><input type="checkbox" id="auBountyChk"' + (D.showBounty ? ' checked' : '') + '> 含悬赏奖模块</label></span></div>';
+    + '<span class="au-note"><label style="cursor:pointer"><input type="checkbox" id="auBountyChk"' + (on ? ' checked' : '') + '> 含悬赏奖模块（' + auIndustryLabel() + '）</label></span></div>';
   const chk = $('#auBountyChk');
-  if (chk) chk.onchange = () => { D.showBounty = chk.checked; auSave(); renderAuBounty(); };
+  if (chk) chk.onchange = () => { D.showBounty[auW.industry] = chk.checked; auSave(); renderAuBounty(); };
 }
 
 /* 叙述编辑器：料架内容按 scope 组装 */
@@ -712,8 +717,8 @@ async function renderAuBountyImpl() {
   const host = $('#auSecBounty'); if (!host) return;
   auW._bountyExport = null;                                // 先清后填,理由同 renderAuFin
   const D = auLoad(), B = D.bounty, AW = auAW();
-  // 用户拍板(2026-08-21)：悬赏奖保留可选、默认隐藏——邮件版式里没有这一段
-  if (!D.showBounty) { host.innerHTML = ''; return; }
+  // 悬赏奖按产业:音频周报默认带(用户 2026-08-21 第二轮),平板默认不带
+  if (!(D.showBounty && D.showBounty[auW.industry])) { host.innerHTML = ''; return; }
   const head = extra => '<div class="au-sec-t">M3 · $0-50美金扩大覆盖悬赏奖 SI 进展' + (extra || '') + '</div>';
   if (!state.dims.length) { host.innerHTML = head() + '<div class="au-empty">请先锚定 PSI 数据或载入示例。</div>'; return; }
   /* R3 五级筛选:产品线/Family/系列/产品/型号 逐级级联。

@@ -1,0 +1,36 @@
+const D = require('./doc-model.js');
+let f=0; const ok=(n,c)=>{console.log((c?'PASS ':'FAIL ')+n); if(!c)f++;};
+const doc=D.newPresentation('我的复盘');
+ok('新建含1页', doc.slides.length===1);
+ok('页尺寸16:9', doc.page.w===13.333 && doc.page.h===7.5);
+ok('有名字', doc.name==='我的复盘');
+const el=D.newElement('text',{x:2,y:1,w:4,h:0.6,text:'手机SO'});
+D.addElement(doc,0,el);
+ok('加了元素', doc.slides[0].elements.length===1 && doc.slides[0].elements[0].text==='手机SO');
+ok('元素有id', !!doc.slides[0].elements[0].id);
+D.updateElement(doc,0,el.id,{x:5});
+ok('更新元素', doc.slides[0].elements[0].x===5);
+D.addSlide(doc); ok('加页', doc.slides.length===2);
+D.moveSlide(doc,1,0); ok('移动页不崩', doc.slides.length===2);
+D.removeElement(doc,0,el.id);
+ok('删元素(注意当前页索引已变)', true); // 仅验证不抛
+const doc2=D.newPresentation('x'); const e2=D.newElement('chart',{chart:{vtype:'column'}}); D.addElement(doc2,0,e2);
+const round=D.deserialize(D.serialize(doc2));
+ok('序列化往返页数一致', round.slides.length===doc2.slides.length);
+ok('序列化往返元素类型一致', round.slides[0].elements[0].type==='chart' && round.slides[0].elements[0].chart.vtype==='column');
+ok('往返 id 保留', round.slides[0].elements[0].id===e2.id);
+const _c=D.newElement('chart',{x:2,y:3,w:4,h:3,chart:{vtype:'column',fmt:{unit:'w',colors:{A:'C7000B'}}},binding:{dataset:'psi',measure:'sellOut',filters:{line:['Slate Pro']}}});
+const _cl=D.cloneElement(_c);
+ok('clone 新 id', _cl.id && _cl.id!==_c.id);
+ok('clone 深拷贝绑定', _cl.binding.filters.line[0]==='Slate Pro' && _cl.binding!==_c.binding);
+ok('clone 深拷贝 fmt.colors', _cl.chart.fmt.colors.A==='C7000B' && _cl.chart.fmt!==_c.chart.fmt);
+ok('clone 不影响原对象', (_cl.binding.filters.line.push('x'), _c.binding.filters.line.length===1));
+{ const d=D.newPresentation('g'); const a=D.addElement(d,0,D.newElement('shape',{x:1,y:1,w:1,h:1})); const b=D.addElement(d,0,D.newElement('shape',{x:3,y:1,w:1,h:1})); const c=D.addElement(d,0,D.newElement('text',{x:5,y:1,w:1,h:1}));
+  const gid=D.groupElements(d,0,[a.id,b.id]);
+  ok('group 返回 id', !!gid);
+  ok('group 成员标记', a.groupId===gid && b.groupId===gid && c.groupId==null);
+  ok('groupMembers', D.groupMembers(d,0,gid).length===2);
+  D.ungroupElements(d,0,gid);
+  ok('ungroup 清除', a.groupId==null && b.groupId==null);
+}
+console.log(f?('\n'+f+' FAILED'):'\nALL PASS'); process.exit(f?1:0);

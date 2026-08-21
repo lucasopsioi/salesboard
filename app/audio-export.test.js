@@ -1,0 +1,133 @@
+'use strict';
+/* 音频周报导出构建器测试:Outlook 安全 HTML + .eml MIME 结构 */
+const AX = require('./audio-export.js');
+let f = 0; const ok = (n, c) => { console.log((c ? 'PASS ' : 'FAIL ') + n); if (!c) f++; };
+
+const model = {
+  week: '2026-W32', dateStr: '2026-08-05',
+  issues: [{ type: '要货', todo: 'SonicBuds SE 5 Max 报要货', prog: '编码已出', due: '2026-08-05', geo: '所有国家' }],
+  fin: { note: '2026年1~6月实际 · 时间进度 50%', tables: [{ title: '分产品系列', header: ['系列', '26年收入'], rows: [['音频合计', '$5,874,525.0'], ['Series T2', '$2,371,625.0']], totalIdx: 0 }] },
+  bounty: { note: '累计SI=Sell-in · 时间进度 58%', header: ['国家', 'SI目标', '26年累计SI', 'SI达成率'], rows: [['墨西哥', '294,000', '171,362', '58%'], ['合计', '764,000', '308,187', '40%']] },
+  ind: { kpis: [{ t: '2026年 Sell In YTD', v: '40,926台', sub: '同比 +24%' }], chartPng: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==', title: '音频与智能配件 · Sell Out · 周维度', hint: '红实线=2026年' },
+  title: { text: 'W29 WoW环比-15%,墨西哥PrimeDay结束后回落', size: 15, bold: true },
+  countries: [{ name: '巴西', chips: '26累计SO 5,331 · DOS 10', header: ['Product', '26累计SO'], rows: [['Product D Buds', '2,060'], ['合计', '5,331']], hasTotal: true }],
+  blocks: [{ title: 'SE 5 Max 上市方案', text: '首销 W36,预热 W34 起', atts: ['方案V2.pptx'] }],
+};
+
+/* ---------- HTML(Outlook 安全) ---------- */
+const html = AX.buildWeeklyHtml(model, 'cid');
+ok('全部六个模块标题都在', ['一 · 遗留问题', '二 · 音频产业经营进展', '三 · $0-50', '四 · 周度销售进展', '五 · 产品维度', '六 · 新品进展'].every(t => html.includes(t)));
+ok('表格用 <table + 内联样式', /<table cellpadding="0" cellspacing="0" style="border-collapse/.test(html));
+ok('无 class/外部CSS/flex/grid(Outlook Word 引擎兼容)', !/class=|<link|display:flex|display:grid/.test(html));
+ok('图表用 cid 引用(邮件模式)', html.includes('src="cid:chart1"'));
+ok('PDF 模式图表用 dataURL', AX.buildWeeklyHtml(model, 'data').includes('src="data:image/png;base64,'));
+ok('数据单元格转义(< > &)', AX.buildWeeklyHtml({ week: 'W1', issues: [{ type: 'a<b', todo: 'x&y', prog: '', due: '', geo: '' }] }, 'data').includes('a&lt;b'));
+ok('悬赏合计行带加粗样式(totalLast)', html.includes('font-weight:bold;background:#FFF3F3'));
+ok('标题文字字号/加粗生效', html.includes('font-size:15px;font-weight:bold;') && html.includes('W29 WoW'));
+
+/* ---------- .eml ---------- */
+const eml = AX.buildEml('音频周报 2026-W32', html, [{ cid: 'chart1', b64: 'iVBORw0KGgoAAAANSUhEUg==' }]);
+ok('Subject 用 RFC2047 UTF-8 B 编码', /^Subject: =\?UTF-8\?B\?.+\?=\r\n/m.test(eml));
+ok('X-Unsent:1(双击 Outlook 开成草稿)', /^X-Unsent: 1\r\n/m.test(eml));
+ok('multipart/related + type=text/html', eml.includes('Content-Type: multipart/related') && eml.includes('type="text/html"'));
+ok('HTML part base64 可解码还原', (() => {
+  const mm = eml.match(/Content-Transfer-Encoding: base64\r\n\r\n([\s\S]*?)\r\n--/);
+  if (!mm) return false;
+  const dec = Buffer.from(mm[1].replace(/\r\n/g, ''), 'base64').toString('utf8');
+  return dec.includes('音频周报 2026-W32') && dec.includes('cid:chart1');
+})());
+ok('内嵌图片 part 带 Content-ID <chart1>', eml.includes('Content-ID: <chart1>') && eml.includes('Content-Disposition: inline'));
+ok('MIME 边界正确闭合(--boundary--)', /------=_sb_audio_weekly_boundary--\r\n$/.test(eml));
+ok('b64Utf8 中文可逆', Buffer.from(AX.b64Utf8('音频周报'), 'base64').toString('utf8') === '音频周报');
+
+/* ---------- 空模型不崩 ---------- */
+ok('空模型可生成(全部占位提示)', (() => { const h = AX.buildWeeklyHtml({}, 'data'); return h.includes('本周无遗留问题') || h.includes('（'); })());
+
+/* ============================================================
+   R6 · Outlook 版式断言（用户实拍问题的回归锁）
+   ① 表格长短不一 → 全篇统一 1000px 版心 + table-layout:fixed + colgroup 列宽合计=表宽
+   ② 100% 缩放越界 → 宽表(>8列)走高清 PNG；没 PNG 时按列切块，任一表 ≤8 列
+   ③ 单元格一堆 ↵  → 标签间零空白（>\s+< 必须零命中）
+   ④ 数字挤在一起  → 数字列右对齐 + padding + nowrap
+   ============================================================ */
+const WIDE_HDR = ['系列', '25年收入', '26年收入', '收入同比', '25年销毛额', '26年销毛额', '销毛额同比', '25年销毛率', '26年销毛率', '25年NSIP', '26年NSIP', 'NSIP同比', '全年BP', 'BP达成率', '全年预测', '预测达成率'];
+const WIDE_ROW = ['音频合计', '$3,866,892.0', '$5,874,525.0', '+51.9%', '$861,351.0', '$1,270,278.0', '+47.5%', '22.3%', '21.6%', '$88.2', '$89.9', '+$1.7', '$11.2', '52%', '$10.0', '58%'];
+const modelWide = {
+  week: '2026-W33', dateStr: '2026-08-10', industry: 'audio', industryLabel: '音频',
+  summary: [{ t: '本周 SO（W33）', v: '5,331台', sub: 'WoW +12%' }, { t: '2026 累计SO 同比', v: '+22%', sub: '累计 49,642' }, { t: '当前 库存', v: '382', sub: '2 个国家合计' }, { t: '渠道 DOS', v: '10 天', sub: '巴西' }],
+  issues: [{ type: '要货', todo: 'SE 5 Max 报要货', prog: '编码已出', due: '2026-08-05', geo: '所有国家' }],
+  fin: { note: '2026年1~6月实际', tables: [{ title: '分产品系列', header: WIDE_HDR, rows: [WIDE_ROW], totalIdx: 0 }] },
+  bounty: { note: '累计SI=Sell-in', header: ['国家', '大盘年空间', '目标份额', 'SI目标', '26年累计SI', 'SI达成率'], rows: [['墨西哥', '1,758,769', '17%', '294,000', '171,362', '58%'], ['合计', '7,923,722', '10%', '764,000', '308,187', '40%']] },
+  ind: { kpis: [{ t: '2026年 Sell In YTD', v: '40,926台', sub: '同比 +24%' }], chartPng: 'data:image/png;base64,iVBORw0KGgo=', title: '音频 · Sell Out · 周维度', hint: '红实线=2026' },
+  title: { text: 'W33 环比-15%\n墨西哥回落', size: 15, bold: true },
+  // 三行:第 2 行(索引1)是明细 → 才会命中斑马纹;第 3 行是合计 → 走合计底色
+  countries: [{ name: '巴西', chips: '26累计SO 5,331', header: ['Product', '26累计SO', '25同期', 'SO同比'], rows: [['Product D Buds', '2,060', '—', '—'], ['Product E Buds Pro', '1,795', '1,402', '28%'], ['合计', '5,331', '4,369', '22%']], hasTotal: true }],
+  blocks: [{ title: 'SE 5 Max 上市', text: '首销 W36', atts: ['方案V2.pptx'] }],
+};
+const hW = AX.buildWeeklyHtml(modelWide, 'cid');
+ok('R6-1 标签之间零空白(>\s+< 零命中 → Word 里不再出现 ↵ 段落标记)', !/>\s+</.test(hW));
+ok('R6-2 每个 <table 都锁死 1000px 版心 + table-layout:fixed', (function () {
+  const ts = hW.match(/<table[^>]*>/g) || [];
+  return ts.length > 0 && ts.every(t => /table-layout:fixed/.test(t) && /width="1000"/.test(t));
+})());
+ok('R6-3 每个表都有 colgroup 且列宽合计恰好=1000(不等会被 Word 重新 autofit)', (function () {
+  const gs = hW.match(/<colgroup>[\s\S]*?<\/colgroup>/g) || [];
+  if (!gs.length) return false;
+  return gs.every(g => {
+    const ws = [].concat.apply([], [...g.matchAll(/<col width="(\d+)"/g)]).filter((x, i) => i % 2 === 1).map(Number);
+    const arr = [...g.matchAll(/<col width="(\d+)"/g)].map(x => +x[1]);
+    return arr.length > 0 && arr.reduce((a, b) => a + b, 0) === 1000;
+  });
+})());
+ok('R6-4 任一 HTML 表列数 ≤8(宽表被切块或转图,不会横向越界)', (function () {
+  const rows = hW.match(/<tr>[\s\S]*?<\/tr>/g) || [];
+  return rows.length > 0 && rows.every(r => ((r.match(/<t[hd][\s>]/g) || []).length) <= 8);
+})());
+ok('R6-5 数字列右对齐 + 内边距 + 不换行(数字不再挤在一起)', /text-align:right;white-space:nowrap/.test(hW) && /padding:6px 10px/.test(hW));
+ok('R6-6 表头底色 + 斑马纹(可读性)', hW.indexOf('#F5F6F7') >= 0 && hW.indexOf('#FAFBFC') >= 0);
+ok('R6-7 仍然零 class / flex / grid / 外部CSS(Word 引擎兼容)', !/class=|<link|display:flex|display:grid/.test(hW));
+ok('R6-8 摘要卡渲染在最前(4 个关键数)', hW.indexOf('本周 SO') > 0 && hW.indexOf('本周 SO') < hW.indexOf('一 · 遗留问题'));
+ok('R6-9 产业名进标题(切平板后标题跟着变)', AX.buildWeeklyHtml(Object.assign({}, modelWide, { industryLabel: '平板' }), 'data').indexOf('平板周报') >= 0);
+ok('R6-10 多行文本转 <br> 而非裸换行(否则 Word 出 ↵)', hW.indexOf('W33 环比-15%<br>墨西哥回落') >= 0);
+ok('R6-11 PDF 模式(data)同样零空白且锁宽', (function () { const h = AX.buildWeeklyHtml(modelWide, 'data'); return !/>\s+</.test(h) && /width="1000"/.test(h); })());
+ok('R6-12 浏览器侧给了 PNG 时,宽表走 <img cid 内嵌', (function () {
+  const m2 = JSON.parse(JSON.stringify(modelWide));
+  m2.fin.tables[0].img = 'data:image/png;base64,AAA'; m2.fin.tables[0].cid = 'fin1';
+  const h = AX.buildWeeklyHtml(m2, 'cid');
+  return h.indexOf('src="cid:fin1"') >= 0 && h.indexOf('width="1000"') >= 0;
+})());
+
+/* ---------- R7 邮件不挂附件(用户明确要求:Outlook 只要版式) ---------- */
+const relOnly = AX.buildEml('周报', '<div>x</div>', [{ cid: 'chart1', b64: 'AAA' }]);
+ok('R7-1 .eml 结构恒为 multipart/related,不出现 mixed/attachment',
+  relOnly.indexOf('Content-Type: multipart/related') >= 0
+  && relOnly.indexOf('multipart/mixed') < 0 && relOnly.indexOf('Content-Disposition: attachment') < 0);
+ok('R7-2 M6 附件只在正文里点名,说明是「随存档保存在本机」',
+  AX.buildWeeklyHtml(model, 'cid').indexOf('随存档保存在本机') >= 0);
+
+/* ---------- R8 导出缓存「先清后填」(源码级回归守卫) ----------
+   一键导出不重新取数,只读渲染留下的 auW.finPb/_bountyExport/cbLast。
+   若渲染器在早退分支不清缓存,切产业后导出会把上一个产业的数字印在新标题下
+   (实测:平板没有财经 LV1 → renderAuFin 早退 → M2 仍是音频的表)。
+   所以要求三个渲染器都在**第一个 await 之前**把自己的缓存清空。 */
+const fs = require('fs');
+const src = fs.readFileSync(require('path').join(__dirname, 'views', 'audio-view.js'), 'utf8');
+function clearsBeforeAwait(fnName, clearRe) {
+  const i = src.indexOf('async function ' + fnName);
+  if (i < 0) return false;
+  const head = src.slice(i, i + 1200);
+  const a = head.search(/\bawait\b/);
+  const c = head.search(clearRe);
+  return c >= 0 && (a < 0 || c < a);
+}
+ok('R8-1 M2 渲染在取数前先清 finPb/finBlk/finRb', clearsBeforeAwait('renderAuFinImpl', /auW\.finPb\s*=\s*null/));
+ok('R8-2 M3 渲染在取数前先清 _bountyExport', clearsBeforeAwait('renderAuBountyImpl', /auW\._bountyExport\s*=\s*null/));
+ok('R8-3 M5 渲染在取数前先清 cbLast', clearsBeforeAwait('renderAuCountryImpl', /auW\.cbLast\s*=\s*\[\]/));
+ok('R8-4 四个异步模块的渲染都登记进 _inflight(导出前能等)',
+  ['auTrack(\'fin\'', 'auTrack(\'bounty\'', 'auTrack(\'cb\'', 'auTrack(\'ind\''].every(s => src.indexOf(s) >= 0));
+ok('R8-5 导出前的就绪检查已导出到 window', src.indexOf('window.auEnsureWeeklyData = auEnsureWeeklyData') >= 0);
+const exp = fs.readFileSync(require('path').join(__dirname, 'audio-export.js'), 'utf8');
+ok('R8-6 三个导出入口都先等就绪', (exp.match(/auEnsureWeeklyData\(\)/g) || []).length >= 3);
+ok('R8-7 model 里不再带附件本机路径(邮件不挂附件)', exp.indexOf('attFiles:') < 0);
+
+console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS'); process.exit(f ? 1 : 0);

@@ -1,0 +1,24 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+  html,body{margin:0;height:100%;overflow:hidden;user-select:none;-webkit-app-region:drag}
+  body{display:flex;flex-direction:column;justify-content:center;gap:10px;padding:22px 26px;box-sizing:border-box;
+    font-family:"Microsoft YaHei","微软雅黑","Segoe UI",sans-serif;background:#fff;border:1px solid #E6E8EB;border-radius:10px}
+  .t{display:flex;align-items:baseline;gap:8px}
+  .name{font-size:15px;font-weight:700;color:#1A1A1A}
+  .ver{font-size:11px;color:#8A9099}
+  .phase{font-size:12px;color:#5A5F66;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:16px}
+  .bar{height:6px;border-radius:3px;background:#F0F1F3;overflow:hidden}
+  .fill{height:100%;width:30%;border-radius:3px;background:#C7000B;transition:width .2s}
+  .fill.ind{animation:sl 1.2s ease-in-out infinite}
+  @keyframes sl{0%{margin-left:-30%}100%{margin-left:100%}}
+</style></head><body>
+  <div class="t"><span class="name">Salesboard</span><span class="ver" id="ver"></span></div>
+  <div class="phase" id="phase">正在启动…</div>
+  <div class="bar"><div class="fill ind" id="fill"></div></div>
+<script>
+  window.splash.onVersion(v => { document.getElementById('ver').textContent = v; });
+  window.splash.onPhase(d => {
+    if (d && d.text) document.getElementById('phase').textContent = d.text;
+    const f = document.getElementById('fill');
+    if (d && d.pct != null) { f.classList.remove('ind'); f.style.marginLeft = '0'; f.style.width = Math.max(2, Math.min(100, d.pct)) + '%'; }
+  });
+</script></body></html>

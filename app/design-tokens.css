@@ -1,0 +1,205 @@
+/* ============================================================
+   Salesboard · Design Tokens（阶段二）
+   受 Liquid Glass 启发的桌面端设计语言。唯一的颜色/尺寸/动效真源。
+
+   规则：
+   · 任何页面、组件、JS 内联样式都不得再写死颜色与尺寸，一律引用这里的变量。
+   · index.html 里的旧变量（--red/--ink/--line/--bg/--panel/--shadow/--radius…）
+     已改为本文件 token 的别名 —— 存量 585 行 CSS 不用改就自动跟随主题。
+   · 业务语义色（good/warn/bad）沿用原值，避免改变 DOS 红黄绿、销毛阈值等既有判读。
+
+   加载顺序：design-tokens.css → glass.css → index.html 内联 <style>
+   ============================================================ */
+
+/* ---------- 1. 与主题无关的基础标度 ---------- */
+:root {
+  /* 排版 —— Windows 优先，Segoe UI Variable 打头（规范四） */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
+               "Microsoft YaHei UI", "Microsoft YaHei", Inter, Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI",
+                  "Microsoft YaHei UI", "Microsoft YaHei", Inter, Arial, sans-serif;
+  --fs-11: 11px; --fs-12: 12px; --fs-13: 13px; --fs-14: 14px;
+  --fs-16: 16px; --fs-20: 20px; --fs-26: 26px;
+  --lh-tight: 1.25; --lh-base: 1.5; --lh-loose: 1.7;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+  /* 数字/金额/百分比/KPI 统一等宽数字，避免跳动（规范四） */
+  --fnum: tabular-nums;
+
+  /* 间距 4pt 栅格 */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
+
+  /* 圆角分级（规范三） */
+  --r-xs: 8px;    /* 小控件 */
+  --r-sm: 10px;   /* 输入框 */
+  --r-md: 12px;   /* 按钮 */
+  --r-lg: 16px;   /* 普通卡片 */
+  --r-xl: 20px;   /* 大面板 */
+  --r-2xl: 24px;  /* 弹窗 */
+  --r-pill: 999px;
+
+  /* 模糊标度 */
+  --blur-1: 8px; --blur-2: 16px; --blur-3: 28px;
+
+  /* 动效（规范六） */
+  --dur-micro: 150ms;  /* 微交互 120–180 */
+  --dur-ui: 220ms;     /* 普通切换 180–280 */
+  --dur-panel: 300ms;  /* 面板/弹窗 240–360 */
+  --dur-page: 360ms;   /* 页面进入 280–450 */
+  --amb-loop: 22s;     /* 背景环境光 10–30s */
+  --ease-glass: cubic-bezier(.2, .8, .2, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+
+  /* 层级 */
+  --z-base: 0; --z-sticky: 10; --z-nav: 30; --z-overlay: 50;
+  --z-modal: 60; --z-pop: 80; --z-toast: 1100;
+
+  /* 断点（供 JS 读取，CSS 里用媒体查询字面量） */
+  --bp-sm: 1100px; --bp-md: 1400px; --bp-lg: 1800px;
+
+  /* 业务语义色 —— 不随主题改判读含义，仅微调明度 */
+  --c-good: #1E9E57;
+  --c-warn: #E0A400;
+  --c-bad:  #C7000B;
+}
+
+/* ---------- 2. 浅色主题（默认） ---------- */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --c-brand:        #C7000B;
+  --c-brand-hover:  #D91420;
+  --c-brand-active: #9E0009;
+  --c-brand-soft:   rgba(199, 0, 11, .10);
+  --c-focus:        rgba(199, 0, 11, .45);
+
+  --c-ink-1: #1A1A1A;   /* 正文 */
+  --c-ink-2: #5A5F66;   /* 次要 */
+  --c-ink-3: #8A9099;   /* 辅助/占位 */
+  --c-ink-on-brand: #FFFFFF;
+
+  --c-line:      #E6E8EB;
+  --c-line-soft: rgba(16, 24, 40, .07);
+
+  --c-bg-base: #FFFFFF;   /* 应用底色 —— 纯白，不做渐变 */
+  --c-bg-elev: #FFFFFF;   /* 不透明卡片 */
+  --c-bg-sunken: #E9ECF1;
+  --c-overlay: rgba(255, 255, 255, .82);   /* 全屏 loading 遮罩 */
+
+  /* 侧栏（浅色下仍走深色，保证导航与内容的层级对比） */
+  --c-nav-bg:   rgba(22, 25, 32, .74);
+  --c-nav-ink:  #D6DAE1;
+  --c-nav-ink-2:#9AA1AC;
+  --c-nav-active-bg: rgba(199, 0, 11, .92);
+
+  /* 环境背景光斑（低饱和、克制） */
+  --amb-1: rgba(120, 160, 255, .30);
+  --amb-2: rgba(150, 120, 235, .22);
+  --amb-3: rgba(90, 200, 220, .20);
+  --amb-canvas: #FFFFFF;   /* 纯色画布，无光斑无噪点 */
+
+  /* 玻璃四级 */
+  --glass-subtle-bg:   rgba(255, 255, 255, .52);
+  --glass-regular-bg:  rgba(255, 255, 255, .66);
+  --glass-elevated-bg: rgba(255, 255, 255, .78);
+  --glass-solid-bg:    rgba(255, 255, 255, .94);
+  --glass-border:      rgba(255, 255, 255, .70);
+  --glass-border-2:    rgba(16, 24, 40, .07);
+  --glass-inner-hi:    rgba(255, 255, 255, .85);   /* 左上内高光 */
+  --glass-sheen:       rgba(255, 255, 255, .38);   /* 鼠标跟随高光 */
+
+  /* 阴影 */
+  --sh-1: 0 1px 3px rgba(16, 24, 40, .06), 0 1px 2px rgba(16, 24, 40, .04);
+  --sh-2: 0 6px 18px rgba(16, 24, 40, .10);
+  --sh-3: 0 16px 44px rgba(16, 24, 40, .16);
+  --sh-glass: 0 8px 30px rgba(16, 24, 40, .12);
+
+  /* 表格 */
+  --c-warn-soft: rgba(224, 164, 0, .12);
+  --c-warn-line: rgba(224, 164, 0, .45);
+  --c-warn-text: #8A6D00;
+  --c-brand-line: rgba(199, 0, 11, .35);
+
+  --c-table-head: rgba(247, 248, 250, .92);
+  --c-table-zebra: rgba(16, 24, 40, .022);
+  --c-table-hover: rgba(199, 0, 11, .06);
+}
+
+/* ---------- 3. 深色主题 ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --c-brand:        #FF4D57;
+  --c-brand-hover:  #FF6C74;
+  --c-brand-active: #E03039;
+  --c-brand-soft:   rgba(255, 77, 87, .16);
+  --c-focus:        rgba(255, 108, 116, .55);
+
+  --c-ink-1: #ECEFF4;
+  --c-ink-2: #A8B0BC;
+  --c-ink-3: #8E96A3;   /* 阶段四：深色下抬一档，保证弱化文字对比 */
+  --c-ink-on-brand: #FFFFFF;
+
+  --c-line:      rgba(255, 255, 255, .10);
+  --c-line-soft: rgba(255, 255, 255, .06);
+
+  /* 深灰蓝，不用纯黑（规范八） */
+  --c-bg-base: #000000;   /* 应用底色 —— 纯黑，不做渐变 */
+  --c-bg-elev: #17191F;
+  --c-bg-sunken: #0B0D11;
+  --c-overlay: rgba(0, 0, 0, .78);
+
+  --c-nav-bg:   rgba(12, 14, 19, .72);
+  --c-nav-ink:  #C6CCD6;
+  --c-nav-ink-2:#7F8794;
+  --c-nav-active-bg: rgba(255, 77, 87, .86);
+
+  --amb-1: rgba(70, 110, 220, .26);
+  --amb-2: rgba(120, 90, 210, .22);
+  --amb-3: rgba(40, 150, 175, .18);
+  --amb-canvas: #000000;   /* 纯色画布，无光斑无噪点 */
+
+  --glass-subtle-bg:   rgba(38, 43, 54, .48);
+  --glass-regular-bg:  rgba(38, 43, 54, .62);
+  --glass-elevated-bg: rgba(42, 48, 60, .76);
+  --glass-solid-bg:    rgba(27, 31, 39, .95);
+  --glass-border:      rgba(255, 255, 255, .12);
+  --glass-border-2:    rgba(0, 0, 0, .40);
+  --glass-inner-hi:    rgba(255, 255, 255, .16);
+  --glass-sheen:       rgba(255, 255, 255, .10);
+
+  --sh-1: 0 1px 3px rgba(0, 0, 0, .40), 0 1px 2px rgba(0, 0, 0, .30);
+  --sh-2: 0 6px 20px rgba(0, 0, 0, .48);
+  --sh-3: 0 18px 48px rgba(0, 0, 0, .60);
+  --sh-glass: 0 10px 34px rgba(0, 0, 0, .50);
+
+  --c-warn-soft: rgba(240, 180, 41, .16);
+  --c-warn-line: rgba(240, 180, 41, .45);
+  --c-warn-text: #F0C260;
+  --c-brand-line: rgba(255, 90, 99, .45);
+
+  --c-table-head: rgba(30, 35, 44, .92);
+  --c-table-zebra: rgba(255, 255, 255, .028);
+  --c-table-hover: rgba(255, 77, 87, .12);
+
+  /* 深色下语义色提亮，保证对比度 */
+  --c-good: #35C97B;
+  --c-warn: #F0B429;
+  --c-bad:  #FF5A63;
+}
+
+/* ---------- 4. 视觉质量等级（默认 Balanced，规范九） ----------
+   High       = 全量玻璃 + 鼠标高光 + 背景缓动
+   Balanced   = 降低模糊半径、关背景缓动（静态渐变）、保留高光
+   Performance= 关 backdrop-filter、关高光、关一切装饰动画 */
+:root[data-perf="balanced"] {
+  --blur-1: 6px; --blur-2: 12px; --blur-3: 18px;
+}
+:root[data-perf="performance"] {
+  --blur-1: 0px; --blur-2: 0px; --blur-3: 0px;
+  --glass-subtle-bg:   var(--c-bg-elev);
+  --glass-regular-bg:  var(--c-bg-elev);
+  --glass-elevated-bg: var(--c-bg-elev);
+  --glass-solid-bg:    var(--c-bg-elev);
+}

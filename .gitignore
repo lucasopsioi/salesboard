@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+
+# 造出来的演示数据体积大，不进仓库（用 scripts/make-demo-data.js 重新生成）
+demo-data/**/*.csv
+demo-data/**/*.xlsx

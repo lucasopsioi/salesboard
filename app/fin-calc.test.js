@@ -1,0 +1,16 @@
+const F=require('./fin-calc.js');
+let f=0; const ok=(n,c)=>{console.log((c?'PASS ':'FAIL ')+n); if(!c)f++;};
+ok('yoy', F.yoy(120,100)===0.2);
+ok('yoy prev0->null', F.yoy(120,0)===null);
+ok('attain', F.attain(50,200)===0.25);
+ok('attain plan0->null', F.attain(50,0)===null);
+ok('gmRate', F.gmRate(30,120)===0.25);
+ok('ppDiff', Math.abs(F.ppDiff(0.25,0.20)-0.05)<1e-9);
+ok('ppDiff null', F.ppDiff(null,0.2)===null);
+ok('nsip', F.nsip(1000,50)===20);
+ok('nsip si0->null', F.nsip(1000,0)===null);
+ok('fYoy', F.fYoy('B2','C2')==='IFERROR((B2-C2)/C2,"")');
+ok('fAttain', F.fAttain('B2','D2')==='IFERROR(B2/D2,"")');
+ok('fRate', F.fRate('B2','C2')==='IFERROR(B2/C2,"")');
+ok('fPp', F.fPp('E2','F2')==='IFERROR(E2-F2,"")');
+console.log(f?('\n'+f+' FAILED'):'\nALL PASS'); process.exit(f?1:0);

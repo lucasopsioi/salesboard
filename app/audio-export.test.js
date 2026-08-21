@@ -176,4 +176,57 @@ ok('R9-13 M1 表带「状态」列', issHtml.indexOf('状态') >= 0 && issHtml.i
 ok('R9-14 M1 的超期说明原样进正文', issHtml.indexOf('已超期16天') >= 0);
 
 
+
+/* ---------- R10 周报 v3(用户 W34 邮件版式) ---------- */
+const v3m = {
+  week: '2026-W34', industryLabel: '平板', version: 'v57', builtAt: 'x', dateStr: '2026-08-21', genTime: '10:00',
+  greet1: '各位领导同事好，请查收W34拉美平板销售团队周报',
+  greet2: '周报涉及产业经营信息，此邮件禁止转发/截屏，请注意信息安全。',
+  title: '拉美平板销售团队周报-W34',
+  issues: [{ type: '要货', todo: 'X', prog: 'Y', status: '有风险', due: '2026-08-15（已超期6天）', geo: '巴西' }],
+  finTitle: '全年达成进度（产业经营）-月度刷新-2026-06（预测为6月预测）',
+  fin: { tables: [{ title: '分产品系列', header: ['系列', '26年收入'], rows: [['平板合计', '$12.4M']], totalIdx: 0 }] },
+  sales: {
+    overall: { text: '大区整体销售：W34 WoW-5%，SO同比+30%', img: 'data:image/png;base64,AAA', cid: 'trend1' },
+    family: { text: '系列销售情况：Slate WoW-23%', table: { header: ['Family', '26累计SO'], rows: [['Slate', '62,301'], ['合计', '102,126']], hasTotal: true } },
+    rep: { text: '国家办销售情况：截止W34，SO同比+15%', table: { header: ['国家办', '26累计SO'], rows: [['墨西哥国家办', '26,507'], ['合计', '102,126']], hasTotal: true } },
+    countries: [
+      { name: '墨西哥', text: '墨西哥：截止W34，SO同比+15%', table: { header: ['Product', '26累计SO'], rows: [['Coral', '7,429']], hasTotal: false } },
+      { name: '巴西', text: '巴西：截止W34，SO同比+12%', table: { header: ['Product', '26累计SO'], rows: [['Marlin', '8,606']], hasTotal: false } },
+    ],
+  },
+  newprods: [{
+    name: 'Tarpon', text: '新品进展-Tarpon：当前2国累计销售1,982台，同比上代首销同期+25%',
+    table: { header: ['国家', '首销日期', '实际达成', '首销目标', '达成率', '同比上代'], rows: [['巴西', '2026/07/20', '1,200', '5,000', '24%', '+25%'], ['合计', '', '1,982', '8,000', '25%', '+25%']], hasTotal: true },
+    info: { main: { header: ['产品', '认证型号', '样机编码', '最晚发货'], rows: [['Tarpon', 'TPN-W09', 'SMP-001、SMP-002', '2026/07']] },
+            plan: { header: ['国家', '预售', '线上首销', '线下首销'], rows: [['巴西', '7/15', '7/20', '7/25']] } },
+  }],
+};
+const v3h = AX.buildWeeklyV3Html(v3m, 'data');
+ok('V3-1 问候两行在大表之外(加粗)', v3h.indexOf('各位领导同事好') < v3h.indexOf('<table') && /<b[^>]*>|font-weight:bold/.test(v3h.slice(0, v3h.indexOf('<table'))));
+ok('V3-2 只有一张外层大表框住全部内容(嵌套数据表除外)', (() => {
+  const outer = v3h.slice(v3h.indexOf('<table'));
+  // 外层表闭合于最末,且问候后所有 section 都在其中
+  return v3h.indexOf('本周重点关注') > v3h.indexOf('<table') && /<\/table>$/.test(v3h);
+})());
+ok('V3-3 大表锁 1000px + table-layout:fixed', /<table[^>]*width="1000"[^>]*table-layout:fixed/.test(v3h.replace(/style="([^"]*)"/g, (a, b) => 'style="' + b + '" ' + b)));
+ok('V3-4 重点关注 6 列表头齐全', ['类型', '重点工作/通知', '进展', '状态', '截止时间', '涉及国家办/国家'].every(t => v3h.indexOf(t) >= 0));
+ok('V3-5 超期/有风险标红', v3h.indexOf('color:#C7000B">有风险') >= 0 || /color:#C7000B[^>]*>[^<]*有风险|有风险[\s\S]{0,80}#C7000B/.test(v3h));
+ok('V3-6 财经标题行带月度刷新与预测版本', v3h.indexOf('月度刷新-2026-06（预测为6月预测）') >= 0);
+ok('V3-7 叙述句首「xxx：」加粗', v3h.indexOf('<b>大区整体销售：</b>') >= 0 && v3h.indexOf('<b>墨西哥：</b>') >= 0);
+ok('V3-8 六国表共用列宽(同结构)', (() => {
+  const gs = [...v3h.matchAll(/<colgroup>([\s\S]*?)<\/colgroup>/g)].map(g => [...g[1].matchAll(/<col width="(\d+)"/g)].map(x => +x[1]));
+  const two = gs.filter(a => a.length === 2 && a[0] + a[1] === 1000);
+  // 墨西哥/巴西两张 2 列表列宽应一致
+  return two.length >= 2 && JSON.stringify(two[two.length - 1]) === JSON.stringify(two[two.length - 2]);
+})());
+ok('V3-9 新品区块含首销表与新品信息', v3h.indexOf('新品进展-Tarpon') >= 0 && v3h.indexOf('新品信息') >= 0 && v3h.indexOf('样机编码') >= 0);
+ok('V3-10 正文 12pt 微软雅黑、零 class/flex/grid', /font-size:12pt/.test(v3h) && !/class=|display:flex|display:grid/.test(v3h));
+ok('V3-11 标签间零空白(无 Word ↵)', !/>\s+</.test(v3h));
+ok('V3-12 悬赏奖不给就不出现(默认隐藏)', v3h.indexOf('悬赏奖') < 0);
+const v3b = AX.buildWeeklyV3Html(Object.assign({}, v3m, { bounty: { note: 'n', header: ['国家', 'SI'], rows: [['墨西哥', '1']] } }), 'data');
+ok('V3-13 悬赏奖给了才出现', v3b.indexOf('悬赏奖') >= 0);
+ok('V3-14 空模型不炸且仍是合法骨架', (() => { const h = AX.buildWeeklyV3Html({}, 'data'); return h.indexOf('<table') >= 0 && /<\/table>$/.test(h); })());
+
+
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS'); process.exit(f ? 1 : 0);

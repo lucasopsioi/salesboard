@@ -48,9 +48,12 @@ async function auEnsureWeeklyData() {
     await Promise.all(ps);
   }
   const missing = [];
-  if (!auW.finPb) missing.push('M2 经营进展');
-  if (!auW._bountyExport) missing.push('M3 悬赏奖');
-  if (!(auW.cbLast || []).length) missing.push('M5 产品维度');
+  const D = auLoad();
+  if (!auW.finPb) missing.push('全年达成进度');
+  if (!auW.famRep) missing.push('系列销售表');
+  if (!auW.repRep) missing.push('国家办销售表');
+  if (!(auW.cbLast || []).length) missing.push('国家块');
+  if (D.showBounty && !auW._bountyExport) missing.push('悬赏奖');   // 默认隐藏时不再误报
   return missing;
 }
 if (typeof window !== 'undefined') window.auEnsureWeeklyData = auEnsureWeeklyData;
@@ -65,9 +68,19 @@ function auDefaultData() {
       // (prodSel===null = 用户没手选过 → 音频产业下走默认产品集 SE2/SE3/SE4)
       lineSel: [], familySel: [], seriesSel: [], prodSel: null, modelSel: [], from: '2026-01-01', to: '',
     },
-    countries: [], title: { text: '', size: 15, bold: false },
+    countries: ['墨西哥', '哥伦比亚', '智利', '秘鲁', '巴西', '阿根廷'],
+    title: { text: '', size: 15, bold: false },
     // 收件人/抄送/主题：随存档走，下次开软件还在（用户从 Outlook 复制上一封的收件人粘进来）
     mail: { to: '', cc: '', subject: '' },
+    /* 周报 v3（用户 W34 邮件版式）：问候两行 + 大表标题，{week}/{产业} 导出时自动替换 */
+    greet: {
+      l1: '各位领导同事好，请查收{week}拉美{产业}销售团队周报',
+      l2: '周报涉及产业经营信息，此邮件禁止转发/截屏，请注意信息安全。',
+      titleTpl: '拉美{产业}销售团队周报-{week}',
+    },
+    nar: { country: {}, np: {} },   // 各章节叙述文档（芯片嵌在文字里）
+    showBounty: false,              // 悬赏奖：用户拍板保留可选、默认隐藏
+    np: { windowN: 30, list: [] },
     blocks: [],
   };
 }
@@ -77,6 +90,9 @@ function auLoad() {
   auW.data = Object.assign(auDefaultData(), d || {});
   auW.data.bounty = Object.assign(auDefaultData().bounty, (d && d.bounty) || {});
   auW.data.mail = Object.assign(auDefaultData().mail, (d && d.mail) || {});
+  auW.data.greet = Object.assign(auDefaultData().greet, (d && d.greet) || {});
+  auW.data.nar = Object.assign({ country: {}, np: {} }, (d && d.nar) || {});
+  if (!auW.data.np || !Array.isArray(auW.data.np.list)) auW.data.np = auDefaultData().np;
   auW.data.title = Object.assign(auDefaultData().title, (d && d.title) || {});
   return auW.data;
 }
@@ -180,6 +196,10 @@ function auSwitchIndustry(key) {
 
 /* ---------- 样式注入(幂等,只加 .au-* 前缀类,不碰任何现有样式) ---------- */
 function auInjectCSS() {
+  if (typeof window.WeeklyNarrative !== 'undefined' && !document.getElementById('wkNarCss')) {
+    const st = document.createElement('style'); st.id = 'wkNarCss'; st.textContent = window.WeeklyNarrative.CSS;
+    document.head.appendChild(st);
+  }
   if (document.getElementById('auCSS')) return;
   const st = document.createElement('style'); st.id = 'auCSS';
   st.textContent = `
@@ -231,12 +251,18 @@ function renderAudio() {
       '  <button class="btn" id="auExpPdf">📄 PDF</button>' +
       '  <button class="btn" id="auExpEml">✉️ Outlook 邮件(.eml)</button>' +
       '</div>' +
+      '<div class="au-toolbar" id="auGreetBar" style="margin-bottom:2px;flex-wrap:wrap;gap:6px"></div>' +
       '<div class="au-sec" id="auSecIssues"></div>' +
       '<div class="au-sec" id="auSecFin"></div>' +
-      '<div class="au-sec" id="auSecBounty"></div>' +
+      '<div class="au-sec" id="auSecSalesHead"></div>' +
+      '<div class="au-sec" id="auSecOverallNar"></div>' +
       '<div class="au-sec" id="auSecInd"></div>' +
+      '<div class="au-sec" id="auSecFamily"></div>' +
+      '<div class="au-sec" id="auSecRep"></div>' +
       '<div class="au-sec" id="auSecCountry"></div>' +
-      '<div class="au-sec" id="auSecBlocks"></div>';
+      '<div class="au-sec" id="auSecBounty"></div>' +
+      '<div class="au-sec" id="auSecNewprod"></div>' +
+      '<div class="au-sec" id="auSecBlocks" style="display:none"></div>';
     $('#auExpPpt').onclick = () => window.auExportWeeklyPpt && window.auExportWeeklyPpt().catch(e => toast('PPT 导出失败:' + e.message, 'err'));
     $('#auExpPdf').onclick = () => window.auExportWeeklyPdf && window.auExportWeeklyPdf().catch(e => toast('PDF 导出失败:' + e.message, 'err'));
     $('#auExpEml').onclick = () => window.auExportWeeklyEml && window.auExportWeeklyEml().catch(e => toast('邮件导出失败:' + e.message, 'err'));
@@ -245,13 +271,173 @@ function renderAudio() {
   }
   auSyncIndSeg();
   renderAuMail();
+  renderAuGreet();
   renderAuIssues();
   renderAuFin();
-  renderAuBounty();
+  renderAuSalesHead();
+  renderAuOverallNar();
   if (typeof renderAuInd === 'function') auTrack('ind', renderAuInd());
+  auTrack('fam', renderAuDim('family'));
+  auTrack('rep', renderAuDim('repOffice'));
   renderAuCountry();
-  renderAuBlocks();
+  renderAuBounty();
+  if (typeof renderAuNewprod === 'function') auTrack('np', renderAuNewprod());
 }
+
+/* ---------- v3 模板令牌：{week}=W周号、{产业}=音频/平板 ---------- */
+function auWeekShort() {
+  const d = new Date();
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dn = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dn);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return 'W' + String(Math.ceil(((t - y0) / 86400000 + 1) / 7)).padStart(2, '0');
+}
+function auTplResolve(tpl) {
+  return String(tpl == null ? '' : tpl).split('{week}').join(auWeekShort()).split('{产业}').join(auIndustryLabel());
+}
+if (typeof window !== 'undefined') { window.auTplResolve = auTplResolve; window.auWeekShort = auWeekShort; }
+
+/* 问候两行 + 大表标题（可编辑模板，导出时替换令牌） */
+function renderAuGreet() {
+  const host = $('#auGreetBar'); if (!host) return;
+  const D = auLoad(), G = D.greet;
+  host.innerHTML = '<label style="white-space:nowrap">问候</label>'
+    + '<input id="auGreet1" value="' + auEsc(G.l1) + '" style="flex:2;min-width:280px" title="{week}/{产业} 导出时自动替换；当前→' + auEsc(auTplResolve(G.l1)) + '">'
+    + '<label style="white-space:nowrap">安全声明</label>'
+    + '<input id="auGreet2" value="' + auEsc(G.l2) + '" style="flex:2;min-width:240px">'
+    + '<label style="white-space:nowrap">大表标题</label>'
+    + '<input id="auGreetT" value="' + auEsc(G.titleTpl) + '" style="flex:1;min-width:170px" title="当前→' + auEsc(auTplResolve(G.titleTpl)) + '">';
+  const bind = (id, k) => { const el = $(id); if (el) el.onchange = () => { G[k] = el.value; auSave(); }; };
+  bind('#auGreet1', 'l1'); bind('#auGreet2', 'l2'); bind('#auGreetT', 'titleTpl');
+}
+
+/* 销售进展大标题 + 悬赏奖开关（用户拍板：保留可选、默认隐藏） */
+function renderAuSalesHead() {
+  const host = $('#auSecSalesHead'); if (!host) return;
+  const D = auLoad();
+  host.innerHTML = '<div class="au-sec-t" style="font-size:15px">销售进展'
+    + '<span class="au-note"><label style="cursor:pointer"><input type="checkbox" id="auBountyChk"' + (D.showBounty ? ' checked' : '') + '> 含悬赏奖模块</label></span></div>';
+  const chk = $('#auBountyChk');
+  if (chk) chk.onchange = () => { D.showBounty = chk.checked; auSave(); renderAuBounty(); };
+}
+
+/* 叙述编辑器：料架内容按 scope 组装 */
+function auNarPalette(level, value) {
+  const sc = k => ({ cfg: { id: k, scope: { level: level, value: value } } });
+  const base = [sc('soYoy'), sc('siYoy'), sc('wow'), sc('weekSo'), sc('cumSo'), sc('dos'), sc('flowDos'), { cfg: { id: 'week' } }];
+  if (level === 'total') return base;
+  return base.concat([sc('topRise'), sc('topFall'),
+    { cfg: { id: 'streakUp', n: 4, scope: { level: level, value: value } } },
+    { cfg: { id: 'streakDown', n: 4, scope: { level: level, value: value } } },
+    { cfg: { id: 'dosOver', x: 120, scope: { level: level, value: value } } },
+    { cfg: { id: 'dosOver', x: 150, scope: { level: level, value: value } } },
+    { cfg: { id: 'flowDosOver', x: 200, scope: { level: level, value: value } } }]);
+}
+/* 默认叙述 = 用户邮件里的句式，XX 全部换成芯片 */
+function auDefaultNar(kind, value) {
+  const W = window.WeeklyChips;
+  const lv = kind === 'overall' ? 'total' : (kind === 'country' ? 'country' : kind);
+  const sc = (id, extra) => ({ chip: Object.assign({ id: id }, extra || {}, { scope: { level: lv, value: value } }) });
+  if (kind === 'overall') return W.docFromTemplate([
+    '大区整体销售：', { chip: { id: 'week' } }, ' WoW', sc('wow'),
+    '，SO同比', sc('soYoy'), '，当前Sell in同比', sc('siYoy'),
+    '，渠道DOS', sc('dos'), '天，全流程DOS', sc('flowDos'), '天。',
+  ]);
+  if (kind === 'fam') return W.docFromTemplate([
+    '系列销售情况：', sc('topRise'), '系列WoW涨幅最大，', sc('topFall'), '系列跌幅最大；',
+    sc('streakDown', { n: 4 }), '连续4周周销下滑。',
+  ]);
+  if (kind === 'rep') return W.docFromTemplate([
+    '国家办销售情况：截止', { chip: { id: 'week' } },
+    '，SO同比', { chip: { id: 'soYoy', scope: { level: 'total' } } },
+    '，WoW', { chip: { id: 'wow', scope: { level: 'total' } } },
+    '，', sc('topRise'), 'WoW涨幅最大，', sc('topFall'), '跌幅最大，',
+    sc('streakUp', { n: 4 }), '连续4周周销持续上涨，', sc('streakDown', { n: 4 }), '连续4周周销持续下滑；',
+    sc('dosOver', { x: 120 }), '渠道DOS超120天，', sc('dosOver', { x: 150 }), '渠道DOS超150天，',
+    sc('flowDosOver', { x: 200 }), '全流程DOS超200天。',
+  ]);
+  return W.docFromTemplate([
+    (value || '') + '：截止', { chip: { id: 'week' } },
+    '，SO同比', sc('soYoy'), '，WoW', sc('wow'),
+    '，', sc('topRise'), 'WoW涨幅最大，', sc('topFall'), '跌幅最大，',
+    sc('streakUp', { n: 4 }), '连续4周持续上涨，', sc('streakDown', { n: 4 }), '连续4周持续下滑；',
+    sc('dosOver', { x: 120 }), '渠道DOS超120天，', sc('dosOver', { x: 150 }), '渠道DOS超150天，',
+    sc('flowDosOver', { x: 200 }), '全流程DOS超200天。',
+  ]);
+}
+function auMountNar(host, narKey, kind, value) {
+  if (!host || typeof window.WeeklyNarrative === 'undefined' || typeof window.WeeklyChips === 'undefined') return;
+  const D = auLoad();
+  let doc = kind === 'country' ? D.nar.country[value] : D.nar[narKey];
+  if (!doc) {
+    doc = auDefaultNar(kind, value);
+    if (kind === 'country') D.nar.country[value] = doc; else D.nar[narKey] = doc;
+    auSave();
+  }
+  window.WeeklyNarrative.mount(host, {
+    doc: doc,
+    palette: auNarPalette(kind === 'overall' ? 'total' : (kind === 'country' ? 'country' : kind), value),
+    onChange: function (d) {
+      if (kind === 'country') D.nar.country[value] = d; else D.nar[narKey] = d;
+      auSave();
+    },
+  });
+}
+function renderAuOverallNar() { const h = $('#auSecOverallNar'); if (h) { h.innerHTML = ''; auMountNar(h, 'overall', 'overall'); } }
+
+/* 系列/国家办汇总表（口径同国家块，只换分组维）+ 各自叙述 */
+async function renderAuDim(dim) {
+  const host = dim === 'family' ? $('#auSecFamily') : $('#auSecRep');
+  if (!host) return;
+  const key = dim === 'family' ? 'fam' : 'rep';
+  auW[key + 'Rep'] = null;                                    // 先清后填(与 renderAuFin 同理)
+  const lab = dim === 'family' ? '系列' : '国家办';
+  host.innerHTML = '<div data-nar></div><div class="fa-wrap" data-tbl>取数中…</div>';
+  auMountNar(host.querySelector('[data-nar]'), key, key);
+  if (!state.dims.length) { host.querySelector('[data-tbl]').innerHTML = '<div class="au-empty">请先锚定 PSI 数据。</div>'; return; }
+  let r = null;
+  try { r = await api.report({ groupDim: dim, weeks: auW.cb.weeks, fromW: auW.cb.fromW, toW: auW.cb.toW, filters: Object.assign({}, auLineFilter()) }); } catch (e) { }
+  auW[key + 'Rep'] = r;
+  const tHost = host.querySelector('[data-tbl]');
+  if (!r || !(r.rows || []).length) { if (tHost) tHost.innerHTML = '<div class="au-empty">无数据</div>'; auChipsRefresh(); return; }
+  if (tHost) tHost.innerHTML = auDimTableHtml(lab, r, dim);
+  auChipsRefresh();
+}
+function auDimTableHtml(firstLabel, r, dim) {
+  const cols = auCbColumns(r, dim);
+  const ki = cols.findIndex(function (c) { return c.key === 'key'; });
+  if (ki >= 0) cols[ki].label = firstLabel;
+  const rows = auCbSortRows(r, cols);
+  let h = '<table class="rep-table" style="width:100%"><thead><tr>' + cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') + '</tr></thead><tbody>';
+  rows.forEach(function (o) { h += '<tr>' + cols.map(function (c) { return '<td>' + (c.totalOnly ? '<span class="wk">—</span>' : c.cell(o)) + '</td>'; }).join('') + '</tr>'; });
+  if (r.total) h += '<tr class="tot">' + cols.map(function (c) { return '<td>' + (c.key === 'key' ? '合计' : (c.key === '__line' ? '' : c.cell(r.total))) + '</td>'; }).join('') + '</tr>';
+  return h + '</tbody></table>';
+}
+
+/* 芯片上下文：各模块缓存 → WeeklyChips ctx */
+function auChipCtx() {
+  const scope = function (r) { return r ? { total: r.total || {}, rows: r.rows || [] } : null; };
+  const country = {};
+  (auW.cbLast || []).forEach(function (x) { country[x.v] = scope(x.r); });
+  const pb = auW.finPb;
+  return {
+    week: auWeekShort(),
+    finTitle: pb ? { ym: pb.curYear + '-' + String(pb.toM).padStart(2, '0'), fcVer: pb.version || '—' } : {},
+    scopes: {
+      total: scope(auW.famRep) || scope(auW.repRep),
+      family: scope(auW.famRep),
+      rep: scope(auW.repRep),
+      country: country,
+      np: (typeof auNpChipScopes === 'function') ? auNpChipScopes() : {},
+    },
+  };
+}
+function auChipsRefresh() {
+  if (typeof window.WeeklyNarrative === 'undefined') return;
+  try { window.WeeklyNarrative.refreshAll(document.getElementById('auRoot'), auChipCtx()); } catch (e) { }
+}
+if (typeof window !== 'undefined') { window.auChipCtx = auChipCtx; window.auChipsRefresh = auChipsRefresh; }
 // 产业段控高亮 + 说明(切换后 M2/M3/M4/M5 与标题、导出名全部跟随)
 function auSyncIndSeg() {
   const seg = $('#auIndSeg'); if (!seg) return;
@@ -319,7 +505,7 @@ function renderAuIssues() {
     const stOpts = AU_ISSUE_STATUS.concat(AU_ISSUE_STATUS.includes(r.status) || !r.status ? [] : [r.status]);
     return `<tr${closed ? ' style="opacity:.55"' : ''}>
       <td style="width:76px"><select data-i="${i}" data-k="type">${typeOpts.map(t => `<option ${t === r.type ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
-      <td><input data-i="${i}" data-k="todo" value="${auEsc(r.todo)}" placeholder="待办事项"></td>
+      <td><input data-i="${i}" data-k="todo" value="${auEsc(r.todo)}" placeholder="重点工作/通知"></td>
       <td><input data-i="${i}" data-k="prog" value="${auEsc(r.prog)}" placeholder="进展"></td>
       <td style="width:84px"><select data-i="${i}" data-k="status">${stOpts.map(t => `<option ${t === (r.status || '进行中') ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
       <td style="width:132px" class="${over ? 'au-overdue' : ''}"><input type="date" data-i="${i}" data-k="due" value="${auEsc(r.due)}" title="${auEsc(tip)}">${tip ? `<div style="font-size:10px;color:${over ? 'var(--c-brand)' : (soon ? '#C98A00' : 'var(--c-ink-3)')}">${auEsc(tip)}</div>` : ''}</td>
@@ -334,8 +520,8 @@ function renderAuIssues() {
     ? `　<b>${nOpen}</b> 项未闭环` + (nRisk ? `　<span style="color:var(--c-brand)"><b>${nRisk}</b> 项有风险</span>` : '')
       + (nOver ? `　<span style="color:var(--c-brand)"><b>${nOver}</b> 项已超期</span>` : '')
     : '';
-  host.innerHTML = '<div class="au-sec-t">M1 · 遗留问题<span class="au-note">直接在表格里录入/修改，自动保存进存档；有风险与已超期自动排到最上面，已闭环沉底' + badge + '</span></div>'
-    + '<div class="fa-wrap"><table class="au-edit"><thead><tr><th>类型</th><th>待办</th><th>进展</th><th>状态</th><th>截止时间</th><th>涉及国家/国家办</th><th></th></tr></thead><tbody>'
+  host.innerHTML = '<div class="au-sec-t">本周重点关注<span class="au-note">直接在表格里录入/修改，自动保存进存档；有风险与已超期自动排到最上面，已闭环沉底' + badge + '</span></div>'
+    + '<div class="fa-wrap"><table class="au-edit"><thead><tr><th>类型</th><th>重点工作/通知</th><th>进展</th><th>状态</th><th>截止时间</th><th>涉及国家办/国家</th><th></th></tr></thead><tbody>'
     + (view.length ? view.map(rowHtml).join('') : '<tr><td colspan="7" class="au-empty">暂无遗留问题，点下方「＋加一行」</td></tr>')
     + '</tbody></table></div>'
     + '<button class="btn au-add" id="auIssueAdd">＋加一行</button>';
@@ -437,7 +623,7 @@ async function renderAuFinImpl() {
   const host = $('#auSecFin'); if (!host) return;
   auW.finPb = null; auW.finBlk = null; auW.finRb = null;   // 先清后填:任何早退都不能把上一轮留给导出
   const lab = auIndustryLabel();
-  const head = (extra) => '<div class="au-sec-t">M2 · ' + auCurInd().board + (extra || '') + '</div>';
+  const head = (extra) => '<div class="au-sec-t" id="auFinHead">全年达成进度（产业经营）' + (extra || '') + '</div>';
   if (!state.finMeta) { host.innerHTML = head() + '<div class="au-empty">未导入财经数据(经营分析底表)。到「数据源」挂载后这里自动出表。</div>'; return; }
   const lv1 = await auFinLv1();
   if (!lv1) { host.innerHTML = head() + '<div class="au-empty">财经数据里没找到「' + lab + '」产业(LV1)。</div>'; return; }
@@ -470,7 +656,7 @@ async function renderAuFinImpl() {
   const box = $('#auFinTables'); if (!box) return;
   if (!pb || pb.error || !blk) { box.innerHTML = '<div class="au-empty">取数失败' + (pb && pb.error ? ':' + pb.error : '') + '</div>'; return; }
   const prog = (pb.toM - pb.fromM + 1) / 12;
-  const note = $('#auFinNote'); if (note) note.textContent = `${pb.curYear}年${pb.fromM}~${pb.toM}月实际 · 时间进度 ${(prog * 100).toFixed(0)}% · 版本:${pb.version || '—'}`;
+  const note = $('#auFinNote'); if (note) note.textContent = `月度刷新-${pb.curYear}-${String(pb.toM).padStart(2, '0')}（预测为${pb.version || '—'}） · ${pb.fromM}~${pb.toM}月实际 · 时间进度 ${(prog * 100).toFixed(0)}%`;
   let html = `<div class="au-sec-t" style="font-size:12px">分产品系列(${lab} LV3)</div><div class="fa-wrap">` + auFinTable('系列', blk, true) + '</div>';
   // 国家办表:financeRepBoard 不支持 lv1 → 用本产业 LV3 名集作为 series 过滤(只读间接筛,零引擎改动);
   // 用户选了产品系列则只传选中的那几个,两张表口径一致。
@@ -526,6 +712,8 @@ async function renderAuBountyImpl() {
   const host = $('#auSecBounty'); if (!host) return;
   auW._bountyExport = null;                                // 先清后填,理由同 renderAuFin
   const D = auLoad(), B = D.bounty, AW = auAW();
+  // 用户拍板(2026-08-21)：悬赏奖保留可选、默认隐藏——邮件版式里没有这一段
+  if (!D.showBounty) { host.innerHTML = ''; return; }
   const head = extra => '<div class="au-sec-t">M3 · $0-50美金扩大覆盖悬赏奖 SI 进展' + (extra || '') + '</div>';
   if (!state.dims.length) { host.innerHTML = head() + '<div class="au-empty">请先锚定 PSI 数据或载入示例。</div>'; return; }
   /* R3 五级筛选:产品线/Family/系列/产品/型号 逐级级联。
@@ -609,14 +797,16 @@ async function renderAuBountyImpl() {
 /* ============================================================
    M5 产品维度:自定义标题 + 可加国家的国家块(port 自 country-view,自包含副本)
    ============================================================ */
-function auCbColumns(r) {
+function auCbColumns(r, dimOverride) {
+  const dim = dimOverride || auW.cb.dim;
   const cyy = r.curYear % 100, py = r.prevYear % 100, wl = r.weekLabels || [];
   const fcell = v => r.hasFlow ? numCell(v) : '<span class="wk">—</span>';
   const cols = [];
-  const showSeries = (auW.cb.dim === 'model' && state.dims.includes('line'));
-  const skuLevel = (auW.cb.dim === 'product' || auW.cb.dim === 'model');
+  const showSeries = (dim === 'model' && state.dims.includes('line'));
+  // 同期/同比收进合计行只对 SKU 级维度有意义；系列/国家办表全行都显示
+  const skuLevel = (dim === 'product' || dim === 'model');
   if (showSeries) cols.push({ key: '__line', label: 'Product Series', cell: o => o.line || '' });
-  cols.push({ key: 'key', label: DIM_LABEL[auW.cb.dim] || auW.cb.dim, cell: o => o.key });
+  cols.push({ key: 'key', label: DIM_LABEL[dim] || dim, cell: o => o.key });
   cols.push({ key: 'cumCur', label: cyy + '累计SO', cell: o => numCell(o.cumCur) });
   cols.push({ key: 'cumPrev', label: py + '同期SO总', totalOnly: skuLevel, cell: o => numCell(o.cumPrev) });
   cols.push({ key: 'yoy', label: 'SO同比', totalOnly: skuLevel, cell: o => pctCell(o.yoy) });
@@ -784,8 +974,16 @@ async function renderAuCountryImpl() {
   if (token !== auW.token) return;
   auW.cbLast = reps;
   list.innerHTML = '';
-  reps.forEach(({ v, r }) => list.appendChild(auRenderCbCard(v, r)));
+  reps.forEach(({ v, r }) => {
+    // 每国先一段叙述(邮件版式:文字在图前),芯片 scope=该国
+    const nar = document.createElement('div');
+    nar.dataset.cbNar = v;
+    list.appendChild(nar);
+    auMountNar(nar, null, 'country', v);
+    list.appendChild(auRenderCbCard(v, r));
+  });
   auApplyZoom();   // 重绘后把已保存的缩放重新贴上
+  auChipsRefresh();
 }
 
 /* ============================================================

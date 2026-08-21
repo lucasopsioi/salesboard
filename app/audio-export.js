@@ -294,7 +294,135 @@
     return e;
   }
 
-  return { b64Utf8, buildWeeklyHtml, buildEml, formatAddrList, WIDE_COLS, W_TOTAL, _tbl: tbl, _align: colAligns, _widths: colWidths, _chunk: chunkCols };
+  /* ============================================================
+     周报 v3 —— 按用户 W34 邮件版式(2026-08-21 拍板)：
+       · 问候两行(加粗)在表格**外**；
+       · 其余全部内容框在**一张** 1000px 大表里(收件人 100% 缩放正好看全)；
+       · 大表 6 列 —— 只有「本周重点关注」用到多列,其余行全部 colspan=6；
+       · 正文字体 微软雅黑 12pt；所有数据表/图统一 12px、统一 1000px 宽。
+     model 形态见 auBuildWeeklyV3Model(浏览器侧)。imgMode: 'cid' | 'data'。
+     ============================================================ */
+  const V3_COLS = 6;                                     // 类型/重点工作/进展/状态/截止时间/涉及
+  const V3_BORDER = '#A6A6A6';
+  const V3_TXT = 'font-family:' + FONT + ';font-size:12pt;line-height:1.6;color:' + C.ink + ';';
+  function v3Cell(inner, opts) {
+    const o = opts || {};
+    let sty = 'border:1px solid ' + V3_BORDER + ';padding:' + (o.pad || '8px 12px') + ';vertical-align:top;';
+    if (o.bg) sty += 'background:' + o.bg + ';';
+    if (o.sty) sty += o.sty;
+    return '<td colspan="' + V3_COLS + '" style="' + sty + '">' + inner + '</td>';
+  }
+  const v3Section = t => '<tr>' + v3Cell('<b>' + esc(t) + '</b>', { bg: '#F2F2F2', sty: V3_TXT + 'font-weight:bold;' }) + '</tr>';
+  // 叙述文字：resolveDoc 出来的纯文本(可多行)。加粗句首「xxx：」之前的部分,与用户邮件观感一致
+  function v3Narrative(text) {
+    const lines = String(text == null ? '' : text).split('\n').map(s => {
+      const e = esc(s);
+      const i = e.indexOf('：');
+      return (i > 0 && i <= 30) ? '<b>' + e.slice(0, i + 1) + '</b>' + e.slice(i + 1) : e;
+    });
+    return '<tr>' + v3Cell(lines.join('<br>'), { sty: V3_TXT }) + '</tr>';
+  }
+  function v3Visual(t, imgMode, opts, seg) { return '<tr>' + v3Cell(unit(t, imgMode, opts, seg), { pad: '6px' }) + '</tr>'; }
+
+  function buildWeeklyV3Html(model, imgMode) {
+    const m = model || {};
+    let b = '';
+    // 问候(表外)
+    const g = s => '<div style="' + V3_TXT + 'font-weight:bold;margin:0 0 2px">' + esc(s) + '</div>';
+    if (m.greet1) b += g(m.greet1);
+    if (m.greet2) b += g(m.greet2);
+    b += '<div style="height:8px;line-height:8px;font-size:8px">&nbsp;</div>';
+
+    // 大表开场
+    b += '<table cellpadding="0" cellspacing="0" width="' + W_TOTAL + '" border="0" style="border-collapse:collapse;table-layout:fixed;width:' + W_TOTAL + 'px;font-family:' + FONT + '">';
+    // 6 列列宽：类型 90 / 重点工作 330 / 进展 220 / 状态 80 / 截止 130 / 涉及 150 = 1000
+    const IW = [90, 330, 220, 80, 130, 150];
+    b += '<colgroup>' + IW.map(w => '<col width="' + w + '" style="width:' + w + 'px">').join('') + '</colgroup>';
+
+    // 标题行
+    b += '<tr>' + v3Cell('<b style="font-size:14pt">' + esc(m.title || '') + '</b>', { bg: '#F2F2F2', sty: V3_TXT }) + '</tr>';
+
+    // 一 · 本周重点关注(唯一用到 6 列的区块)
+    b += v3Section('本周重点关注');
+    const th = t => '<td style="border:1px solid ' + V3_BORDER + ';background:#FAFAFA;padding:6px 10px;' + V3_TXT + 'font-weight:bold;font-size:10.5pt">' + esc(t) + '</td>';
+    const td = (t, red) => '<td style="border:1px solid ' + V3_BORDER + ';padding:6px 10px;' + V3_TXT + 'font-size:10.5pt' + (red ? ';color:' + C.brand : '') + '">' + esc(t) + '</td>';
+    b += '<tr>' + ['类型', '重点工作/通知', '进展', '状态', '截止时间', '涉及国家办/国家'].map(th).join('') + '</tr>';
+    const iss = m.issues || [];
+    if (iss.length) iss.forEach(r => {
+      const red = /已超期/.test(r.due || '') || r.status === '有风险';
+      b += '<tr>' + [td(r.type || ''), td(r.todo || ''), td(r.prog || ''), td(r.status || '', red), td(r.due || '', red), td(r.geo || '')].join('') + '</tr>';
+    });
+    else b += '<tr>' + v3Cell('<span style="color:' + C.ink2 + '">本周无重点关注事项</span>', { sty: V3_TXT + 'font-size:10.5pt;' }) + '</tr>';
+
+    // 二 · 全年达成进度
+    if (m.finTitle) b += v3Section(m.finTitle);
+    if (m.fin && m.fin.tables && m.fin.tables.length) {
+      const seg = sharedSegs(m.fin.tables);
+      m.fin.tables.forEach(t => { b += v3Visual(t, imgMode, { totalIdx: t.totalIdx }, seg(t)); });
+    }
+
+    // 三 · 销售进展
+    const S = m.sales || {};
+    if (S.overall || S.family || S.rep || (S.countries || []).length) b += v3Section('销售进展');
+    if (S.overall) {
+      if (S.overall.text) b += v3Narrative(S.overall.text);
+      if (S.overall.kpis && S.overall.kpis.length) b += '<tr>' + v3Cell(cardRow(S.overall.kpis, true), { pad: '6px' }) + '</tr>';
+      if (S.overall.img || S.overall.cid) b += v3Visual({ img: S.overall.img, cid: S.overall.cid, title: '周度销售进展' }, imgMode);
+    }
+    if (S.family) {
+      if (S.family.text) b += v3Narrative(S.family.text);
+      if (S.family.table) b += v3Visual(S.family.table, imgMode, { totalLast: !!S.family.table.hasTotal });
+    }
+    if (S.rep) {
+      if (S.rep.text) b += v3Narrative(S.rep.text);
+      if (S.rep.table) b += v3Visual(S.rep.table, imgMode, { totalLast: !!S.rep.table.hasTotal });
+    }
+    const cbs = (S.countries || []).filter(c => c && (c.text || c.table));
+    if (cbs.length) {
+      const seg = sharedSegs(cbs.map(c => c.table).filter(Boolean));
+      cbs.forEach(c => {
+        if (c.text) b += v3Narrative(c.text);
+        if (c.table) b += v3Visual(c.table, imgMode, { totalLast: !!c.table.hasTotal }, seg(c.table));
+      });
+    }
+
+    // (可选) 悬赏奖
+    if (m.bounty && m.bounty.rows && m.bounty.rows.length) {
+      b += v3Section('$0-50美金扩大覆盖悬赏奖 SI 进展');
+      if (m.bounty.note) b += v3Narrative(m.bounty.note);
+      b += v3Visual(m.bounty, imgMode, { totalLast: true });
+    }
+
+    // 四 · 新品进展
+    const nps = (m.newprods || []).filter(Boolean);
+    if (nps.length) {
+      nps.forEach(np => {
+        b += v3Section('新品进展-' + (np.name || ''));
+        if (np.text) b += v3Narrative(np.text);
+        if (np.table) b += v3Visual(np.table, imgMode, { totalLast: !!np.table.hasTotal });
+      });
+      // 新品信息(全部新品合一个区块)
+      const infos = nps.filter(np => np.info);
+      if (infos.length) {
+        b += v3Section('新品信息');
+        infos.forEach(np => {
+          if (np.info.main) b += v3Visual(np.info.main, imgMode, {});
+          if (np.info.plan) {
+            b += v3Narrative((np.name || '') + ' 各国上市计划：');
+            b += v3Visual(np.info.plan, imgMode, {});
+          }
+        });
+      }
+    }
+
+    // 页脚
+    b += '<tr>' + v3Cell('<span style="font-size:9pt;color:' + C.ink2 + '">Salesboard ' + esc(m.version || '')
+      + (m.builtAt ? ' · 构建 ' + esc(m.builtAt) : '') + ' · 生成于 ' + esc((m.dateStr || '') + ' ' + (m.genTime || '')) + '</span>', { sty: V3_TXT }) + '</tr>';
+    b += '</table>';
+    return b.replace(/>\s+</g, '><');
+  }
+
+  return { b64Utf8, buildWeeklyHtml, buildWeeklyV3Html, buildEml, formatAddrList, WIDE_COLS, W_TOTAL, _tbl: tbl, _align: colAligns, _widths: colWidths, _chunk: chunkCols };
 });
 
 /* ============================================================
@@ -533,12 +661,122 @@ if (typeof window !== 'undefined') (function () {
       const miss = await window.auEnsureWeeklyData();
       if (miss.length) toast('这些模块暂无数据,导出里会留空:' + miss.join('、'), 'warn');
     }
-    const m = auAttachTableImages(window.auBuildWeeklyModel());
-    const html = AX.buildWeeklyHtml(m, 'data');
+    const m = auAttachV3Images(window.auBuildWeeklyV3Model());
+    const html = AX.buildWeeklyV3Html(m, 'data');
     const res = await api.printHtmlPdf('周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.pdf',
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{margin:10mm}body{margin:0}</style></head><body>' + html + '</body></html>');
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{margin:10mm}body{margin:0;background:#fff}</style></head><body>' + html + '</body></html>');
     if (res && res.path) toast('已导出 PDF', 'ok'); else if (res && res.error) toast('PDF 导出失败:' + res.error, 'err');
   };
+
+  /* ============================================================
+     周报 v3 模型（用户 W34 邮件版式）。所有叙述用 auChipCtx 解析成纯文本；
+     表格从各模块缓存转成 {header,rows}；宽表在 auAttachV3Images 里转 PNG。
+     ============================================================ */
+  function auReportTableModel(r, dim, firstLabel) {
+    if (!r || !(r.rows || []).length) return null;
+    const cols = auCbColumns(r, dim);
+    const ki = cols.findIndex(c => c.key === 'key');
+    if (ki >= 0) cols[ki].label = firstLabel || cols[ki].label;
+    const skuLevel = (dim === 'product' || dim === 'model');
+    const rows = auCbSortRows(r, cols).map(o => cols.map(c => (c.totalOnly && skuLevel) ? '—' : strip(c.cell(o)).replace(/\s+/g, ' ')));
+    if (r.total) rows.push(cols.map(c => c.key === 'key' ? '合计' : (c.key === '__line' ? '' : strip(c.cell(r.total)))));
+    return { header: cols.map(c => c.label), rows: rows, hasTotal: !!r.total };
+  }
+
+  window.auBuildWeeklyV3Model = function () {
+    const D = (typeof auLoad === 'function') ? auLoad() : {};
+    const ctx = (typeof auChipCtx === 'function') ? auChipCtx() : {};
+    const WCp = window.WeeklyChips;
+    const lab = auIndustryLabel();
+    const V = window.__appVer || null;
+    const iso = isoWeekOf(new Date());
+    const wk = (typeof auWeekShort === 'function') ? auWeekShort() : ('W' + iso[1]);
+    const tpl = t => (typeof auTplResolve === 'function') ? auTplResolve(t) : String(t || '');
+    const G = D.greet || {};
+    const doc = k => {
+      const d = k === 'overall' ? (D.nar || {}).overall : (D.nar || {})[k];
+      return d ? WCp.resolveDoc(d, ctx) : '';
+    };
+    const model = {
+      week: iso[0] + '-' + wk, weekShort: wk, dateStr: todayStr(),
+      industry: auIndustryKey(), industryLabel: lab,
+      version: V && V.version ? ('v' + V.version) : '', builtAt: (V && V.builtAt) || '',
+      genTime: new Date().toTimeString().slice(0, 5),
+      greet1: tpl(G.l1), greet2: tpl(G.l2), title: tpl(G.titleTpl),
+      issues: (typeof auIssuesForExport === 'function' ? auIssuesForExport() : (D.issues || []).slice()),
+      mail: Object.assign({ to: '', cc: '', subject: '' }, D.mail || {}),
+      finTitle: null, fin: null, sales: {}, bounty: null, newprods: [],
+    };
+    // 全年达成（标题自动带 月度刷新-YYYY-MM（预测为X））
+    const pb = (typeof auW !== 'undefined' && auW.finPb) || null;
+    const blk = (typeof auW !== 'undefined' && auW.finBlk) || null;
+    if (pb && blk) {
+      model.finTitle = '全年达成进度（产业经营）-月度刷新-' + pb.curYear + '-' + String(pb.toM).padStart(2, '0') + '（预测为' + (pb.version || '—') + '）';
+      const cols = AU_FIN_COLS;
+      const mk = (block, first, isSeries) => {
+        let rows = (block.rows || []).slice();
+        if (isSeries) rows.sort((a, b) => { const ra = seriesRank(a.key), rb = seriesRank(b.key); return ra !== rb ? ra - rb : ((b.rev26 || 0) - (a.rev26 || 0)); });
+        const all = block.total ? [block.total].concat(rows) : rows;
+        return { header: [first].concat(cols.map(c => c.label)), rows: all.map(o => [o.key].concat(cols.map(c => strip(c.fmt(o))))), totalIdx: block.total ? 0 : null };
+      };
+      const tables = [Object.assign({ title: '分产品系列(' + lab + ' LV3)' }, mk(blk, '系列', true))];
+      if (auW.finRb && auW.finRb.repTable) tables.push(Object.assign({ title: '分国家办(' + lab + ')' }, mk(auW.finRb.repTable, '国家办', false)));
+      model.fin = { tables: tables };
+    }
+    // 销售进展
+    const ind = (typeof auIndExportModel === 'function') ? auIndExportModel() : null;
+    model.sales.overall = {
+      text: doc('overall'),
+      kpis: ind ? (ind.kpis || []).slice(0, 4) : [],
+      img: ind ? ind.chartPng : '', cid: 'chart1',
+    };
+    model.sales.family = { text: doc('fam'), table: auReportTableModel(auW.famRep, 'family', '系列') };
+    model.sales.rep = { text: doc('rep'), table: auReportTableModel(auW.repRep, 'repOffice', '国家办') };
+    model.sales.countries = (auW.cbLast || []).map(x => ({
+      name: x.v,
+      text: (D.nar && D.nar.country && D.nar.country[x.v]) ? WCp.resolveDoc(D.nar.country[x.v], ctx) : '',
+      table: auReportTableModel(x.r, auW.cb.dim, null),
+    }));
+    // 悬赏奖（可选，默认隐藏）
+    if (D.showBounty && typeof auW !== 'undefined' && auW._bountyExport) model.bounty = Object.assign({}, auW._bountyExport);
+    // 新品
+    if (typeof auNpExportModels === 'function') model.newprods = auNpExportModels(ctx);
+    return model;
+  };
+
+  /* v3 宽表 → PNG（统一 1000px 版心、12px 字，与 HTML 表观感一致） */
+  function auAttachV3Images(m) {
+    let n = 0;
+    const conv = (t, title, opts) => {
+      if (!t || t.img || !(t.header || []).length || t.header.length <= AX.WIDE_COLS) return;
+      const url = window.auRenderTablePng(t.header, t.rows, Object.assign({ title: title }, opts || {}));
+      if (url) { t.img = url; t.cid = 'v3t' + (++n); }
+    };
+    if (m.fin && m.fin.tables) m.fin.tables.forEach(t => conv(t, t.title, { totalIdx: t.totalIdx }));
+    const S = m.sales || {};
+    if (S.family && S.family.table) conv(S.family.table, '系列销售', { totalLast: true });
+    if (S.rep && S.rep.table) conv(S.rep.table, '国家办销售', { totalLast: true });
+    (S.countries || []).forEach(c => conv(c.table, c.name, { totalLast: !!(c.table && c.table.hasTotal) }));
+    if (m.bounty) conv(m.bounty, '悬赏奖 SI 进展', { totalLast: true });
+    (m.newprods || []).forEach(np => {
+      conv(np.table, '新品首销达成', { totalLast: true });
+      if (np.info) { conv(np.info.main, null, {}); conv(np.info.plan, null, {}); }
+    });
+    return m;
+  }
+  function auCollectV3Images(m) {
+    const out = [];
+    const S = m.sales || {};
+    if (S.overall && S.overall.img) out.push({ cid: S.overall.cid || 'chart1', b64: String(S.overall.img).replace(/^data:image\/png;base64,/, '') });
+    const push = t => { if (t && t.img && t.cid) out.push({ cid: t.cid, b64: String(t.img).replace(/^data:image\/png;base64,/, '') }); };
+    if (m.fin && m.fin.tables) m.fin.tables.forEach(push);
+    if (S.family) push(S.family.table);
+    if (S.rep) push(S.rep.table);
+    (S.countries || []).forEach(c => push(c.table));
+    push(m.bounty);
+    (m.newprods || []).forEach(np => { push(np.table); if (np.info) { push(np.info.main); push(np.info.plan); } });
+    return out;
+  }
 
   /* ---- Outlook .eml(双击即草稿) ---- */
   window.auExportWeeklyEml = async function () {
@@ -546,11 +784,11 @@ if (typeof window !== 'undefined') (function () {
       const miss = await window.auEnsureWeeklyData();
       if (miss.length) toast('这些模块暂无数据,导出里会留空:' + miss.join('、'), 'warn');
     }
-    const m = auAttachTableImages(window.auBuildWeeklyModel());
-    const html = AX.buildWeeklyHtml(m, 'cid');
+    const m = auAttachV3Images(window.auBuildWeeklyV3Model());
+    const html = AX.buildWeeklyV3Html(m, 'cid');
     const mail = m.mail || {};
-    const subject = (mail.subject || '').trim() || (m.industryLabel + '产业周报 ' + m.week);
-    const eml = AX.buildEml(subject, html, auCollectImages(m), mail);
+    const subject = (mail.subject || '').trim() || ('【周报】' + m.industryLabel + '销售团队产业周报-' + m.weekShort);
+    const eml = AX.buildEml(subject, html, auCollectV3Images(m), mail);
     const res = await api.saveFile('周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.eml', AX.b64Utf8(eml), 'eml');
     if (res && res.path) {
       const who = AX.formatAddrList(mail.to) ? '，收件人已填好' : '，还没填收件人';

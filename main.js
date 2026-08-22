@@ -204,6 +204,41 @@ ipcMain.handle('launchScan', (_e, params) => {
 ipcMain.handle('sample', () => engine.loadSample());
 ipcMain.handle('log', (_e, msg) => { try { fs.appendFileSync(path.join(app.getPath('userData'), 'renderer.log'), new Date().toISOString() + ' ' + msg + '\n'); } catch (e) {} });
 
+// 周报输出目录：纯选目录(不落引擎 config,由渲染层存进周报存档)
+ipcMain.handle('pickDir', async () => {
+  const r = await dialog.showOpenDialog(win, { title: '选择周报输出文件夹', properties: ['openDirectory', 'createDirectory'] });
+  if (r.canceled || !r.filePaths || !r.filePaths[0]) return { canceled: true };
+  return { dir: r.filePaths[0] };
+});
+// 直接写到指定目录(不弹框)。重名自动加 (2)(3)…绝不覆盖旧周报。
+function uniquePath(dir, name) {
+  const ext = path.extname(name), base = path.basename(name, ext);
+  let p2 = path.join(dir, name);
+  for (let i = 2; fs.existsSync(p2) && i < 100; i++) p2 = path.join(dir, base + '(' + i + ')' + ext);
+  return p2;
+}
+ipcMain.handle('saveFileAt', async (_e, dir, name, b64) => {
+  try {
+    if (!dir || !fs.existsSync(dir)) return { error: '输出文件夹不存在：' + dir };
+    const p2 = uniquePath(dir, String(name).replace(/[\\/:*?"<>|]/g, '_'));
+    fs.writeFileSync(p2, Buffer.from(String(b64), 'base64'));
+    return { path: p2 };
+  } catch (err) { return { error: String(err) }; }
+});
+ipcMain.handle('printHtmlPdfAt', async (_e, dir, name, html) => {
+  let pw = null;
+  try {
+    if (!dir || !fs.existsSync(dir)) return { error: '输出文件夹不存在：' + dir };
+    const p2 = uniquePath(dir, String(name).replace(/[\\/:*?"<>|]/g, '_'));
+    pw = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+    await pw.loadURL('data:text/html;charset=utf-8;base64,' + Buffer.from(String(html), 'utf8').toString('base64'));
+    const pdf = await pw.webContents.printToPDF({ landscape: true, printBackground: true, pageSize: 'A4', margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 } });
+    fs.writeFileSync(p2, pdf);
+    return { path: p2 };
+  } catch (err) { return { error: String(err) }; }
+  finally { try { if (pw) pw.destroy(); } catch (e) { } }
+});
+ipcMain.handle('openFolder', (_e, dir) => { try { shell.openPath(dir); return { ok: true }; } catch (e) { return { ok: false }; } });
 ipcMain.handle('saveFile', async (_e, name, b64, mime) => {
   const r = await dialog.showSaveDialog(win, { title: '导出', defaultPath: name });
   if (r.canceled || !r.filePath) return { canceled: true };

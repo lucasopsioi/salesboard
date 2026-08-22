@@ -709,8 +709,12 @@ if (typeof window !== 'undefined') (function () {
       });
     }
     const b64 = await pptx.write('base64');
-    const res = await api.saveFile('周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.pptx', b64, 'pptx');
-    if (res && res.path) toast('已导出 PPT', 'ok');
+    const pptName = '周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.pptx';
+    const outDir3 = (typeof auLoad === 'function' && (auLoad() || {}).outDir) || '';
+    const res = outDir3 ? await api.saveFileAt(outDir3, pptName, b64)
+                        : await api.saveFile(pptName, b64, 'pptx');
+    if (res && res.path) toast('已导出 PPT → ' + res.path, 'ok');
+    else if (res && res.error) toast(res.error, 'err');
   };
 
   /* ---- PDF:Outlook 同款 HTML(dataURL 图片) → 主进程 printToPDF ---- */
@@ -721,8 +725,11 @@ if (typeof window !== 'undefined') (function () {
     }
     const m = auAttachV3Images(window.auBuildWeeklyV3Model());
     const html = AX.buildWeeklyV3Html(m, 'data');
-    const res = await api.printHtmlPdf('周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.pdf',
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{margin:10mm}body{margin:0;background:#fff}</style></head><body>' + html + '</body></html>');
+    const fullHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{margin:10mm}body{margin:0;background:#fff}</style></head><body>' + html + '</body></html>';
+    const pdfName = '周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.pdf';
+    const outDir2 = (auLoad() || {}).outDir;
+    const res = outDir2 ? await api.printHtmlPdfAt(outDir2, pdfName, fullHtml)
+                        : await api.printHtmlPdf(pdfName, fullHtml);
     if (res && res.path) toast('已导出 PDF', 'ok'); else if (res && res.error) toast('PDF 导出失败:' + res.error, 'err');
   };
 
@@ -830,7 +837,11 @@ if (typeof window !== 'undefined') (function () {
     const mail = m.mail || {};
     const subject = (mail.subject || '').trim() || ('【周报】' + m.industryLabel + '销售团队产业周报-' + m.weekShort);
     const eml = AX.buildEml(subject, html, auCollectV3Images(m), mail);
-    const res = await api.saveFile('周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.eml', AX.b64Utf8(eml), 'eml');
+    const fname = '周报_' + m.industryLabel + '_' + m.week + '_' + todayStr() + '.eml';
+    const outDir = (auLoad() || {}).outDir;
+    const res = outDir ? await api.saveFileAt(outDir, fname, AX.b64Utf8(eml))
+                       : await api.saveFile(fname, AX.b64Utf8(eml), 'eml');
+    if (res && res.error) { toast(res.error, 'err'); return; }
     if (res && res.path) {
       const who = AX.formatAddrList(mail.to) ? '，收件人已填好' : '，还没填收件人';
       toast('已导出 Outlook 邮件(.eml，双击成草稿' + who + ')', 'ok');

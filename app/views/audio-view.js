@@ -22,7 +22,10 @@ const AU_INDS = [
 ];
 const auW = {
   data: null, shell: false, industry: 'audio',
-  finToM: 0, finUnit: 'MUSD', finDp: 1,   // 默认 MUSD:用户嫌 USD 全额数字太长(2026-08-21) finLv1: {}, finDims: null, finLv3Opts: {}, finLv3Sel: [], finRepSel: [], finPb: null, finRb: null,
+  // 默认 MUSD:用户嫌 USD 全额数字太长(2026-08-21)。
+  // ⚠ 教训:上一版把注释写在行中,把后面 7 个字段全吞进注释,auW.finLv1 变 undefined,
+  //   经营模块整段消失且被 auTrack 静默——注释永远独占一行。
+  finToM: 0, finUnit: 'MUSD', finDp: 1, finLv1: {}, finDims: null, finLv3Opts: {}, finLv3Sel: [], finRepSel: [], finPb: null, finRb: null,
   cb: { dim: 'product', weeks: 9, fromW: null, toW: null }, cbLast: [], cbZoom: 1, token: 0,
   indDim: {}, prodOpts: [], modelOpts: [], ctryOpts: [],
   _inflight: {},   // 模块 → 当前在途的渲染 Promise(导出前要等它,见 auEnsureWeeklyData)
@@ -35,7 +38,11 @@ const auW = {
    renderAuFin 早退,auW.finPb 还是音频那份,导出的「平板产业经营进展」里印的是音频数字。
    四个异步模块的渲染 Promise 也登记下来,导出前统一等一等,免得刚进看板就点导出出半份。 */
 function auTrack(key, p) {
-  const q = Promise.resolve(p).catch(() => { });
+  // 绝不静默吞异常——2026-08-21 经营模块整段消失却无声,就是这里 catch(()=>{}) 干的
+  const q = Promise.resolve(p).catch(e => {
+    try { toast('周报模块「' + key + '」渲染失败:' + (e && e.message || e), 'err'); } catch (_) { }
+    try { api.log && api.log('weekly.' + key + ' ' + (e && e.stack || e)); } catch (_) { }
+  });
   auW._inflight[key] = q;
   q.then(() => { if (auW._inflight[key] === q) auW._inflight[key] = null; });
   return p;
@@ -72,6 +79,8 @@ function auDefaultData() {
     title: { text: '', size: 15, bold: false },
     // 收件人/抄送/主题：随存档走，下次开软件还在（用户从 Outlook 复制上一封的收件人粘进来）
     mail: { to: '', cc: '', subject: '' },
+    outDir: '',   // 周报输出文件夹:设了就直接落盘(文件名自带周号),不再每次弹保存框
+
     /* 周报 v3（用户 W34 邮件版式）：问候两行 + 大表标题，{week}/{产业} 导出时自动替换 */
     greet: {
       l1: '各位领导同事好，请查收{week}拉美{产业}销售团队周报',
@@ -250,6 +259,8 @@ function renderAudio() {
       '</div>' +
       '<div class="au-toolbar" id="auMailBar" style="margin-bottom:2px;flex-wrap:wrap;gap:6px"></div>' +
       '<div class="au-toolbar" id="auExportBar" style="justify-content:flex-end;margin-bottom:2px">' +
+      '  <span class="au-note" id="auOutDirNote" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>' +
+      '  <button class="btn" id="auOutDirBtn" title="选择周报输出文件夹;选定后导出直接存进去,文件名自带周号">📁 输出文件夹</button>' +
       '  <span class="au-note">一键导出整份周报 ▸</span>' +
       '  <button class="btn" id="auExpPpt">📑 PPT</button>' +
       '  <button class="btn" id="auExpPdf">📄 PDF</button>' +
@@ -267,6 +278,15 @@ function renderAudio() {
       '<div class="au-sec" id="auSecBounty"></div>' +
       '<div class="au-sec" id="auSecNewprod"></div>' +
       '<div class="au-sec" id="auSecBlocks" style="display:none"></div>';
+    const syncOutDir = () => {
+      const D0 = auLoad(), n = $('#auOutDirNote');
+      if (n) { n.textContent = D0.outDir ? ('输出到:' + D0.outDir) : '未设输出文件夹(每次弹保存框)'; n.title = D0.outDir || ''; n.style.cursor = D0.outDir ? 'pointer' : ''; n.onclick = () => { if (D0.outDir) api.openFolder(D0.outDir); }; }
+    };
+    $('#auOutDirBtn').onclick = async () => {
+      const r = await api.pickDir();
+      if (r && r.dir) { const D0 = auLoad(); D0.outDir = r.dir; auSave(); syncOutDir(); toast('周报将输出到:' + r.dir, 'ok'); }
+    };
+    syncOutDir();
     $('#auExpPpt').onclick = () => window.auExportWeeklyPpt && window.auExportWeeklyPpt().catch(e => toast('PPT 导出失败:' + e.message, 'err'));
     $('#auExpPdf').onclick = () => window.auExportWeeklyPdf && window.auExportWeeklyPdf().catch(e => toast('PDF 导出失败:' + e.message, 'err'));
     $('#auExpEml').onclick = () => window.auExportWeeklyEml && window.auExportWeeklyEml().catch(e => toast('邮件导出失败:' + e.message, 'err'));

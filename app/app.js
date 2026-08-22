@@ -640,7 +640,29 @@ async function init(){
         if(!err){ const s6tabs=(wd.slides[5].elements||[]).filter(e=>e.type==='table').length; if(s6tabs!==2) err='S6 table 数!=2 got='+s6tabs; }
         pptWeekly={ ok: !err, err };
       }catch(e){ pptWeekly={ok:false, err:String(e&&e.message||e)}; }
-      const r='SELFTEST_RESULT '+JSON.stringify({records:s1.records,dims:s1.dims.length,
+      // ---- 周报 v3 界面区块自测：每个章节的宿主必须渲染出实际内容(用户 2026-08-21:经营模块从界面消失) ----
+      let weeklyV3={ok:false};
+      try{
+        switchView('audio');
+        renderAudio();
+        if(typeof auEnsureWeeklyData==='function') await auEnsureWeeklyData();
+        await new Promise(r2=>setTimeout(r2,400));
+        const secLen=id=>{const el=document.getElementById(id);return el?el.innerHTML.length:-1;};
+        const secTables=id=>{const el=document.getElementById(id);return el?el.querySelectorAll('table').length:0;};
+        weeklyV3={
+          ok:true,
+          issues:secLen('auSecIssues'),
+          finTables:secTables('auSecFin'), finLen:secLen('auSecFin'),
+          finEmptyText:(document.getElementById('auSecFin')||{innerText:''}).innerText.slice(0,60),
+          famTables:secTables('auSecFamily'), repTables:secTables('auSecRep'),
+          cbCards:document.querySelectorAll('#auCbList .cb-card').length,
+          npLen:secLen('auSecNewprod'),
+          chips:document.querySelectorAll('#auRoot .wk-chip').length,
+          chipsUnresolved:[...document.querySelectorAll('#auRoot .wk-chip-v')].filter(x=>x.textContent==='…').length,
+        };
+        if(weeklyV3.finTables<2) weeklyV3.ok=false;   // 经营模块必须两张表(分系列+分国家办)
+      }catch(e){ weeklyV3={ok:false,err:String(e&&e.stack||e).slice(0,300)}; }
+      const r='SELFTEST_RESULT '+JSON.stringify({weeklyV3,records:s1.records,dims:s1.dims.length,
         reportDOM:{rows:domRows,cols:domCols,hasTotal},repPptOk,repPptErr,
         chartTypes,colorOverride:!!(overrideApplied&&overrideApplied.color),barPptOk,barErr,
         multiSel:{picked:twoLines.length,got:msSeriesNames.length,match:JSON.stringify(twoLines.slice().sort())===JSON.stringify(msSeriesNames.slice().sort())},hasTotalSeries,

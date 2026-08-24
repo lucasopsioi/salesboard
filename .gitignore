@@ -11,3 +11,4 @@ demo-data/**/*.xlsx
 
 # 评测的引擎解析缓存（可再生）
 eval/.engine-cache/
+dist-interview/

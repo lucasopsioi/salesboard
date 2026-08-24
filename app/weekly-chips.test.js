@@ -104,5 +104,28 @@ ok('N2 达成率不带正号', W.resolveChip({ id: 'npAttain', scope: { value: '
 ok('N3 同比上代带符号', W.resolveChip({ id: 'npYoy', scope: { value: 'n1' } }, CTX) === '+25%');
 ok('N4 未知新品 → —', W.resolveChip({ id: 'npCum', scope: { value: 'nope' } }, CTX) === '—');
 
+/* ---------- 音频延迟报量：尾部未报量的 0 周不许打断连涨连跌 ---------- */
+{
+  const upTail = [10, 20, 30, 40, 50, 0, 0];      // 连涨 4 周后 2 周未报量
+  ok('A1 音频砍尾 0 → 认得出连涨 4 周', W.hasStreak(upTail, 4, 'up', 1) === true);
+  ok('A2 平板不砍尾 → 同一串不算连涨(0 是真没卖)', W.hasStreak(upTail, 4, 'up', 0) === false);
+  ok('A3 音频砍尾 0 → 认得出连跌 4 周', W.hasStreak([50, 40, 30, 20, 10, 0], 4, 'down', 1) === true);
+  ok('A4 全 0 砍完不够长 → false,不瞎猜', W.hasStreak([0, 0, 0, 0, 0, 0], 4, 'up', 1) === false);
+  ok('A5 尾部无 0 时砍不砍一个样', W.hasStreak([1, 2, 3, 4, 5], 4, 'up', 1) === W.hasStreak([1, 2, 3, 4, 5], 4, 'up', 0));
+  const rows = [{ key: '音频A', weekly: upTail, hasAu: 1 }, { key: '平板B', weekly: upTail, hasAu: 0 }];
+  ok('A6 listStreak 按 hasAu 分流:只有音频行进名单', JSON.stringify(W.listStreak(rows, 4, 'up')) === '["音频A"]');
+  const ctxA = { scopes: { total: { total: { weekly: upTail, hasAu: 1 }, rows: [] } } };
+  ok('A7 音频本周SO 取最后有数周 50,不是 0', W.resolveChip({ id: 'weekSo' }, ctxA) === '50');
+  const ctxT = { scopes: { total: { total: { weekly: upTail, hasAu: 0 }, rows: [] } } };
+  ok('A8 平板本周SO 就是末周 0', W.resolveChip({ id: 'weekSo' }, ctxT) === '0');
+}
+
+/* ---------- 小幅变动不许被抹成 +0% ---------- */
+ok('A9  +0.4% 自动补一位小数,不显示 +0%', W.fmtPct(0.004, 0) === '+0.4%', W.fmtPct(0.004, 0));
+ok('A10 -0.04% 补到两位', W.fmtPct(-0.0004, 0) === '-0.04%', W.fmtPct(-0.0004, 0));
+ok('A11 两位也看不见的极小值才落到 0%', W.fmtPct(0.00001, 0) === '+0.00%', W.fmtPct(0.00001, 0));
+ok('A12 真正的 0 还是 0%,不补小数', W.fmtPct(0, 0) === '+0%', W.fmtPct(0, 0));
+ok('A13 正常幅度不受影响', W.fmtPct(0.082, 0) === '+8%', W.fmtPct(0.082, 0));
+
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS');
 process.exit(f ? 1 : 0);

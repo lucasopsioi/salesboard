@@ -91,8 +91,19 @@ C.Engine.prototype.report = function(p){
     const mk=(r)=>{ const daily=r.last4>0?r.last4/28:0; const dos=daily>0?Math.round((r.invDos||0)/daily):(r.hasAu?null:0);
       const yoy=r.cumPrev>0?(r.cumCur-r.cumPrev)/r.cumPrev:null;
       const siYoy=r.siPrev>0?(r.siCur-r.siPrev)/r.siPrev:null;
-      const a=r.weekly[wprev]||0, b=r.weekly[wlast]||0; const wow=a>0?(b-a)/a:null;
-      return {cumCur:r.cumCur,cumPrev:r.cumPrev,yoy,siCur:r.siCur,siPrev:r.siPrev,siYoy,weekly:lastN.map(w=>r.weekly[w]||0),wow,inv:r.inv,dos,last4:r.last4,hasAu:r.hasAu?1:0,
+      /* WoW：平板用固定的末两周；**音频用「最后两个有数的周」**——音频 SO 人工延迟报量，
+         末尾一两周恒为 0(没录,不是卖了 0),按固定末两周算会得到 0/0=null 或 −100% 的假象。
+         与 DOS 的 W_last 口径同一个道理(用户 2026-08-05 定的音频口径),这里补齐。
+         wowWeeks 一并回传,导出/叙述里可标明「W31→W32」到底比的哪两周。 */
+      let a=r.weekly[wprev]||0, b=r.weekly[wlast]||0, wowW=[wprev,wlast];
+      if(r.hasAu){
+        const have=lastN.filter(w=>(r.weekly[w]||0)>0);
+        if(have.length>=2){ const p2=have[have.length-2], l2=have[have.length-1];
+          a=r.weekly[p2]||0; b=r.weekly[l2]||0; wowW=[p2,l2]; }
+        else if(have.length===1){ a=0; b=r.weekly[have[0]]||0; wowW=[null,have[0]]; }
+      }
+      const wow=a>0?(b-a)/a:null;
+      return {cumCur:r.cumCur,cumPrev:r.cumPrev,yoy,siCur:r.siCur,siPrev:r.siPrev,siYoy,weekly:lastN.map(w=>r.weekly[w]||0),wow,wowWeeks:wowW,inv:r.inv,dos,last4:r.last4,hasAu:r.hasAu?1:0,
         family:r.family,line:r.line,series:r.series,product:r.product}; };
     const rows=[]; G.forEach((r,gc)=>{ const o=mk(r); o.key=gDict[gc]; rows.push(o); });
     rows.sort((a,b)=>b.cumCur-a.cumCur);

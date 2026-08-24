@@ -27,9 +27,14 @@
   /* ---------- 格式化（与周报正文口径一致） ---------- */
   const isNum = v => v != null && isFinite(v);
   function fmtInt(v) { return isNum(v) ? Math.round(v).toLocaleString('en-US') : '—'; }
+  /* 非零但四舍五入后成 0 的，自动补小数位到看得见为止(最多 2 位)。
+     否则「巴西国家办WoW涨幅最大(+0%)」这种句子会自相矛盾——+0.4% 被抹成 +0%。
+     真正的 0 仍然显示 0%。 */
   function fmtPct(v, dp, signed) {
     if (!isNum(v)) return '—';
-    const s = (v * 100).toFixed(dp == null ? 0 : dp) + '%';
+    let d = dp == null ? 0 : dp;
+    if (v !== 0) { while (d < 2 && Math.abs(v * 100).toFixed(d) === (0).toFixed(d)) d++; }
+    const s = (v * 100).toFixed(d) + '%';
     return (signed !== false && v >= 0) ? '+' + s : s;
   }
   /* 名单：空 → '无'（明确结论，不是留空——用户 2026-08-21：空着让人以为没算）；
@@ -46,15 +51,20 @@
      约定：合计行不在 rows 里（调用方传 r.rows，不含 r.total）。 */
 
   // 末端连续 n 周严格上涨/下滑（用 weekly 数组；不足 n+1 周 → false）
-  function hasStreak(weekly, n, dir) {
-    const w = (weekly || []).map(v => +v || 0);
+  /* trimTail：砍掉尾部的 0 周再判断。**只给音频用**——音频 SO 人工延迟报量，
+     末尾一两周恒为 0 是「还没录」不是「卖了 0」，不砍的话连涨连跌永远判不出来
+     （实测：音频 W33/W34 全 0，8 个国家办一个都进不了名单，叙述句整段是「无」）。
+     平板必须保留 0 周：那是真的一台没卖，属于下滑。 */
+  function hasStreak(weekly, n, dir, trimTail) {
+    let w = (weekly || []).map(v => +v || 0);
+    if (trimTail) { let e = w.length; while (e > 0 && w[e - 1] === 0) e--; w = w.slice(0, e); }
     if (w.length < n + 1) return false;
     for (let i = w.length - n; i < w.length; i++) {
       if (dir === 'up' ? !(w[i] > w[i - 1]) : !(w[i] < w[i - 1])) return false;
     }
     return true;
   }
-  const listStreak = (rows, n, dir) => (rows || []).filter(r => hasStreak(r.weekly, n, dir)).map(r => r.key);
+  const listStreak = (rows, n, dir) => (rows || []).filter(r => hasStreak(r.weekly, n, dir, r.hasAu)).map(r => r.key);
 
   // WoW 涨/跌幅最大（wow=null 的行不参与；全 null → null）
   function topMover(rows, dir) {
@@ -149,7 +159,10 @@
         case 'soYoy': return fmtPct(T.yoy, dp);
         case 'siYoy': return fmtPct(T.siYoy, dp);
         case 'wow': return fmtPct(T.wow, dp);
-        case 'weekSo': { const w = T.weekly || []; return w.length ? fmtInt(w[w.length - 1]) : '—'; }
+        case 'weekSo': { // 音频取最后一个有数的周(延迟报量,末周恒 0)
+          let w = (T.weekly || []).slice();
+          if (T.hasAu) { while (w.length && !(+w[w.length - 1] > 0)) w.pop(); }
+          return w.length ? fmtInt(w[w.length - 1]) : '—'; }
         case 'cumSo': return fmtInt(T.cumCur);
         case 'cumSi': return fmtInt(T.siCur);
         case 'dos': return isNum(T.dos) ? String(T.dos) : '—';

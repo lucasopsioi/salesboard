@@ -137,6 +137,39 @@ let f = 0; const ok = (n, c, extra) => { console.log((c ? 'PASS ' : 'FAIL ') + n
   })();
 
 
+  /* ===== ⑧ 音频 WoW 也要用「最后两个有数的周」=====
+     与 ⑦ 同一个病根：音频 SO 人工延迟报量，末尾一两周整周没行。
+     DOS 早按 W_last 修过了，WoW 却还在死磕固定末两周 → 0/0 得 null，
+     叙述句里「WoW—、无涨幅最大、无连续四周…」整段变空。平板不能跟着改：
+     平板末周 SO=0 是真的一台没卖，属于下滑，不许跳过。 */
+  await (async () => {
+    const mk = async (fam, tail) => {
+      const rs = [HEAD.join(',')];
+      const push = (d, metric, v) =>
+        rs.push(['LATAM', 'RepX', 'Brazil', 'Online', 'F1', fam, 'S1', 'P1', 'P1-M', d, metric, v].join(','));
+      // 三周 100 / 200 / 300
+      [['2026-07-20', 100], ['2026-07-27', 200], ['2026-08-03', 300]].forEach(x => push(x[0], 'Sell Out', x[1]));
+      // tail=true 时末两周补 SO=0 的真实行(平板)；false 则整周缺行(音频未报量)
+      if (tail) ['2026-08-10', '2026-08-17'].forEach(d => push(d, 'Sell Out', 0));
+      push('2026-08-17', 'Inventory', 500);
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wow-'));
+      fs.writeFileSync(path.join(dir, 'psi.csv'), '\ufeff' + rs.join('\n'), 'utf8');
+      const eng = new E.Engine(fs.mkdtempSync(path.join(os.tmpdir(), 'we-')));
+      eng.setFolder(dir);
+      await eng.refresh();
+      return eng.report({ groupDim: 'series' }).total;
+    };
+    const au = await mk('音频与智能配件', false);
+    const tb = await mk('平板', true);
+    ok('⑧-1 音频 WoW = 300/200-1 = +50%(跳过未报量的末两周)',
+      au.wow != null && Math.abs(au.wow - 0.5) < 1e-9, 'wow=' + au.wow);
+    ok('⑧-2 音频 wowWeeks 记下真实比的两周,导出可标注',
+      Array.isArray(au.wowWeeks) && au.wowWeeks.length === 2, 'wowWeeks=' + JSON.stringify(au.wowWeeks));
+    ok('⑧-3 平板末两周真 0 → WoW=null,不编成 0% 也不跳周', tb.wow === null, 'wow=' + tb.wow);
+    ok('⑧-4 音频 hasAu 标记传到行上(芯片层靠它分流)', au.hasAu === 1, 'hasAu=' + au.hasAu);
+    ok('⑧-5 平板 hasAu=0', tb.hasAu === 0, 'hasAu=' + tb.hasAu);
+  })();
+
   console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS');
   process.exit(f ? 1 : 0);
 })().catch(e => { console.log('FAIL 未捕获异常: ' + (e && e.stack || e)); process.exit(1); });

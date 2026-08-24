@@ -661,6 +661,36 @@ async function init(){
           chipsUnresolved:[...document.querySelectorAll('#auRoot .wk-chip-v')].filter(x=>x.textContent==='…').length,
         };
         if(weeklyV3.finTables<2) weeklyV3.ok=false;   // 经营模块必须两张表(分系列+分国家办)
+        // ---- M2 控件 + M5 隐藏→导出剔除→恢复 E2E(用户 2026-08-24:表没法筛/藏/选周数;隐藏恢复不回来) ----
+        const famBar=document.querySelector('#auSecFamily [data-bar]');
+        weeklyV3.famCtrl=!!(famBar&&famBar.querySelector('[data-pick]')&&famBar.querySelectorAll('select').length>=2);
+        let hideE2E=null;
+        const card0=document.querySelector('#auCbList .cb-card');
+        if(card0){
+          const v0=card0.dataset.v;
+          const keep=auHiddenList(v0).slice();          // E2E 结束原样放回,不动用户自己的选择
+          try{
+            auSetHidden(v0,[]);auRepaintCbCard(v0);
+            const c1=document.querySelector('#auCbList .cb-card[data-v="'+v0+'"]');
+            const rows0=c1.querySelectorAll('tbody tr').length;
+            const hbtn=c1.querySelector('[data-hiderow]');
+            const hidKey=hbtn?decodeURIComponent(hbtn.dataset.hiderow):'';
+            if(hbtn)hbtn.click();
+            const rowsA=c1.querySelectorAll('tbody tr').length;
+            let exportDrops=false;
+            try{ const vm=auBuildWeeklyV3Model(); const ct=(vm.sales.countries||[]).find(c=>c.name===v0);
+              exportDrops=!!(ct&&ct.table&&!ct.table.rows.some(rw=>String(rw[0])===hidKey||String(rw[1]||'')===hidKey)); }catch(e2){}
+            const pick=c1.querySelector('.au-pick'); if(pick)pick.click();
+            const panel=c1.querySelector('.au-pick-panel');
+            const btnAll=panel?[...panel.querySelectorAll('button')].filter(bt=>bt.textContent==='全部显示')[0]:null;
+            if(btnAll)btnAll.click();
+            const rowsB=c1.querySelectorAll('tbody tr').length;
+            if(panel)panel.remove();
+            hideE2E={rows0,rowsA,rowsB,panel:!!panel,exportDrops,ok:rowsA===rows0-1&&rowsB===rows0&&exportDrops};
+          }finally{ auSetHidden(v0,keep);auRepaintCbCard(v0); }
+        }
+        weeklyV3.hideE2E=hideE2E;
+        if(!weeklyV3.famCtrl||(hideE2E&&!hideE2E.ok)) weeklyV3.ok=false;
       }catch(e){ weeklyV3={ok:false,err:String(e&&e.stack||e).slice(0,300)}; }
       const r='SELFTEST_RESULT '+JSON.stringify({weeklyV3,records:s1.records,dims:s1.dims.length,
         reportDOM:{rows:domRows,cols:domCols,hasTotal},repPptOk,repPptErr,

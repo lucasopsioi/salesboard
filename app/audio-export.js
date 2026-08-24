@@ -737,13 +737,17 @@ if (typeof window !== 'undefined') (function () {
      周报 v3 模型（用户 W34 邮件版式）。所有叙述用 auChipCtx 解析成纯文本；
      表格从各模块缓存转成 {header,rows}；宽表在 auAttachV3Images 里转 PNG。
      ============================================================ */
-  function auReportTableModel(r, dim, firstLabel) {
+  function auReportTableModel(r, dim, firstLabel, hkey) {
     if (!r || !(r.rows || []).length) return null;
     const cols = auCbColumns(r, dim);
     const ki = cols.findIndex(c => c.key === 'key');
     if (ki >= 0) cols[ki].label = firstLabel || cols[ki].label;
     const skuLevel = (dim === 'product' || dim === 'model');
-    const rows = auCbSortRows(r, cols).map(o => cols.map(c => (c.totalOnly && skuLevel) ? '—' : strip(c.cell(o)).replace(/\s+/g, ' ')));
+    /* 界面上筛掉/隐藏的行,导出也要剔除——用户按国家保存的「产品版本」就是要发出去的版本。
+       此前只有屏幕过滤,.eml/PDF 里隐藏行照印(合计仍是引擎全量,口径不动)。 */
+    let srcRows = auCbSortRows(r, cols);
+    if (hkey && typeof auRH === 'function') srcRows = auRH().visible(srcRows, auHiddenListK(hkey));
+    const rows = srcRows.map(o => cols.map(c => (c.totalOnly && skuLevel) ? '—' : strip(c.cell(o)).replace(/\s+/g, ' ')));
     if (r.total) rows.push(cols.map(c => c.key === 'key' ? '合计' : (c.key === '__line' ? '' : strip(c.cell(r.total)))));
     return { header: cols.map(c => c.label), rows: rows, hasTotal: !!r.total };
   }
@@ -795,12 +799,12 @@ if (typeof window !== 'undefined') (function () {
       kpis: ind ? (ind.kpis || []).slice(0, 4) : [],
       img: ind ? ind.chartPng : '', cid: 'chart1',
     };
-    model.sales.family = { text: doc('fam'), table: auReportTableModel(auW.famRep, 'family', '系列') };
-    model.sales.rep = { text: doc('rep'), table: auReportTableModel(auW.repRep, 'repOffice', '国家办') };
+    model.sales.family = { text: doc('fam'), table: auReportTableModel(auW.famRep, 'family', '系列', auHKey('M2', 'family')) };
+    model.sales.rep = { text: doc('rep'), table: auReportTableModel(auW.repRep, 'repOffice', '国家办', auHKey('M2', 'repOffice')) };
     model.sales.countries = (auW.cbLast || []).map(x => ({
       name: x.v,
       text: (D.nar && D.nar.country && D.nar.country[x.v]) ? WCp.resolveDoc(D.nar.country[x.v], ctx) : '',
-      table: auReportTableModel(x.r, auW.cb.dim, null),
+      table: auReportTableModel(x.r, auW.cb.dim, null, auHiddenKey(x.v)),
     }));
     // 悬赏奖（可选，默认隐藏）
     if (D.showBounty && D.showBounty[auIndustryKey()] && typeof auW !== 'undefined' && auW._bountyExport) model.bounty = Object.assign({}, auW._bountyExport);

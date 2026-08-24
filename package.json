@@ -9,7 +9,8 @@
     "start": "electron .",
     "test": "node scripts/run-tests.js",
     "bump": "node scripts/bump-version.js",
-    "dist": "electron-builder --win portable"
+    "dist": "electron-builder --win portable",
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "jszip": "^3.10.1",

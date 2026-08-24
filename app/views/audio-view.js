@@ -27,6 +27,8 @@ const auW = {
   //   经营模块整段消失且被 auTrack 静默——注释永远独占一行。
   finToM: 0, finUnit: 'MUSD', finDp: 1, finLv1: {}, finDims: null, finLv3Opts: {}, finLv3Sel: [], finRepSel: [], finPb: null, finRb: null,
   cb: { dim: 'product', weeks: 9, fromW: null, toW: null }, cbLast: [], cbZoom: 1, token: 0,
+  // M2 系列/国家办表各自的周范围(独立于 M5 的 cb;用户 2026-08-24:这俩表没法选周数)
+  dimWk: { family: { weeks: 9, fromW: null, toW: null }, repOffice: { weeks: 9, fromW: null, toW: null } },
   indDim: {}, prodOpts: [], modelOpts: [], ctryOpts: [],
   _inflight: {},   // 模块 → 当前在途的渲染 Promise(导出前要等它,见 auEnsureWeeklyData)
 };
@@ -123,12 +125,18 @@ function auStateRestore() {
   if (Array.isArray(s.finRepSel)) auW.finRepSel = s.finRepSel.slice();
   if (s.cbDim === 'product' || s.cbDim === 'model') auW.cb.dim = s.cbDim;
   if (+s.cbFromW > 0) auW.cb.fromW = +s.cbFromW; if (+s.cbToW > 0) auW.cb.toW = +s.cbToW;
+  ['family', 'repOffice'].forEach(d => {
+    const w = s.dimWk && s.dimWk[d]; if (!w) return;
+    if (+w.fromW > 0) auW.dimWk[d].fromW = +w.fromW;
+    if (+w.toW > 0) auW.dimWk[d].toW = +w.toW;
+  });
 }
 function auStateSave() {
   boardStateSave(AU_STATE_KEY, () => ({
     industry: auW.industry, finToM: auW.finToM, finUnit: auW.finUnit,
     finLv3Sel: auW.finLv3Sel, finRepSel: auW.finRepSel,
     cbDim: auW.cb.dim, cbFromW: auW.cb.fromW, cbToW: auW.cb.toW,
+    dimWk: auW.dimWk,
   }));
 }
 
@@ -428,27 +436,53 @@ async function renderAuDim(dim) {
   const key = dim === 'family' ? 'fam' : 'rep';
   auW[key + 'Rep'] = null;                                    // 先清后填(与 renderAuFin 同理)
   const lab = dim === 'family' ? '系列' : '国家办';
-  host.innerHTML = '<div data-nar></div><div class="fa-wrap" data-tbl>取数中…</div>';
+  host.innerHTML = '<div data-nar></div>'
+    + '<div class="au-toolbar" data-bar style="margin:4px 0 2px;position:relative">'
+    + '  <label>周范围</label><span data-wk id="auDimWk_' + dim + '" style="display:inline-flex;gap:4px;align-items:center"></span>'
+    + '  <span class="chip au-pick" data-pick style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand)" title="勾选要展示的' + lab + ',去勾=隐藏;选择按产业保存,重启不丢">' + lab + ' <b>—</b> ▾</span>'
+    + '  <span class="au-note">筛选/隐藏只影响表格显示与导出,合计与叙述芯片始终是产业全量口径</span>'
+    + '</div>'
+    + '<div class="fa-wrap" data-tbl>取数中…</div>';
   auMountNar(host.querySelector('[data-nar]'), key, key);
   if (!state.dims.length) { host.querySelector('[data-tbl]').innerHTML = '<div class="au-empty">请先锚定 PSI 数据。</div>'; return; }
+  renderWeekRange('auDimWk_' + dim, auW.dimWk[dim], () => { auStateSave(); auTrack(key, renderAuDim(dim)); });
   let r = null;
-  try { r = await api.report({ groupDim: dim, weeks: auW.cb.weeks, fromW: auW.cb.fromW, toW: auW.cb.toW, filters: Object.assign({}, auLineFilter()) }); } catch (e) { }
-  auW[key + 'Rep'] = r;
+  try { r = await api.report({ groupDim: dim, weeks: auW.dimWk[dim].weeks, fromW: auW.dimWk[dim].fromW, toW: auW.dimWk[dim].toW, filters: Object.assign({}, auLineFilter()) }); } catch (e) { }
+  auW[key + 'Rep'] = r;                                       // 叙述芯片/导出吃全量 r,不吃筛选
   const tHost = host.querySelector('[data-tbl]');
   if (!r || !(r.rows || []).length) { if (tHost) tHost.innerHTML = '<div class="au-empty">无数据</div>'; auChipsRefresh(); return; }
-  if (tHost) tHost.innerHTML = auDimTableHtml(lab, r, dim);
+  const hkey = auHKey('M2', dim);
+  const allKeys = () => {
+    const ks = auCbSortRows(r, auCbColumns(r, dim)).map(o => o.key);
+    auHiddenListK(hkey).forEach(k => { if (ks.indexOf(k) < 0) ks.push(k); });   // 已隐藏但本期无数据的也列出来,能恢复
+    return ks;
+  };
+  const chip = host.querySelector('[data-pick]');
+  const syncChip = () => { const bEl = chip.querySelector('b'); const n = allKeys().length; if (bEl) bEl.textContent = (n - auHiddenListK(hkey).length) + '/' + n; };
+  const paintTable = () => {
+    tHost.innerHTML = auDimTableHtml(lab, r, dim, hkey);
+    tHost.querySelectorAll('[data-hiderow]').forEach(bt => bt.onclick = () => {
+      auSetHiddenK(hkey, auRH().add(auHiddenListK(hkey), decodeURIComponent(bt.dataset.hiderow)));
+      paintTable(); syncChip();
+    });
+  };
+  chip.onclick = () => auPickPanel(chip.parentElement, chip, allKeys, hkey, () => { paintTable(); syncChip(); });
+  paintTable(); syncChip();
   auChipsRefresh();
 }
-function auDimTableHtml(firstLabel, r, dim) {
+function auDimTableHtml(firstLabel, r, dim, hkey) {
   const cols = auCbColumns(r, dim);
   const ki = cols.findIndex(function (c) { return c.key === 'key'; });
   if (ki >= 0) cols[ki].label = firstLabel;
-  const rows = auCbSortRows(r, cols);
-  let h = '<table class="rep-table" style="width:100%"><thead><tr>' + cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') + '</tr></thead><tbody>';
-  rows.forEach(function (o) { h += '<tr>' + cols.map(function (c) { return '<td>' + (c.totalOnly ? '<span class="wk">—</span>' : c.cell(o)) + '</td>'; }).join('') + '</tr>'; });
-  if (r.total) h += '<tr class="tot">' + cols.map(function (c) { return '<td>' + (c.key === 'key' ? '合计' : (c.key === '__line' ? '' : c.cell(r.total))) + '</td>'; }).join('') + '</tr>';
+  let rows = auCbSortRows(r, cols);
+  if (hkey) rows = auRH().visible(rows, auHiddenListK(hkey));   // 只影响显示行;合计仍是全量
+  const hideTd = o => '<td><button class="row-hide-btn" data-hiderow="' + encodeURIComponent(o.key) + '" title="隐藏此行(不影响合计,用上方筛选 chip 可恢复)" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;padding:0 3px">✕</button></td>';
+  let h = '<table class="rep-table" style="width:100%"><thead><tr>' + (hkey ? '<th style="width:20px"></th>' : '') + cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') + '</tr></thead><tbody>';
+  rows.forEach(function (o) { h += '<tr>' + (hkey ? hideTd(o) : '') + cols.map(function (c) { return '<td>' + (c.totalOnly ? '<span class="wk">—</span>' : c.cell(o)) + '</td>'; }).join('') + '</tr>'; });
+  if (r.total) h += '<tr class="tot">' + (hkey ? '<td></td>' : '') + cols.map(function (c) { return '<td>' + (c.key === 'key' ? '合计' : (c.key === '__line' ? '' : c.cell(r.total))) + '</td>'; }).join('') + '</tr>';
   return h + '</tbody></table>';
 }
+
 
 /* 芯片上下文：各模块缓存 → WeeklyChips ctx */
 function auChipCtx() {
@@ -869,9 +903,33 @@ function auCbSortRows(r, cols) {
 }
 function auRH() { return (typeof window !== 'undefined' && window.RowHide) ? window.RowHide : require('../row-hide-core.js'); }
 function auHiddenAll() { try { return JSON.parse(localStorage.getItem(AU_HIDE_LS)) || {}; } catch (e) { return {}; } }
-function auHiddenKey(v) { return 'audio|' + v + '|' + auW.cb.dim; }
-function auHiddenList(v) { return auHiddenAll()[auHiddenKey(v)] || []; }
-function auSetHidden(v, arr) { const all = auHiddenAll(); if (arr && arr.length) all[auHiddenKey(v)] = arr; else delete all[auHiddenKey(v)]; try { localStorage.setItem(AU_HIDE_LS, JSON.stringify(all)); } catch (e) { } }
+/* 隐藏行的存储键一律带产业前缀。历史键硬编码 'audio|' 开头(两产业共用一份,平板下藏的行
+   会串到音频)——恰好与音频产业的新键同形,旧数据自然归音频、平板拿到干净一页,无需迁移。
+   slot: M5 用国家名;M2 系列/国家办表用 'M2'(第三段 dim 区分 family/repOffice)。 */
+function auHKey(slot, dim) { return auW.industry + '|' + slot + '|' + (dim || auW.cb.dim); }
+function auHiddenListK(key) { return auHiddenAll()[key] || []; }
+function auSetHiddenK(key, arr) { const all = auHiddenAll(); if (arr && arr.length) all[key] = arr; else delete all[key]; try { localStorage.setItem(AU_HIDE_LS, JSON.stringify(all)); } catch (e) { } }
+function auHiddenKey(v) { return auHKey(v); }
+function auHiddenList(v) { return auHiddenListK(auHiddenKey(v)); }
+function auSetHidden(v, arr) { auSetHiddenK(auHiddenKey(v), arr); }
+/* 勾选面板(M2 与 M5 共用):checked=显示,去勾=隐藏,全走 localStorage 的 hkey,重启不丢。
+   新出现的行不在隐藏名单里 → 默认显示,所以「以后新增产品」自动进表。 */
+function auPickPanel(anchor, chip, allKeysFn, hkey, onChange) {
+  let p = anchor.querySelector('.au-pick-panel'); if (p) { p.remove(); return; }
+  p = document.createElement('div'); p.className = 'au-pick-panel';
+  p.style.cssText = 'position:absolute;top:calc(100% - 2px);left:' + Math.max(8, chip.offsetLeft) + 'px;z-index:60;background:var(--c-bg-elev);border:1px solid var(--c-line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:8px 10px;max-height:280px;overflow:auto;min-width:220px';
+  const hid0 = auHiddenListK(hkey);
+  allKeysFn().forEach(k => {
+    const row = document.createElement('label'); row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12px;color:var(--c-ink-1);cursor:pointer';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = hid0.indexOf(k) < 0;
+    cb.onchange = () => { auSetHiddenK(hkey, cb.checked ? auRH().remove(auHiddenListK(hkey), k) : auRH().add(auHiddenListK(hkey), k)); onChange(); };
+    const nm = document.createElement('span'); nm.textContent = k; nm.style.flex = '1';
+    row.appendChild(cb); row.appendChild(nm); p.appendChild(row);
+  });
+  const all = document.createElement('button'); all.textContent = '全部显示'; all.className = 'btn'; all.style.cssText = 'margin-top:6px;padding:2px 10px;font-size:11px;width:100%';
+  all.onclick = () => { auSetHiddenK(hkey, []); onChange(); p.querySelectorAll('input').forEach(c => { c.checked = true; }); };
+  p.appendChild(all); anchor.appendChild(p);
+}
 function auCbVisibleRows(v, r, cols) { return auRH().visible(auCbSortRows(r, cols), auHiddenList(v)); }
 function auCbTableHtml(v, r) {
   const cols = auCbColumns(r);
@@ -881,7 +939,7 @@ function auCbTableHtml(v, r) {
   let body = '';
   for (let i = 0; i < rows.length; i++) {
     const o = rows[i];
-    let tds = `<td><button class="row-hide-btn" data-hiderow="${encodeURIComponent(o.key)}" title="隐藏此行(不影响合计,卡片头可恢复)" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;padding:0 3px">✕</button></td>`;
+    let tds = `<td><button class="row-hide-btn" data-hiderow="${encodeURIComponent(o.key)}" title="隐藏此行(不影响合计,卡片头「产品」chip 可恢复)" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;padding:0 3px">✕</button></td>`;
     cols.forEach(c => {
       if (c.key === '__line' && showSeries) {
         if (i > 0 && (rows[i - 1].line || '') === (o.line || '')) return;
@@ -908,41 +966,43 @@ function auRepaintCbCard(v) {
 }
 
 function auRenderCbCard(v, r) {
+  /* 产品管理器(用户 2026-08-24):卡片头「产品 n/N ▾」勾选面板 = 这一国要展示的产品版本,
+     按 产业|国家|拆分维度 存 localStorage,重启不丢;新品出量后自动出现在清单并默认显示。
+     行内 ✕ 是快捷隐藏,与面板同一份存储。切换显隐只重画本卡表体,零取数零闪屏。 */
   const card = document.createElement('div'); card.className = 'cb-card'; card.dataset.v = v;
   const head = document.createElement('div'); head.className = 'cb-head'; head.style.position = 'relative';
+  const wrapEl = document.createElement('div'); wrapEl.className = 'cb-table-wrap';
+  const tbl = document.createElement('table'); tbl.className = 'rep-table'; wrapEl.appendChild(tbl);
   const t = r.total || {}; const cyy = r.curYear % 100;
-  const hidList = auHiddenList(v);
+  const allKeys = () => {
+    const ks = auCbSortRows(r, auCbColumns(r)).map(o => o.key);
+    auHiddenList(v).forEach(k => { if (ks.indexOf(k) < 0) ks.push(k); });   // 已隐藏但本期无数据的也列出来,能恢复
+    return ks;
+  };
+  const syncChip = () => { const bEl = head.querySelector('.au-pick b'); const n = allKeys().length; if (bEl) bEl.textContent = (n - auHiddenList(v).length) + '/' + n; };
+  const paintTable = () => {
+    tbl.innerHTML = auCbTableHtml(v, r);
+    wrapEl.querySelectorAll('[data-hiderow]').forEach(bt => bt.onclick = () => {
+      auSetHidden(v, auRH().add(auHiddenList(v), decodeURIComponent(bt.dataset.hiderow)));
+      paintTable(); syncChip();
+    });
+  };
+  const n0 = allKeys().length;
   head.innerHTML = `<span class="nm">${v}</span>`
     + `<span class="chip">${cyy}累计SO <b>${numCell(t.cumCur)}</b></span>`
     + `<span class="chip">同比 <b class="${t.yoy == null ? '' : (t.yoy >= 0 ? 'pos' : 'neg')}">${t.yoy == null ? '—' : (t.yoy * 100).toFixed(0) + '%'}</b></span>`
     + `<span class="chip">库存 <b>${numCell(t.inv)}</b></span>`
     + `<span class="chip">DOS <b>${t.dos == null ? '—' : t.dos}</b></span>`
-    + (hidList.length ? `<span class="chip au-hidchip" style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand)">已隐藏 ${hidList.length} 行 ▾</span>` : '')
+    + `<span class="chip au-pick" style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand)" title="勾选这一国要展示的产品,去勾=隐藏;选择按国家保存,重启不丢">产品 <b>${n0 - auHiddenList(v).length}/${n0}</b> ▾</span>`
     + `<span class="fa-exp"><button data-ex="xlsx">📊 Excel</button><button data-ex="png">🖼 图片</button><button data-ex="rm" title="从周报移除此国家">移除</button></span>`;
-  const wrapEl = document.createElement('div'); wrapEl.className = 'cb-table-wrap';
-  const tbl = document.createElement('table'); tbl.className = 'rep-table'; tbl.innerHTML = auCbTableHtml(v, r); wrapEl.appendChild(tbl);
   head.querySelectorAll('.fa-exp button').forEach(btn => btn.onclick = () => {
     if (btn.dataset.ex === 'xlsx') auExportCbXlsx(v, r);
     else if (btn.dataset.ex === 'png') auExportCbPng(v, r);
     else { const D = auLoad(); D.countries = D.countries.filter(c => c !== v); auSave(); renderAuCountry(); }
   });
-  const chip = head.querySelector('.au-hidchip');
-  if (chip) chip.onclick = () => {
-    let p = head.querySelector('.au-hid-panel'); if (p) { p.remove(); return; }
-    p = document.createElement('div'); p.className = 'au-hid-panel';
-    p.style.cssText = 'position:absolute;top:calc(100% - 4px);left:' + Math.max(8, chip.offsetLeft) + 'px;z-index:60;background:var(--c-bg-elev);border:1px solid var(--c-line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:8px 10px;max-height:260px;overflow:auto;min-width:200px';
-    auHiddenList(v).forEach(k => {
-      const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:2px 0;font-size:12px;color:var(--c-ink-1)';
-      const nm = document.createElement('span'); nm.textContent = k; nm.style.flex = '1';
-      const btn = document.createElement('button'); btn.textContent = '恢复'; btn.className = 'btn'; btn.style.cssText = 'padding:1px 8px;font-size:11px';
-      btn.onclick = () => { auSetHidden(v, auRH().remove(auHiddenList(v), k)); auRepaintCbCard(v); };
-      row.appendChild(nm); row.appendChild(btn); p.appendChild(row);
-    });
-    const all = document.createElement('button'); all.textContent = '全部恢复'; all.className = 'btn'; all.style.cssText = 'margin-top:6px;padding:2px 10px;font-size:11px;width:100%';
-    all.onclick = () => { auSetHidden(v, []); auRepaintCbCard(v); };
-    p.appendChild(all); head.appendChild(p);
-  };
-  wrapEl.querySelectorAll('[data-hiderow]').forEach(b => b.onclick = () => { auSetHidden(v, auRH().add(auHiddenList(v), decodeURIComponent(b.dataset.hiderow))); auRepaintCbCard(v); });
+  const chip = head.querySelector('.au-pick');
+  chip.onclick = () => auPickPanel(head, chip, allKeys, auHiddenKey(v), () => { paintTable(); syncChip(); });
+  paintTable();
   card.appendChild(head); card.appendChild(wrapEl);
   return card;
 }
@@ -998,17 +1058,13 @@ async function renderAuCountryImpl() {
   wkFld.innerHTML = '<label>周范围</label><span id="auCbWeekRange" style="display:inline-flex;gap:4px;align-items:center"></span>';
   bar.appendChild(wkFld);
   renderWeekRange('auCbWeekRange', auW.cb, () => { auStateSave(); renderAuCountry(); });
-  // R4 缩放控件(整块缩放:表头+表体一起;Ctrl+滚轮同效)
+  // 缩放:Ctrl+滚轮直接缩放(用户 2026-08-24:别让我点按钮);点百分比一键回 100%
   const zmFld = document.createElement('div'); zmFld.style.cssText = 'display:flex;align-items:center;gap:4px';
   zmFld.innerHTML = '<label>缩放</label>'
-    + '<button class="btn" id="auZoomOut" title="缩小 5%" style="padding:1px 9px">−</button>'
-    + '<span id="auZoomVal" style="font-size:12px;color:var(--c-ink-2);min-width:42px;text-align:center">' + Math.round(auW.cbZoom * 100) + '%</span>'
-    + '<button class="btn" id="auZoomIn" title="放大 5%" style="padding:1px 9px">＋</button>'
-    + '<button class="btn" id="auZoomReset" title="恢复 100%" style="padding:1px 9px">重置</button>';
+    + '<button class="btn" id="auZoomVal" title="Ctrl+鼠标滚轮缩放;点击恢复 100%" style="padding:1px 10px;font-size:12px;min-width:46px">' + Math.round(auW.cbZoom * 100) + '%</button>'
+    + '<span class="au-note">Ctrl+滚轮</span>';
   bar.appendChild(zmFld);
-  $('#auZoomOut').onclick = () => auSetZoom(auW.cbZoom - AU_ZOOM_STEP);
-  $('#auZoomIn').onclick = () => auSetZoom(auW.cbZoom + AU_ZOOM_STEP);
-  $('#auZoomReset').onclick = () => auSetZoom(1);
+  $('#auZoomVal').onclick = () => auSetZoom(1);
   // 国家块
   const list = $('#auCbList');
   auBindZoomWheel(list);

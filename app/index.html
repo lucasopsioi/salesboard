@@ -680,6 +680,7 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
       <div class="nav-item" data-view="inventory"><span class="ic" data-icon="inventory"></span>库存管理</div>
       <div class="nav-item" data-view="textout"><span class="ic" data-icon="textout"></span>文字输出</div>
       <div class="nav-item" data-view="audio"><span class="ic" data-icon="audio"></span>产业周报</div>
+      <div class="nav-item" data-view="fob"><span class="ic" data-icon="finance"></span>Floor FOB</div>
       <div class="nav-label">助手</div>
       <div class="nav-item" id="navAiEntry"><span class="ic" data-icon="ai"></span>AI 问答</div>
       <div id="navRestore" class="hidden"><span class="ic" data-icon="eye"></span><span id="navRestoreTxt"></span></div>
@@ -967,6 +968,7 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
     <section class="view" id="view-textout">
       <div id="txtRoot" style="padding:0;overflow:hidden;height:100%"></div>
     </section>
+    <section class="view" id="view-fob"></section>
     <section class="view" id="view-audio">
       <div id="auRoot" style="padding:16px 20px;overflow:auto;height:100%"></div>
     </section>
@@ -1035,6 +1037,10 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
   <script src="fin-calc.js"></script>
   <script src="table-sort-core.js"></script>
   <script src="row-hide-core.js"></script>
+  <script src="fob-core.js"></script>
+  <script src="fob-sample.js"></script>
+  <script src="fob-store.js"></script>
+  <script src="fob-reports.js"></script>
   <script src="color-memory-core.js"></script>
   <script src="views/report-view.js"></script>
   <script src="views/psi-view.js"></script>
@@ -1072,6 +1078,7 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
   <script src="weekly-narrative.js"></script>
   <script src="views/audio-ind.js"></script>
   <script src="views/audio-view.js"></script>
+  <script src="views/fob-view.js"></script>
   <script src="views/audio-newprod.js"></script>
   <script src="app.js"></script>
   <script>try{window.SbUI&&window.SbUI.init();}catch(e){console.warn("UI kit init failed",e);}try{window.SbI18n&&window.SbI18n.init();}catch(e){console.warn("i18n init failed",e);}</script>

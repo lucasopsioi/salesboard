@@ -125,7 +125,7 @@ function switchView(v){
   $$('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===v));
   $$('.view').forEach(el=>el.classList.toggle('active',el.id==='view-'+v));
   renderDataBar(v);
-  $('#viewTitle').textContent={psi:'PSI 数据分析',industry:'产业看板',finance:'经营分析',country:'国家看板',report:'汇总表',custom:'自定义图表',designer:'看板设计器',source:'数据源',pricing:'定价测算',pricinglib:'产品定价库',roadmap:'路标管理',pptoutput:'PPT output',inventory:'库存管理',textout:'文字输出',audio:'产业周报'}[v]||v;
+  $('#viewTitle').textContent={psi:'PSI 数据分析',industry:'产业看板',finance:'经营分析',country:'国家看板',report:'汇总表',custom:'自定义图表',designer:'看板设计器',source:'数据源',pricing:'定价测算',pricinglib:'产品定价库',roadmap:'路标管理',pptoutput:'PPT output',inventory:'库存管理',textout:'文字输出',audio:'产业周报',fob:'Floor FOB'}[v]||v;
   if(v==='pricing'&&typeof renderPricing==='function') renderPricing();
   if(v==='pricinglib'&&typeof renderPricingLib==='function') renderPricingLib();
   if(v==='roadmap'&&typeof renderRoadmap==='function') renderRoadmap();
@@ -133,6 +133,7 @@ function switchView(v){
   if(v==='inventory'&&typeof renderInventory==='function') renderInventory();
   if(v==='textout'&&typeof renderTextout==='function') renderTextout();
   if(v==='audio'&&typeof renderAudio==='function') renderAudio();
+  if(v==='fob'&&typeof renderFob==='function') renderFob();
   if(v==='psi'&&chart) setTimeout(()=>chart.resize(),50);
   if(v==='industry'){ if(state.dims.length){ if(!ind.data) initIndustry(); else setTimeout(()=>ind.chart&&ind.chart.resize(),50); } else $('#indEmpty').classList.remove('hidden'); }
   if(v==='report' && state.dims.length && !rep.last) drawReport();
@@ -640,6 +641,23 @@ async function init(){
         if(!err){ const s6tabs=(wd.slides[5].elements||[]).filter(e=>e.type==='table').length; if(s6tabs!==2) err='S6 table 数!=2 got='+s6tabs; }
         pptWeekly={ ok: !err, err };
       }catch(e){ pptWeekly={ok:false, err:String(e&&e.message||e)}; }
+      // ---- Floor FOB 看板自测:核心链路(嗅探→算价→折叠→spec) + 视图 shell ----
+      let fobT={ok:false};
+      try{
+        const col=FobSample.toColumn();
+        const pr=FobCore.parsePaste(col);
+        const ext=FobCore.extract(pr,202607,false,col);
+        const stF=new FobStore.Store(null,{onDirty:()=>{}});
+        stF.addSnapshot(ext,{label:'selftest',category:'平板'});
+        const spec=FobReports.boardSpec(stF,{decimals:0});
+        const wkKey=FobCore.normalizeModelKey('Tarvos-W09DK');
+        const v607=stF.boardCells()[wkKey+'|202607'];
+        await renderFob();
+        const tabs=document.querySelectorAll('#view-fob .fob-tab').length;
+        fobT={ok:pr.nProducts===22&&spec.rows.length===22&&Math.abs(v607-628)<0.6&&tabs===5,
+          nProducts:pr.nProducts,specRows:spec.rows.length,tarvos:v607,tabs:tabs};
+        if(!fobT.ok) fobT.err='counts mismatch';
+      }catch(e){ fobT={ok:false,err:String(e&&e.stack||e).slice(0,200)}; }
       // ---- 周报 v3 界面区块自测：每个章节的宿主必须渲染出实际内容(用户 2026-08-21:经营模块从界面消失) ----
       let weeklyV3={ok:false};
       let keepScope=null;
@@ -741,7 +759,7 @@ async function init(){
         if(!weeklyV3.famCtrl||!weeklyV3.famPure||(hideE2E&&!hideE2E.ok)||(weeklyV3.famPanelE2E&&!weeklyV3.famPanelE2E.ok)||(weeklyV3.scopeE2E&&!weeklyV3.scopeE2E.ok)) weeklyV3.ok=false;
       }catch(e){ weeklyV3={ok:false,err:String(e&&e.stack||e).slice(0,300)}; }
       finally{ if(keepScope&&typeof auInd!=='undefined'){ auInd.filters=keepScope; if(typeof auIndStateSave==='function')auIndStateSave(); } }
-      const r='SELFTEST_RESULT '+JSON.stringify({weeklyV3,records:s1.records,dims:s1.dims.length,
+      const r='SELFTEST_RESULT '+JSON.stringify({weeklyV3,fob:fobT,records:s1.records,dims:s1.dims.length,
         reportDOM:{rows:domRows,cols:domCols,hasTotal},repPptOk,repPptErr,
         chartTypes,colorOverride:!!(overrideApplied&&overrideApplied.color),barPptOk,barErr,
         multiSel:{picked:twoLines.length,got:msSeriesNames.length,match:JSON.stringify(twoLines.slice().sort())===JSON.stringify(msSeriesNames.slice().sort())},hasTotalSeries,

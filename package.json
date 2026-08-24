@@ -33,6 +33,7 @@
       "version.json",
       "engine*.js",
       "app/**/*",
+      "!app/**/*.test.js",
       "node_modules/**/*",
       "!node_modules/@node-llama-cpp/win-x64-cuda*/**",
       "!node_modules/@node-llama-cpp/win-arm64*/**",

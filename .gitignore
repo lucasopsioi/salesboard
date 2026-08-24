@@ -8,3 +8,6 @@ Thumbs.db
 demo-data/**/*.csv
 demo-data/**/*.xlsx
 !demo-data/README.md
+
+# 评测的引擎解析缓存（可再生）
+eval/.engine-cache/

@@ -204,6 +204,23 @@ ipcMain.handle('launchScan', (_e, params) => {
 ipcMain.handle('sample', () => engine.loadSample());
 ipcMain.handle('log', (_e, msg) => { try { fs.appendFileSync(path.join(app.getPath('userData'), 'renderer.log'), new Date().toISOString() + ' ' + msg + '\n'); } catch (e) {} });
 
+// Floor FOB 看板持久化:userData/fob-data.json。写走 tmp+rename,断电不留半个文件
+ipcMain.handle('fobLoad', () => {
+  try {
+    const p = path.join(app.getPath('userData'), 'fob-data.json');
+    if (!fs.existsSync(p)) return { data: null };
+    return { data: JSON.parse(fs.readFileSync(p, 'utf8')) };
+  } catch (err) { return { data: null, error: String(err) }; }
+});
+ipcMain.handle('fobSave', (_e, data) => {
+  try {
+    const p = path.join(app.getPath('userData'), 'fob-data.json');
+    const tmp = p + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(data), 'utf8');
+    fs.renameSync(tmp, p);
+    return { ok: true };
+  } catch (err) { return { ok: false, error: String(err) }; }
+});
 // 周报输出目录：纯选目录(不落引擎 config,由渲染层存进周报存档)
 ipcMain.handle('pickDir', async () => {
   const r = await dialog.showOpenDialog(win, { title: '选择周报输出文件夹', properties: ['openDirectory', 'createDirectory'] });

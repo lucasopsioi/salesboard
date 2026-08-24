@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('sb', {
   launchScan:  (params)      => ipcRenderer.invoke('launchScan', params),
   sample:      ()            => ipcRenderer.invoke('sample'),
   saveFile:    (name, b64, mime) => ipcRenderer.invoke('saveFile', name, b64, mime),
+  fobLoad:     ()            => ipcRenderer.invoke('fobLoad'),
+  fobSave:     (data)        => ipcRenderer.invoke('fobSave', data),
   pickDir:     ()            => ipcRenderer.invoke('pickDir'),
   saveFileAt:  (dir, name, b64) => ipcRenderer.invoke('saveFileAt', dir, name, b64),
   printHtmlPdfAt: (dir, name, html) => ipcRenderer.invoke('printHtmlPdfAt', dir, name, html),

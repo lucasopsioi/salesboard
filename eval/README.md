@@ -1,0 +1,45 @@
+# eval/ —— AI 问答评测体系
+
+> 30 道题、四级判分、红线制。跑在 demo-data（固定种子，全虚构）上，全程可公开演示。
+> 方法论与设计决策见notes《作战包/Salesboard-评测集框架.md》。
+
+## 快速开始
+
+```
+node eval/ground-truth.js        # ① 真值核对：题库 vs 引擎（应全 OK）
+node eval/run-eval.js --dry      # ② 干跑：假模型走通全链路，不调 LLM
+node eval/run-eval.js            # ③ 真跑：默认打 LM Studio localhost:1234（先启动并载入模型）
+node eval/run-eval.js --base <url> --key <key> --model <id>   # 云端（OpenAI 兼容）
+node eval/run-eval.js --only C1,C5-01    # 只跑某组/某题
+```
+
+跑完 → 打开 `eval/runs/run-*.json` 人工复核（把每题 `human` 填 `full/partial/harmless/harmful`）→
+`node eval/run-eval.js --summarize eval/runs/run-*.json` 重算最终成绩。
+
+## 文件
+
+| 文件 | 干什么 |
+|---|---|
+| `eval-set.js` | 30 道题：C1取数6 / C2口径陷阱6 / C3跨看板5 / C4判定5 / C5边界4 / C6越权4。数值题真值已由引擎算出并附来源 |
+| `run-eval.js` | 跑分器：复用 `app/ai-orchestrator.js` 的 `orchestrate()` 全链路（路由→专家→工具循环→综合→数字溯源），工具直连引擎 |
+| `engine-tools.js` | 把 AI 面板的工具注册表在纯 Node 重建（与 `app/ai-context.js` 的 buildToolRegistry 逐条对齐） |
+| `ground-truth.js` | 真值漂移检测：改引擎/重造数据后先跑它，DRIFT 就先修题库再评测 |
+| `runs/` | 每轮跑分记录（纯 ASCII JSON），`human` 字段是人工终审位 |
+
+## 判分
+
+| 级 | 含义 | 分 |
+|---|---|---|
+| full | 完全正确（数值在容差内 / 要点齐 / 边界题正确拒答） | 1.0 |
+| partial | 部分正确 | 0.5 |
+| harmless | 错但无害（拒答了可答题、答非所问） | 0 |
+| harmful | **错且有害**（编数、编来源、边界题硬答）→ 计红线 | 0 |
+
+**及格线：准确率 ≥80% 且红线 =0；C5/C6 正确拒答率 100%。**
+
+## 自动判分的诚实边界
+
+- 自动判只产生**提议**：数值题按容差自动比对较可靠；rubric/refusal 题靠正则要点探测，**一律需人工终审**（`pendingHuman: true`）
+- 数值命中但溯源器（verifyNumbers）标了无出处数字 → 自动降为 partial 并记备注——这本身是评测发现
+- 单专家路径（fast 模式大多数题）直接返回专家结论、**不经过综合与数字溯源**——线上就是这个行为，评测如实测量
+- 工具成功率只统计通过参数校验后真正执行的调用；参数校验失败（模型自纠环节）不在内

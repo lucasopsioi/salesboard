@@ -76,7 +76,27 @@
     if (!best) return null;
     if (dir === 'fall' && best.wow >= 0) return null;   // 没有下跌的就说没有,别把涨得最少的说成跌幅最大
     if (dir !== 'fall' && best.wow <= 0) return null;
-    return { key: best.key, wow: best.wow };
+    return { key: best.key, wow: best.wow, series: best.series };
+  }
+
+  /* ---------- 叙述句名称短显(用户 2026-08-24:产品全名太长,一行全是名字) ----------
+     · 地理名一律剥「国家办/终端事业部/业务部」后缀:巴西国家办 → 巴西
+     · 产品级(国家块 scope,行是产品/型号)默认显示**系列名**;芯片可配 nameBy:
+       'series'=系列名 / 'key'=原名。family/rep 层不做系列映射——分组行的
+       series 是组内任取的一条,映射出来是错的。
+     只影响叙述句与导出正文;表格仍是全名(表是对账基准)。 */
+  function shortGeo(name) { return String(name == null ? '' : name).replace(/(终端事业部|业务部|国家办)$/, ''); }
+  function dispName(r, cfg, lv) {
+    let n = r && r.key;
+    const by = (cfg && cfg.nameBy) || (lv === 'country' ? 'series' : 'key');
+    if (by === 'series' && r && r.series) n = r.series;
+    return shortGeo(n);
+  }
+  // 系列映射后同名去重:保留首个(行序=累计SO 高→低,首个就是量最大的那条)
+  function uniqBy(items, keyOf) {
+    const seen = {}; const out = [];
+    (items || []).forEach(it => { const k = keyOf(it); if (!seen[k]) { seen[k] = 1; out.push(it); } });
+    return out;
   }
 
   // DOS 超阈值名单（field: 'dos' | 'flowDos'；null 不参与——null 是「算不出」不是超标）
@@ -174,18 +194,22 @@
     // list（用户 2026-08-21：降幅最大的也要把数讲出来 → 默认带幅度/天数，cfg.showVal===false 可关）
     const max = cfg.max || 4;
     const withVal = cfg.showVal !== false;
+    const nm = r => dispName(r, cfg, lv);
     switch (cfg.id) {
-      case 'topRise': { const t = topMover(rows, 'rise'); return t ? (t.key + (withVal ? '(' + fmtPct(t.wow, cfg.dp != null ? cfg.dp : 0) + ')' : '')) : '无'; }
-      case 'topFall': { const t = topMover(rows, 'fall'); return t ? (t.key + (withVal ? '(' + fmtPct(t.wow, cfg.dp != null ? cfg.dp : 0) + ')' : '')) : '无'; }
-      case 'streakUp': return fmtList(listStreak(rows, cfg.n || 4, 'up'), max);
-      case 'streakDown': return fmtList(listStreak(rows, cfg.n || 4, 'down'), max);
+      case 'topRise': { const t = topMover(rows, 'rise'); return t ? (nm(t) + (withVal ? '(' + fmtPct(t.wow, cfg.dp != null ? cfg.dp : 0) + ')' : '')) : '无'; }
+      case 'topFall': { const t = topMover(rows, 'fall'); return t ? (nm(t) + (withVal ? '(' + fmtPct(t.wow, cfg.dp != null ? cfg.dp : 0) + ')' : '')) : '无'; }
+      case 'streakUp': case 'streakDown': {
+        const dir = cfg.id === 'streakUp' ? 'up' : 'down';
+        const hit = (rows || []).filter(r => hasStreak(r.weekly, cfg.n || 4, dir, r.hasAu));
+        return fmtList(uniqBy(hit.map(r => ({ n: nm(r) })), x => x.n).map(x => x.n), max);
+      }
       case 'dosOver': {
         const hit = (rows || []).filter(r => r.dos != null && isFinite(r.dos) && r.dos > (cfg.x || 120));
-        return fmtList(hit.map(r => r.key + (withVal ? '(' + r.dos + '天)' : '')), max);
+        return fmtList(uniqBy(hit.map(r => ({ n: nm(r), v: r.dos })), x => x.n).map(x => x.n + (withVal ? '(' + x.v + '天)' : '')), max);
       }
       case 'flowDosOver': {
         const hit = (rows || []).filter(r => r.flowDos != null && isFinite(r.flowDos) && r.flowDos > (cfg.x || 200));
-        return fmtList(hit.map(r => r.key + (withVal ? '(' + r.flowDos + '天)' : '')), max);
+        return fmtList(uniqBy(hit.map(r => ({ n: nm(r), v: r.flowDos })), x => x.n).map(x => x.n + (withVal ? '(' + x.v + '天)' : '')), max);
       }
     }
     return '—';
@@ -305,7 +329,7 @@
 
   return {
     fmtInt, fmtPct, fmtList,
-    hasStreak, listStreak, topMover, listDosOver,
+    hasStreak, listStreak, topMover, listDosOver, shortGeo, dispName,
     CATALOG, chipDef, chipLabel, resolveChip, resolveDoc, docFromTemplate,
     detectFirstSale, cumFrom, firstSaleRow, firstSaleTotal,
   };

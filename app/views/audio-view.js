@@ -193,6 +193,26 @@ async function auDetectIndustryDim(kind) {
   auW.indDim[ind.key] = hit; return hit;
 }
 function auLineFilter() { const d = auW.indDim[auW.industry]; return d ? { [d.field]: [d.value] } : {}; }
+/* 「周度销售进展」章节的范围筛选 = M4 筛选栏(auInd.filters)。
+   M2 系列/国家办表与 M5 国家块都吃它:用户在上面筛 Slate SE,下面全部跟着变
+   (2026-08-24 连续两次反馈,之前 M4 筛选只管自己的曲线图)。
+   产业维度值 M4 里本来就有种子,再兜一层 auLineFilter 防探测空窗。 */
+function auScopeFilters() {
+  const f = Object.assign({}, auLineFilter());
+  if (typeof auInd !== 'undefined' && auInd.filters) {
+    Object.keys(auInd.filters).forEach(k => {
+      const v = auInd.filters[k];
+      if (Array.isArray(v) ? v.length : v) f[k] = Array.isArray(v) ? v.slice() : v;
+    });
+  }
+  return f;
+}
+/* M4 筛选 commit 后由 audio-ind.js 调用:范围变了,下面吃范围的模块全部重取 */
+function auScopeChanged() {
+  auTrack('fam', renderAuDim('family'));
+  auTrack('rep', renderAuDim('repOffice'));
+  renderAuCountry();
+}
 /* 供导出侧(audio-export.js)取产业名:model.industry / model.industryLabel 的数据源 */
 function auIndustryInfo() {
   const ind = auCurInd(), d = auW.indDim[ind.key];
@@ -314,7 +334,10 @@ function renderAudio() {
      M4(renderAuInd)自带产业种子逻辑,不吃 auLineFilter,留在闸外无妨,一并放里面求稳。 */
   auTrack('boot', (async () => {
     await auDetectIndustryDim(auW.industry);
-    if (typeof renderAuInd === 'function') auTrack('ind', renderAuInd());
+    /* M4 必须先跑完:它的筛选栏渲染会**清洗存档里当前产业下取不到的残留值**
+       (比如音频页签挂着平板的 Slate SE)。M2/M5 现在吃 M4 的范围筛选,
+       若并行会拿到未清洗的残留,整章取空(2026-08-24 selftest 抓到的就是这形态)。 */
+    if (typeof renderAuInd === 'function') await auTrack('ind', renderAuInd());
     auTrack('fam', renderAuDim('family'));
     auTrack('rep', renderAuDim('repOffice'));
     renderAuCountry();
@@ -447,14 +470,14 @@ async function renderAuDim(dim) {
     + '<div class="au-toolbar" data-bar style="margin:4px 0 2px;position:relative">'
     + '  <label>周范围</label><span data-wk id="auDimWk_' + dim + '" style="display:inline-flex;gap:4px;align-items:center"></span>'
     + '  <span class="chip au-pick" data-pick style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand)" title="勾选要展示的' + lab + ',去勾=隐藏;选择按产业保存,重启不丢">' + lab + ' <b>—</b> ▾</span>'
-    + '  <span class="au-note">筛选/隐藏只影响表格显示与导出,合计与叙述芯片始终是产业全量口径</span>'
+    + '  <span class="au-note">范围跟随上方「周度销售进展」筛选,合计=筛选范围全量;勾选/✕只影响显示行</span>'
     + '</div>'
     + '<div class="fa-wrap" data-tbl>取数中…</div>';
   auMountNar(host.querySelector('[data-nar]'), key, key);
   if (!state.dims.length) { host.querySelector('[data-tbl]').innerHTML = '<div class="au-empty">请先锚定 PSI 数据。</div>'; return; }
   renderWeekRange('auDimWk_' + dim, auW.dimWk[dim], () => { auStateSave(); auTrack(key, renderAuDim(dim)); });
   let r = null;
-  try { r = await api.report({ groupDim: dim, weeks: auW.dimWk[dim].weeks, fromW: auW.dimWk[dim].fromW, toW: auW.dimWk[dim].toW, filters: Object.assign({}, auLineFilter()) }); } catch (e) { }
+  try { r = await api.report({ groupDim: dim, weeks: auW.dimWk[dim].weeks, fromW: auW.dimWk[dim].fromW, toW: auW.dimWk[dim].toW, filters: auScopeFilters() }); } catch (e) { }
   auW[key + 'Rep'] = r;                                       // 叙述芯片/导出吃全量 r,不吃筛选
   const tHost = host.querySelector('[data-tbl]');
   if (!r || !(r.rows || []).length) { if (tHost) tHost.innerHTML = '<div class="au-empty">无数据</div>'; auChipsRefresh(); return; }
@@ -1037,7 +1060,7 @@ async function renderAuCountryImpl() {
   const host = $('#auSecCountry'); if (!host) return;
   auW.cbLast = [];                                         // 先清后填,理由同 renderAuFin
   const D = auLoad(), T = D.title;
-  const head = '<div class="au-sec-t">M5 · 产品维度<span class="au-note">标题可自己写(字号/加粗可调) · 按国家逐块看产品销量(口径同国家看板,全流程/DOS 全移植;跟随当前产业:' + auIndustryLabel() + ') · Ctrl+滚轮缩放</span></div>';
+  const head = '<div class="au-sec-t">M5 · 产品维度<span class="au-note">标题可自己写(字号/加粗可调) · 按国家逐块看产品销量(口径同国家看板;跟随当前产业:' + auIndustryLabel() + ',范围跟随上方筛选) · Ctrl+滚轮缩放</span></div>';
   if (!state.dims.length) { host.innerHTML = head + '<div class="au-empty">请先锚定 PSI 数据或载入示例。</div>'; return; }
   await auDetectIndustryDim(auW.industry); await auEnsureCtryOpts();
   host.innerHTML = head
@@ -1079,7 +1102,7 @@ async function renderAuCountryImpl() {
   if (!ctrys.length) { list.innerHTML = '<div class="au-empty">用上方「＋添加国家」选择要展示的国家(每国一块,格式同国家看板)。</div>'; return; }
   const token = ++auW.token;
   const reps = await Promise.all(ctrys.map(v => {
-    const f = Object.assign({}, auLineFilter(), { country: [v] });
+    const f = Object.assign({}, auScopeFilters(), { country: [v] });
     return api.report({ groupDim: auW.cb.dim, weeks: auW.cb.weeks, fromW: auW.cb.fromW, toW: auW.cb.toW, filters: f }).then(r => ({ v, r }));
   }));
   if (token !== auW.token) return;

@@ -87,13 +87,13 @@ const near = (a, b) => (a == null && b == null) || (a != null && b != null && Ma
   const riseChip = chip({ id: 'topRise', scope: { level: 'rep' } });
   const fallChip = chip({ id: 'topFall', scope: { level: 'rep' } });
   // 2026-08-21 起芯片默认带幅度：名字(+X%)；空名单显「无」——手工重算侧同格式拼
-  const riseManual = rise && rise.wow > 0 ? rise.key + '(' + pctS(rise.wow) + ')' : '无';
-  const fallManual = fall && fall.wow < 0 ? fall.key + '(' + pctS(fall.wow) + ')' : '无';
+  const riseManual = rise && rise.wow > 0 ? WC.shortGeo(rise.key) + '(' + pctS(rise.wow) + ')' : '无';
+  const fallManual = fall && fall.wow < 0 ? WC.shortGeo(fall.key) + '(' + pctS(fall.wow) + ')' : '无';
   ok('③-1 涨幅最大芯片 = 手工排序第一+幅度', riseChip === riseManual, riseChip + ' vs ' + riseManual);
   ok('③-2 跌幅最大芯片 = 手工排序末一+幅度', fallChip === fallManual, fallChip + ' vs ' + fallManual);
-  const manualUp = repRep.rows.filter(r => { const w = r.weekly; if (w.length < 5) return false; for (let i = w.length - 4; i < w.length; i++) if (!(w[i] > w[i - 1])) return false; return true; }).map(r => r.key);
+  const manualUp = repRep.rows.filter(r => { const w = r.weekly; if (w.length < 5) return false; for (let i = w.length - 4; i < w.length; i++) if (!(w[i] > w[i - 1])) return false; return true; }).map(r => WC.shortGeo(r.key));
   ok('③-3 连续4周上涨名单 = 手工逐行验', chip({ id: 'streakUp', n: 4, scope: { level: 'rep' } }) === WC.fmtList(manualUp));
-  const manualOver = repRep.rows.filter(r => r.dos != null && r.dos > 40).map(r => r.key + '(' + r.dos + '天)');
+  const manualOver = repRep.rows.filter(r => r.dos != null && r.dos > 40).map(r => WC.shortGeo(r.key) + '(' + r.dos + '天)');
   ok('③-4 DOS超40名单 = 手工筛+天数(demo 阈值取40才有命中)', chip({ id: 'dosOver', x: 40, scope: { level: 'rep' } }) === WC.fmtList(manualOver));
 
   /* ---------- ④ 财经表：MUSD 换算与达成率 ---------- */

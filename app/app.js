@@ -642,8 +642,15 @@ async function init(){
       }catch(e){ pptWeekly={ok:false, err:String(e&&e.message||e)}; }
       // ---- 周报 v3 界面区块自测：每个章节的宿主必须渲染出实际内容(用户 2026-08-21:经营模块从界面消失) ----
       let weeklyV3={ok:false};
+      let keepScope=null;
       try{
         switchView('audio');
+        // E2E 必须在确定的范围下跑:dev 与打包版共享 userData,用户真实筛选残留会把断言全带偏
+        // (实测:用户筛了 Slate SE,音频 sample 下整章取空,五个断言齐红)。存档 keep,块尾还原。
+        if(typeof auInd!=='undefined'){
+          keepScope=JSON.parse(JSON.stringify(auInd.filters));
+          auInd.filters={};
+        }
         renderAudio();
         if(typeof auEnsureWeeklyData==='function') await auEnsureWeeklyData();
         await new Promise(r2=>setTimeout(r2,400));
@@ -692,7 +699,8 @@ async function init(){
         weeklyV3.hideE2E=hideE2E;
         // ---- famRep 口径纯度:界面缓存必须与「带产业过滤的直查」同数——首屏竞态(探测前发查询)会在这翻车 ----
         try{
-          const chk=await api.report({groupDim:'family',weeks:9,filters:Object.assign({},auLineFilter())});
+          const wk2=auW.dimWk.family;
+          const chk=await api.report({groupDim:'family',weeks:wk2.weeks,fromW:wk2.fromW,toW:wk2.toW,filters:auScopeFilters()});
           weeklyV3.famPure=!!(auW.famRep&&auW.famRep.rows.length===chk.rows.length
             &&auW.famRep.total&&chk.total&&auW.famRep.total.cumCur===chk.total.cumCur);
         }catch(e2){weeklyV3.famPure=false;}
@@ -715,8 +723,24 @@ async function init(){
             weeklyV3.famPanelE2E={n0,n1,n2,panel:!!pan,ok:n1===n0-1&&n2===n0};
           }
         }catch(e2){weeklyV3.famPanelE2E={ok:false,err:String(e2&&e2.message||e2)};}
-        if(!weeklyV3.famCtrl||!weeklyV3.famPure||(hideE2E&&!hideE2E.ok)||(weeklyV3.famPanelE2E&&!weeklyV3.famPanelE2E.ok)) weeklyV3.ok=false;
+        // ---- 范围筛选 E2E:M4 筛掉一个系列,M2 表要缩到那个系列(用户 2026-08-24:筛 Slate SE 下面要变) ----
+        try{
+          const keys0=auW.famRep?auW.famRep.rows.map(rr=>rr.key):[];
+          const cum0=auW.famRep&&auW.famRep.total?auW.famRep.total.cumCur:null;
+          if(keys0.length>1&&typeof auInd!=='undefined'){
+            const keepF=JSON.parse(JSON.stringify(auInd.filters));
+            auInd.filters.family=[keys0[0]];
+            auScopeChanged(); await auEnsureWeeklyData();
+            const rowsF=auW.famRep?auW.famRep.rows.map(rr=>rr.key):[];
+            const cumF=auW.famRep&&auW.famRep.total?auW.famRep.total.cumCur:null;
+            weeklyV3.scopeE2E={rows:rowsF.length,key:rowsF[0]||'',totalShrank:cumF!=null&&cum0!=null&&cumF<cum0,
+              ok:rowsF.length===1&&rowsF[0]===keys0[0]&&cumF!=null};
+            auInd.filters=keepF; auScopeChanged(); await auEnsureWeeklyData();
+          }
+        }catch(e2){weeklyV3.scopeE2E={ok:false,err:String(e2&&e2.message||e2)};}
+        if(!weeklyV3.famCtrl||!weeklyV3.famPure||(hideE2E&&!hideE2E.ok)||(weeklyV3.famPanelE2E&&!weeklyV3.famPanelE2E.ok)||(weeklyV3.scopeE2E&&!weeklyV3.scopeE2E.ok)) weeklyV3.ok=false;
       }catch(e){ weeklyV3={ok:false,err:String(e&&e.stack||e).slice(0,300)}; }
+      finally{ if(keepScope&&typeof auInd!=='undefined'){ auInd.filters=keepScope; if(typeof auIndStateSave==='function')auIndStateSave(); } }
       const r='SELFTEST_RESULT '+JSON.stringify({weeklyV3,records:s1.records,dims:s1.dims.length,
         reportDOM:{rows:domRows,cols:domCols,hasTotal},repPptOk,repPptErr,
         chartTypes,colorOverride:!!(overrideApplied&&overrideApplied.color),barPptOk,barErr,

@@ -41,10 +41,10 @@ ok('R2 SO同比默认带符号', W.resolveChip({ id: 'soYoy', scope: { level: 't
 ok('R3 WoW 负号', W.resolveChip({ id: 'wow', scope: { level: 'total' } }, CTX) === '-5%');
 ok('R4 本周SO=weekly最后一格', W.resolveChip({ id: 'weekSo', scope: { level: 'total' } }, CTX) === '3,457');
 ok('R5 DOS 纯数字', W.resolveChip({ id: 'dos', scope: { level: 'total' } }, CTX) === '49');
-ok('R6 国家办涨幅最大(默认带幅度)', W.resolveChip({ id: 'topRise', scope: { level: 'rep' } }, CTX) === '墨西哥国家办(+8%)');
-ok('R6b showVal=false 只给名字', W.resolveChip({ id: 'topRise', showVal: false, scope: { level: 'rep' } }, CTX) === '墨西哥国家办');
-ok('R7 连续4周上涨名单', W.resolveChip({ id: 'streakUp', n: 4, scope: { level: 'rep' } }, CTX) === '墨西哥国家办');
-ok('R8 渠道DOS超120名单(带天数)', W.resolveChip({ id: 'dosOver', x: 120, scope: { level: 'rep' } }, CTX) === '墨西哥国家办(130天)');
+ok('R6 国家办涨幅最大(默认带幅度)', W.resolveChip({ id: 'topRise', scope: { level: 'rep' } }, CTX) === '墨西哥(+8%)');
+ok('R6b showVal=false 只给名字', W.resolveChip({ id: 'topRise', showVal: false, scope: { level: 'rep' } }, CTX) === '墨西哥');
+ok('R7 连续4周上涨名单', W.resolveChip({ id: 'streakUp', n: 4, scope: { level: 'rep' } }, CTX) === '墨西哥');
+ok('R8 渠道DOS超120名单(带天数)', W.resolveChip({ id: 'dosOver', x: 120, scope: { level: 'rep' } }, CTX) === '墨西哥(130天)');
 ok('R9 国家 scope 下的产品维名单(带幅度)', W.resolveChip({ id: 'topFall', scope: { level: 'country', value: '墨西哥' } }, CTX) === 'Anchovy(-83%)');
 ok('R10 scope 缺数据 → —', W.resolveChip({ id: 'soYoy', scope: { level: 'country', value: '智利' } }, CTX) === '—');
 ok('R11 小数位可调', W.resolveChip({ id: 'soYoy', dp: 1, scope: { level: 'total' } }, CTX) === '+30.0%');
@@ -126,6 +126,28 @@ ok('A10 -0.04% 补到两位', W.fmtPct(-0.0004, 0) === '-0.04%', W.fmtPct(-0.000
 ok('A11 两位也看不见的极小值才落到 0%', W.fmtPct(0.00001, 0) === '+0.00%', W.fmtPct(0.00001, 0));
 ok('A12 真正的 0 还是 0%,不补小数', W.fmtPct(0, 0) === '+0%', W.fmtPct(0, 0));
 ok('A13 正常幅度不受影响', W.fmtPct(0.082, 0) === '+8%', W.fmtPct(0.082, 0));
+
+/* ---------- 叙述名称短显:产品级默认系列名,地理剥后缀,同名去重 ---------- */
+{
+  const rows = [
+    { key: 'Slate 11 Pro 12+256 WiFi', series: 'Slate Pro系列', wow: 0.06, weekly: [1, 2, 3, 4, 5], dos: 130, hasAu: 0 },
+    { key: 'Slate SE 11 8+128', series: 'Slate SE系列', wow: -0.05, weekly: [5, 4, 3, 2, 1], dos: 150, hasAu: 0 },
+    { key: 'Slate SE 10 4+64', series: 'Slate SE系列', wow: -0.02, weekly: [9, 8, 7, 6, 5], dos: 200, hasAu: 0 },
+  ];
+  const ctx = { scopes: { country: { 墨西哥: { total: {}, rows: rows } } } };
+  const c = (id, extra) => W.resolveChip(Object.assign({ id: id, scope: { level: 'country', value: '墨西哥' } }, extra || {}), ctx);
+  ok('G1 国家块产品默认显示系列名', c('topRise') === 'Slate Pro系列(+6%)', c('topRise'));
+  ok('G2 nameBy=key 切回产品全名', c('topRise', { nameBy: 'key' }) === 'Slate 11 Pro 12+256 WiFi(+6%)', c('topRise', { nameBy: 'key' }));
+  ok('G3 连跌名单同系列去重(两个 SE 只出一次)', c('streakDown') === 'Slate SE系列', c('streakDown'));
+  ok('G4 DOS名单去重且保留首个值(行序=SO高→低)', c('dosOver', { x: 120 }) === 'Slate Pro系列(130天)、Slate SE系列(150天)', c('dosOver', { x: 120 }));
+  const ctx2 = { scopes: { rep: { total: {}, rows: [{ key: '巴西国家办', wow: 0.06, weekly: [], hasAu: 0 }, { key: '墨西哥国家办', wow: -0.05, weekly: [], hasAu: 0 }] } } };
+  ok('G5 国家办后缀剥掉', W.resolveChip({ id: 'topRise', scope: { level: 'rep' } }, ctx2) === '巴西(+6%)', W.resolveChip({ id: 'topRise', scope: { level: 'rep' } }, ctx2));
+  ok('G6 终端事业部后缀剥掉', W.shortGeo('拉美终端事业部') === '拉美');
+  // family 层分组行的 series 是组内任取的,不许映射
+  const ctx3 = { scopes: { family: { total: {}, rows: [{ key: 'Slate', series: '组内随机一条', wow: 0.05, weekly: [], hasAu: 0 }] } } };
+  ok('G7 family 层保持原名不映射', W.resolveChip({ id: 'topRise', scope: { level: 'family' } }, ctx3) === 'Slate(+5%)');
+  ok('G8 无 series 字段回退原名', W.resolveChip({ id: 'topRise', scope: { level: 'country', value: '墨西哥' } }, { scopes: { country: { 墨西哥: { total: {}, rows: [{ key: 'P1', wow: 0.05, weekly: [], hasAu: 0 }] } } } }) === 'P1(+5%)');
+}
 
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS');
 process.exit(f ? 1 : 0);

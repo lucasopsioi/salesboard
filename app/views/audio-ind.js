@@ -66,6 +66,10 @@ async function auIndSetIndustry(kind) {
   if (prev) { const cur = asArrLocal(auInd.filters[prev.field]).filter(v => v !== prev.value); if (cur.length) auInd.filters[prev.field] = cur; else delete auInd.filters[prev.field]; }
   if (next && !asArrLocal(auInd.filters[next.field]).length) auInd.filters[next.field] = [next.value];
   auInd.cmp = { series: [], product: [], model: [] };   // 对比项属于旧产业,一并清
+  /* 产品级筛选(系列/产品/型号)也属于旧产业——留着的话新产业下全取空。
+     现在 M2/M5 都吃这份范围,残留会把整章筛没,必须清。repOffice/country 是地理维度,跨产业有效,保留。 */
+  ['series', 'product', 'model'].forEach(k => { delete auInd.filters[k]; });
+  ['line', 'family'].forEach(k => { if (!next || next.field !== k) delete auInd.filters[k]; });
   auInd.data = null; auIndStateSave();
 }
 if (typeof window !== 'undefined') window.auIndSetIndustry = auIndSetIndustry;
@@ -123,6 +127,8 @@ async function auIndRenderFilters() {
       onCommit: async v => {
         if (v.length) auInd.filters[field] = v; else delete auInd.filters[field];
         auIndClearDownstream(field); await auIndRenderFilters(); await auIndRenderCmp(); auIndDraw(); auIndStateSave();
+        // 范围筛选联动:M2 系列/国家办表 + M5 国家块跟着重取(用户 2026-08-24:筛了上面下面要变)
+        if (typeof auScopeChanged === 'function') auScopeChanged();
       },
     });
     row.appendChild(ms);

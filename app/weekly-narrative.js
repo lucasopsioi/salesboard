@@ -61,6 +61,11 @@
       + '  <label data-nwrap>连续N周 <input data-n type="number" min="2" max="8" value="' + (cfg.n || 4) + '" style="width:52px"></label>'
       + '  <label data-xwrap>超X天 <input data-x type="number" min="1" max="999" value="' + (cfg.x || 120) + '" style="width:60px"></label>'
       + '  <label><input data-v type="checkbox"' + (cfg.showVal === false ? '' : ' checked') + '> 带数值</label>'
+      + '  <label data-nbwrap>名称用 <select data-nb>'
+      + '<option value=""' + (!cfg.nameBy ? ' selected' : '') + '>自动(产品显示系列)</option>'
+      + '<option value="series"' + (cfg.nameBy === 'series' ? ' selected' : '') + '>系列名</option>'
+      + '<option value="key"' + (cfg.nameBy === 'key' ? ' selected' : '') + '>原名(全名)</option>'
+      + '</select></label>'
       + '</div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end">'
       + '  <button class="btn" data-del style="color:var(--c-brand)">删除芯片</button>'
@@ -72,6 +77,7 @@
       const f = pop.querySelector('[data-f]').value;
       pop.querySelector('[data-nwrap]').style.display = /streak/.test(f) ? '' : 'none';
       pop.querySelector('[data-xwrap]').style.display = /dosOver|flowDosOver/i.test(f) ? '' : 'none';
+      pop.querySelector('[data-nbwrap]').style.display = /topRise|topFall|streak|dosOver|flowDosOver/i.test(f) ? '' : 'none';
     };
     pop.querySelector('[data-f]').onchange = syncVis; syncVis();
     const outside = function (e) { if (!pop.contains(e.target)) close(); };
@@ -88,6 +94,8 @@
       if (/streak/.test(f)) nc.n = Math.max(2, Math.min(8, +pop.querySelector('[data-n]').value || 4));
       if (/dosOver|flowDosOver/i.test(f)) nc.x = Math.max(1, +pop.querySelector('[data-x]').value || 120);
       if (!pop.querySelector('[data-v]').checked) nc.showVal = false;
+      const nbSel = pop.querySelector('[data-nb]');
+      if (nbSel && nbSel.value) nc.nameBy = nbSel.value;
       const sSel = pop.querySelector('[data-s]');
       if (sSel && f !== 'week') {
         const o = (opts.scopeOpts || [])[+sSel.value];

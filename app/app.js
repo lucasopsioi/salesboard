@@ -690,7 +690,32 @@ async function init(){
           }finally{ auSetHidden(v0,keep);auRepaintCbCard(v0); }
         }
         weeklyV3.hideE2E=hideE2E;
-        if(!weeklyV3.famCtrl||(hideE2E&&!hideE2E.ok)) weeklyV3.ok=false;
+        // ---- famRep 口径纯度:界面缓存必须与「带产业过滤的直查」同数——首屏竞态(探测前发查询)会在这翻车 ----
+        try{
+          const chk=await api.report({groupDim:'family',weeks:9,filters:Object.assign({},auLineFilter())});
+          weeklyV3.famPure=!!(auW.famRep&&auW.famRep.rows.length===chk.rows.length
+            &&auW.famRep.total&&chk.total&&auW.famRep.total.cumCur===chk.total.cumCur);
+        }catch(e2){weeklyV3.famPure=false;}
+        // ---- M2 筛选面板 E2E:去勾一行表要少一行,勾回来要还原(用户 2026-08-24:筛了下面不变) ----
+        try{
+          const famChip=famBar?famBar.querySelector('[data-pick]'):null;
+          if(famChip){
+            const hk=auHKey('M2','family'); const keep2=auHiddenListK(hk).slice();
+            const tb=()=>document.querySelectorAll('#auSecFamily [data-tbl] tbody tr').length;
+            famChip.click();
+            const pan=famBar.querySelector('.au-pick-panel');
+            const cb0=pan?pan.querySelector('input'):null;
+            const n0=tb();
+            if(cb0){cb0.checked=false;cb0.dispatchEvent(new Event('change'));}
+            const n1=tb();
+            if(cb0){cb0.checked=true;cb0.dispatchEvent(new Event('change'));}
+            const n2=tb();
+            if(pan)pan.remove();
+            auSetHiddenK(hk,keep2);
+            weeklyV3.famPanelE2E={n0,n1,n2,panel:!!pan,ok:n1===n0-1&&n2===n0};
+          }
+        }catch(e2){weeklyV3.famPanelE2E={ok:false,err:String(e2&&e2.message||e2)};}
+        if(!weeklyV3.famCtrl||!weeklyV3.famPure||(hideE2E&&!hideE2E.ok)||(weeklyV3.famPanelE2E&&!weeklyV3.famPanelE2E.ok)) weeklyV3.ok=false;
       }catch(e){ weeklyV3={ok:false,err:String(e&&e.stack||e).slice(0,300)}; }
       const r='SELFTEST_RESULT '+JSON.stringify({weeklyV3,records:s1.records,dims:s1.dims.length,
         reportDOM:{rows:domRows,cols:domCols,hasTotal},repPptOk,repPptErr,

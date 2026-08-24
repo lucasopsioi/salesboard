@@ -308,12 +308,19 @@ function renderAudio() {
   renderAuFin();
   renderAuSalesHead();
   renderAuOverallNar();
-  if (typeof renderAuInd === 'function') auTrack('ind', renderAuInd());
-  auTrack('fam', renderAuDim('family'));
-  auTrack('rep', renderAuDim('repOffice'));
-  renderAuCountry();
-  renderAuBounty();
-  if (typeof renderAuNewprod === 'function') auTrack('np', renderAuNewprod());
+  /* 吃 auLineFilter() 的模块必须等产业维度探测完成再跑——此前 renderAuDim 首屏赶在
+     探测前发查询,auLineFilter() 返回空,系列/国家办表把平板音频全混在一起
+     (用户 2026-08-24 截图:SonicBuds 和 Slate 同表)。探测按产业缓存,只慢首次一个来回。
+     M4(renderAuInd)自带产业种子逻辑,不吃 auLineFilter,留在闸外无妨,一并放里面求稳。 */
+  auTrack('boot', (async () => {
+    await auDetectIndustryDim(auW.industry);
+    if (typeof renderAuInd === 'function') auTrack('ind', renderAuInd());
+    auTrack('fam', renderAuDim('family'));
+    auTrack('rep', renderAuDim('repOffice'));
+    renderAuCountry();
+    renderAuBounty();
+    if (typeof renderAuNewprod === 'function') auTrack('np', renderAuNewprod());
+  })());
   // 兜底：等全部异步模块落地后统一重算所有芯片(单模块回调若有遗漏,这里保证句子不留「…」)
   auEnsureWeeklyData().then(function () { auChipsRefresh(); }).catch(function () { });
 }

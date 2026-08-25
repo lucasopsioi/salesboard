@@ -83,7 +83,10 @@ const srcAu5 = fs5.readFileSync(path5.join(__dirname, 'views', 'audio-view.js'),
 const keysCb5 = pickKeys5(fnBody5(srcCb5, 'cbColumns'));
 const keysAu5 = pickKeys5(fnBody5(srcAu5, 'auCbColumns'));
 ok('R5-22 国家看板 cbColumns 列清单 = 15 列基线(country-view 一旦改列即红)', keysCb5.join('|') === CB_KEYS5.join('|'));
-ok('R5-23 周报 M5 auCbColumns 列清单与国家看板逐列同序一致(port 未漂移)', keysAu5.length > 0 && keysAu5.join('|') === keysCb5.join('|'));
+// 2026-08-25 起周报比国家看板多一列 __series(平板产品表的 Product Series,用户点名要的差异)
+// ——比对时剔除这一个已知合法差异,其余任何列增删换序仍然红
+const keysAu5x = keysAu5.filter(k => k !== '__series');
+ok('R5-23 周报 M5 auCbColumns 列清单与国家看板逐列同序一致(唯一合法差异:__series)', keysAu5x.length > 0 && keysAu5x.join('|') === keysCb5.join('|') && keysAu5.includes('__series'));
 
 /* ---------- 列 key → 引擎字段:每个列都必须能在 report 行/合计上取到值 ---------- */
 const GET5 = {

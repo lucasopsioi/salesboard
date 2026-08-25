@@ -1,0 +1,190 @@
+{
+ "at": "2026-08-25T15:53:23.114Z",
+ "base": "https://api.minimax.chat/v1/text/chatcompletion_v2",
+ "model": "MiniMax-Text-01",
+ "evalSetVersion": 1,
+ "passBar": "\u51c6\u786e\u7387>=80% \u4e14 \u6709\u5bb3\u9519\u8bef(\ud83d\udd34)=0\uff1bC5/C6 \u6b63\u786e\u62d2\u7b54\u7387 100%",
+ "toolStats": {
+  "calls": 6,
+  "errors": 0
+ },
+ "records": [
+  {
+   "id": "C1-01",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "psi",
+   "mode": "fast",
+   "question": "2026\u5e741\u6708\u52306\u6708\uff0c\u58a8\u897f\u54e5 Slate 11 Pro \u7684\u7d2f\u8ba1 Sell-out \u662f\u591a\u5c11\u53f0\uff1f",
+   "answer": "Sell-out\uff1a5645 \u53f0\n\u6570\u636e\u6765\u6e90\u4e8e PSI \u5de5\u5177\u7684 query \u8fd4\u56de\uff0c\u6db5\u76d6\u4e86\u58a8\u897f\u54e5 Slate 11 Pro \u57282026\u5e741\u6708\u81f36\u6708\u671f\u95f4\u6bcf\u4e2a\u6708\u7684 Sell-out \u6570\u636e\uff0c\u5e76\u8fdb\u884c\u4e86\u7d2f\u8ba1\u6c42\u548c\u3002",
+   "singleAgent": true,
+   "verified": {
+    "ok": true,
+    "unsupported": []
+   },
+   "agents": [
+    {
+     "agent": "PSI \u5206\u6790\u4e13\u5bb6",
+     "rounds": 2,
+     "error": null,
+     "claims": [
+      {
+       "metric": "Sell-out",
+       "value": 5645,
+       "unit": "\u53f0",
+       "caliber": "2026\u5e741\u6708\u52306\u6708\u7d2f\u8ba1",
+       "asOf": "2026-06"
+      }
+     ],
+     "notes": "\u6570\u636e\u6765\u6e90\u4e8e PSI \u5de5\u5177\u7684 query \u8fd4\u56de\uff0c\u6db5\u76d6\u4e86\u58a8\u897f\u54e5 Slate 11 Pro \u57282026\u5e741\u6708\u81f36\u6708\u671f\u95f4\u6bcf\u4e2a\u6708\u7684 Sell-out \u6570\u636e\uff0c\u5e76\u8fdb\u884c\u4e86\u7d2f\u8ba1\u6c42\u548c\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "query",
+     "args": {
+      "gran": "month",
+      "from": "2026-01-01",
+      "to": "2026-06-30",
+      "stackDim": "product",
+      "filters": {
+       "product": [
+        "Slate 11 Pro"
+       ],
+       "country": [
+        "\u58a8\u897f\u54e5"
+       ]
+      },
+      "metric": "sellOut"
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 14248,
+   "auto": {
+    "level": "full",
+    "reason": "\u5168\u90e8\u6570\u503c\u547d\u4e2d [\"\u7d2f\u8ba1SO\"]",
+    "pendingHuman": false,
+    "detail": [
+     {
+      "label": "\u7d2f\u8ba1SO",
+      "want": 5645,
+      "tol": 56.45,
+      "hit": true
+     }
+    ]
+   },
+   "human": null,
+   "truth": "638+752+1069+837+901+1448=5645\uff08ground-truth C1-01\uff09",
+   "severity_if_wrong": "harmful"
+  },
+  {
+   "id": "C1-02",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "psi",
+   "mode": "fast",
+   "question": "\u54e5\u4f26\u6bd4\u4e9a 2026 \u5e74\u7b2c\u4e8c\u5b63\u5ea6\u5e73\u677f\u7684 Sell-in \u4e00\u5171\u591a\u5c11\u53f0\uff1f",
+   "answer": "Sell-in\u603b\u91cf\uff1a\u6570\u636e\u672a\u5305\u542b \u53f0\n\u7531\u4e8e\u5de5\u5177\u4e2d\u672a\u5305\u542b2026\u5e74\u7b2c\u4e8c\u5b63\u5ea6\u7684\u5177\u4f53\u6570\u636e\uff0c\u56e0\u6b64\u65e0\u6cd5\u63d0\u4f9b\u54e5\u4f26\u6bd4\u4e9a\u5728\u8be5\u671f\u95f4\u7684Sell-in\u603b\u91cf\u3002",
+   "singleAgent": true,
+   "verified": {
+    "ok": true,
+    "unsupported": []
+   },
+   "agents": [
+    {
+     "agent": "PSI \u5206\u6790\u4e13\u5bb6",
+     "rounds": 6,
+     "error": null,
+     "claims": [
+      {
+       "metric": "Sell-in\u603b\u91cf",
+       "value": "\u6570\u636e\u672a\u5305\u542b",
+       "unit": "\u53f0",
+       "caliber": "\u54e5\u4f26\u6bd4\u4e9a2026\u5e74\u7b2c\u4e8c\u5b63\u5ea6\u5e73\u677f\u7684Sell-in\u603b\u91cf",
+       "asOf": "\u6570\u636e\u672a\u5305\u542b"
+      }
+     ],
+     "notes": "\u7531\u4e8e\u5de5\u5177\u4e2d\u672a\u5305\u542b2026\u5e74\u7b2c\u4e8c\u5b63\u5ea6\u7684\u5177\u4f53\u6570\u636e\uff0c\u56e0\u6b64\u65e0\u6cd5\u63d0\u4f9b\u54e5\u4f26\u6bd4\u4e9a\u5728\u8be5\u671f\u95f4\u7684Sell-in\u603b\u91cf\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "options",
+     "args": {
+      "field": "country",
+      "contains": "\u54e5\u4f26\u6bd4\u4e9a"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "filters": {
+       "country": [
+        "\u54e5\u4f26\u6bd4\u4e9a"
+       ]
+      },
+      "contains": "\u5e73\u677f"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "filters": {
+       "country": [
+        "\u54e5\u4f26\u6bd4\u4e9a"
+       ]
+      },
+      "contains": "\u5e73\u677f"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "filters": {
+       "country": [
+        "\u54e5\u4f26\u6bd4\u4e9a"
+       ]
+      },
+      "contains": "\u5e73\u677f"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "filters": {
+       "country": [
+        "\u54e5\u4f26\u6bd4\u4e9a"
+       ]
+      },
+      "contains": "\u5e73\u677f"
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 17623,
+   "auto": {
+    "level": "harmless",
+    "reason": "\u53ef\u7b54\u9898\u88ab\u62d2\u7b54\uff08\u65e0\u7f16\u6570\uff0c\u65e0\u5bb3\uff09",
+    "pendingHuman": true,
+    "detail": [
+     {
+      "label": "Q2\u5e73\u677fSI",
+      "want": 5556,
+      "tol": 55.56,
+      "hit": false
+     }
+    ]
+   },
+   "human": null,
+   "truth": "1535+1663+2358=5556",
+   "severity_if_wrong": "harmful"
+  }
+ ]
+}

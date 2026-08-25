@@ -54,10 +54,33 @@ function buildRegistry(engine) {
       if (!a.stackDim || !DIM.includes(a.stackDim)) {
         return { error: 'stackDim 必填（引擎要求），只能是：' + DIM.join('/') + '。想看整体也要挑一个维度，例如 country。' };
       }
-      return engine.query({ metric: a.metric || 'sellOut', gran: a.gran || 'month', filters: a.filters || {}, stackDim: a.stackDim, from: a.from, to: a.to, limit: a.limit });
+      const met = a.metric || 'sellOut';
+      const r = engine.query({ metric: met, gran: a.gran || 'month', filters: a.filters || {}, stackDim: a.stackDim, from: a.from, to: a.to, limit: a.limit });
+      // 与 app/ai-context.js 的区间合计保持一致（改那边记得同步这里）
+      try {
+        if (r && r.data && (met === 'sellOut' || met === 'sellIn')) {
+          const sums = {}; let tot = 0;
+          (r.series || []).forEach(n => {
+            let s = 0; Object.values(r.data[n] || {}).forEach(v => { s += (+v || 0); });
+            sums[n] = s; tot += s;
+          });
+          r.区间合计 = Object.assign({ _全部: tot }, sums);
+        }
+      } catch (e) {}
+      return r;
     },
     financeCustom: async (a) => engine.financeCustom(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})),
-    financeOverview: async (a) => engine.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})),
+    financeOverview: async (a) => {
+      // 与 app/ai-context.js 的年份护栏保持一致（改那边记得同步这里）
+      if (a && a.year != null) {
+        const m = engine.meta();
+        const years = m && m.finMeta && m.finMeta.years;
+        if (Array.isArray(years) && years.length && years.indexOf(+a.year) < 0) {
+          return { error: '年份 ' + a.year + ' 无财经数据，可用年份：' + years.join('/') + '。不确定就不要传 year（默认最新实际年）。' };
+        }
+      }
+      return engine.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}));
+    },
     financeProductBoard: async (a) => engine.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})),
     financeRepBoard: async (a) => engine.financeRepBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})),
     agg: async (a) => engine.agg(a || {}),

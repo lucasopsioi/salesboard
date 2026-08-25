@@ -28,7 +28,7 @@
 
   /* ---------- 版式常量 ---------- */
   const C = { brand: '#C7000B', ink: '#1A1A1A', ink2: '#5A5F66', line: '#D9DCE0', soft: '#FFF3F3', head: '#F5F6F7', zebra: '#FAFBFC' };
-  const FONT = 'Microsoft YaHei,微软雅黑,Segoe UI,sans-serif';
+  const FONT = '"Microsoft YaHei","微软雅黑",sans-serif';   // 用户 2026-08-25:必须微软雅黑,不要其他字体
   const W_TOTAL = 1000;   // 全篇统一版心宽(px):Outlook 100% 缩放下不越界
   const WIDE_COLS = 8;    // 列数 > 8 判定为宽表 → 走高清 PNG(降级:按列切块)
 
@@ -90,6 +90,34 @@
 
   /* ---------- 基础块 ---------- */
   const TBL_OPEN = 'cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;width:' + W_TOTAL + 'px;';
+  /* 单元格条件装饰(用户 2026-08-25):
+     · 渠道DOS>120 / 全流程DOS>200 → 红加粗
+     · WoW:涨=红↑ 跌=绿↓(A股习惯,用户明确指定红涨绿跌);0/— 不加箭头 */
+  function cellDecor(hdrText, raw) {
+    const h = String(hdrText || ''), t = String(raw == null ? '' : raw);
+    if (/全流程DOS/.test(h)) {
+      const v = parseFloat(t.replace(/,/g, ''));
+      return (isFinite(v) && v > 200) ? 'color:#C00000;font-weight:bold;' : '';
+    }
+    if (/DOS/.test(h)) {
+      const v = parseFloat(t.replace(/,/g, ''));
+      return (isFinite(v) && v > 120) ? 'color:#C00000;font-weight:bold;' : '';
+    }
+    if (/WoW/i.test(h)) {
+      const v = parseFloat(t);
+      if (isFinite(v) && v > 0) return 'color:#C00000;font-weight:bold;';
+      if (isFinite(v) && v < 0) return 'color:#1E7E34;font-weight:bold;';
+      return '';
+    }
+    return '';
+  }
+  function wowArrow(hdrText, raw) {
+    if (!/WoW/i.test(String(hdrText || ''))) return raw;
+    const t = String(raw == null ? '' : raw);
+    const v = parseFloat(t);
+    if (!isFinite(v) || v === 0) return raw;
+    return (v > 0 ? '↑' : '↓') + t;
+  }
   function oneTable(header, rows, opts) {
     opts = opts || {};
     const hdr = header || [], rws = rows || [];
@@ -108,7 +136,7 @@
     h += '<tr>' + hdr.map((x, i) => '<th width="' + cw[i] + '" style="' + thSty(i) + '">' + esc(x) + '</th>').join('') + '</tr>';
     rws.forEach((r, i) => {
       const tot = (opts.totalIdx != null && i === opts.totalIdx) || (opts.totalLast && i === rws.length - 1);
-      h += '<tr>' + hdr.map((_, ci) => '<td width="' + cw[ci] + '" style="' + tdSty(ci, tot, i % 2 === 1) + '">' + esc((r || [])[ci]) + '</td>').join('') + '</tr>';
+      h += '<tr>' + hdr.map((_, ci) => '<td width="' + cw[ci] + '" style="' + tdSty(ci, tot, i % 2 === 1) + cellDecor(hdr[ci], (r || [])[ci]) + '">' + esc(wowArrow(hdr[ci], (r || [])[ci])) + '</td>').join('') + '</tr>';
     });
     return h + '</table>';
   }
@@ -158,12 +186,13 @@
       (rows || []).forEach(r => { const L = dispLen((r || [])[i]); if (L > m) m = L; });
       return m;
     });
-    for (let fs = 12; fs >= 7; fs--) {
-      const padX = Math.max(3, Math.round(fs * 0.7));
+    // 下限 9:7px 用户看不清(2026-08-25);装不下就压 padding,宁可紧凑不许模糊
+    for (let fs = 12; fs >= 9; fs--) {
+      const padX = Math.max(2, Math.round(fs * (fs > 9 ? 0.7 : 0.5)));
       const w = maxU.reduce((a, u) => a + u * 0.56 * fs + padX * 2 + 1, 0);
-      if (w <= TOT || fs === 7) return { fs: fs, padX: padX, total: TOT };
+      if (w <= TOT || fs === 9) return { fs: fs, padX: padX, total: TOT };
     }
-    return { fs: 7, padX: 5, total: TOT };
+    return { fs: 9, padX: 2, total: TOT };
   }
   /* 同结构组：共用 列宽 + 对齐 + 字号（合并全组行一起量），上下表逐列对齐且观感一致 */
   function sharedFit(items) {
@@ -408,11 +437,30 @@
     });
     else b += '<tr>' + v3Cell('<span style="color:' + C.ink2 + '">本周无重点关注事项</span>', { sty: V3_TXT + 'font-size:10.5pt;' }) + '</tr>';
 
+    /* 全篇统一字号(用户 2026-08-25:每个表字号不一样大,有的太小):
+       所有表跑一遍 fitFont 取最小值,钳在 9~12;预览里锁定的 m.v3Fs 优先。
+       列宽仍按组共享(对齐不变),只是字号全篇一个数。 */
+    const S0 = m.sales || {};
+    const allT = []
+      .concat((m.fin && m.fin.tables) || [])
+      .concat([S0.family && S0.family.table, S0.rep && S0.rep.table])
+      .concat(((S0.countries || []).map(c => c && c.table)))
+      .concat([m.bounty])
+      .concat((m.newprods || []).map(np => np && np.table))
+      .concat((m.newprods || []).reduce((a, np) => a.concat((np && np.info && np.info.tables) || []), []))
+      .filter(t => t && !t.img && (t.header || []).length);
+    let gfs = 12;
+    allT.forEach(t => { gfs = Math.min(gfs, fitFont(t.header, t.rows, V3_INNER).fs); });
+    if (+m.v3Fs) gfs = +m.v3Fs;
+    gfs = Math.max(9, Math.min(12, gfs));
+    const GF = { fs: gfs, padX: Math.max(2, Math.round(gfs * (gfs > 9 ? 0.7 : 0.5))) };
+    const withG = f => Object.assign({}, f || fitFont([], [], V3_INNER), GF);
+
     // 二 · 全年达成进度
     if (m.finTitle) b += v3Section(m.finTitle);
     if (m.fin && m.fin.tables && m.fin.tables.length) {
       const fit = sharedFit(m.fin.tables);
-      m.fin.tables.forEach(t => { b += v3Visual(t, imgMode, { totalIdx: t.totalIdx }, fit(t)); });
+      m.fin.tables.forEach(t => { b += v3Visual(t, imgMode, { totalIdx: t.totalIdx }, withG(fit(t))); });
     }
 
     // 三 · 销售进展
@@ -428,18 +476,18 @@
     const dimFit = sharedFit(dimGroup);
     if (S.family) {
       if (S.family.text) b += v3Narrative(S.family.text);
-      if (S.family.table) b += v3Visual(S.family.table, imgMode, { totalLast: !!S.family.table.hasTotal }, dimFit(S.family.table));
+      if (S.family.table) b += v3Visual(S.family.table, imgMode, { totalLast: !!S.family.table.hasTotal }, withG(dimFit(S.family.table)));
     }
     if (S.rep) {
       if (S.rep.text) b += v3Narrative(S.rep.text);
-      if (S.rep.table) b += v3Visual(S.rep.table, imgMode, { totalLast: !!S.rep.table.hasTotal }, dimFit(S.rep.table));
+      if (S.rep.table) b += v3Visual(S.rep.table, imgMode, { totalLast: !!S.rep.table.hasTotal }, withG(dimFit(S.rep.table)));
     }
     const cbs = (S.countries || []).filter(c => c && (c.text || c.table));
     if (cbs.length) {
       // 六国与系列/国家办同结构 → 用同一个 dimFit，整篇逐列对齐、字号一致
       cbs.forEach(c => {
         if (c.text) b += v3Narrative(c.text);
-        if (c.table) b += v3Visual(c.table, imgMode, { totalLast: !!c.table.hasTotal }, dimFit(c.table));
+        if (c.table) b += v3Visual(c.table, imgMode, { totalLast: !!c.table.hasTotal }, withG(dimFit(c.table)));
       });
     }
 
@@ -447,7 +495,7 @@
     if (m.bounty && m.bounty.rows && m.bounty.rows.length) {
       b += v3Section('$0-50美金扩大覆盖悬赏奖 SI 进展');
       if (m.bounty.note) b += v3Narrative(m.bounty.note);
-      b += v3Visual(m.bounty, imgMode, { totalLast: true }, null);
+      b += v3Visual(m.bounty, imgMode, { totalLast: true }, withG(null));
     }
 
     // 四 · 新品进展
@@ -456,7 +504,7 @@
       nps.forEach(np => {
         b += v3Section('新品进展-' + (np.name || ''));
         if (np.text) b += v3Narrative(np.text);
-        if (np.table) b += v3Visual(np.table, imgMode, { totalLast: !!np.table.hasTotal });
+        if (np.table) b += v3Visual(np.table, imgMode, { totalLast: !!np.table.hasTotal }, withG(null));
       });
       // 新品信息(全部新品合一个区块)
       const infos = nps.filter(np => np.info);
@@ -467,7 +515,7 @@
           tables.forEach(t => {
             if (!t) return;
             if (t.title) b += v3Narrative(t.title + '：');
-            b += v3Visual(t, imgMode, {});
+            b += v3Visual(t, imgMode, {}, withG(null));
           });
         });
       }
@@ -646,7 +694,7 @@ if (typeof window !== 'undefined') (function () {
       model.countries = auW.cbLast.map(({ v, r }) => {
         const cols = auCbColumns(r);
         const rows = auCbVisibleRows(v, r, cols).map(o => cols.map(c => c.totalOnly ? '—' : strip(c.cell(o)).replace(/\s+/g, ' ')));
-        if (r.total) rows.push(cols.map(c => c.key === 'key' ? '合计' : (c.key === '__line' ? '' : strip(c.cell(r.total)))));
+        if (r.total) rows.push(cols.map(c => c.key === 'key' ? '合计' : ((c.key === '__line' || c.key === '__series') ? '' : strip(c.cell(r.total)))));
         const t = r.total || {};
         return { name: v, chips: `${r.curYear % 100}累计SO ${strip(numCell(t.cumCur))} · 库存 ${strip(numCell(t.inv))} · DOS ${t.dos == null ? '—' : t.dos}`, header: cols.map(c => c.label), rows, hasTotal: !!r.total };
       });
@@ -766,6 +814,7 @@ if (typeof window !== 'undefined') (function () {
     };
     const model = {
       week: rw.year + '-' + wk, weekShort: wk, dateStr: todayStr(),
+      v3Fs: +(D.v3Fs) || 0,   // 预览里锁定的全篇字号(0=自动)
       industry: auIndustryKey(), industryLabel: lab,
       version: V && V.version ? ('v' + V.version) : '', builtAt: (V && V.builtAt) || '',
       genTime: new Date().toTimeString().slice(0, 5),
@@ -828,11 +877,51 @@ if (typeof window !== 'undefined') (function () {
   }
 
   /* ---- Outlook .eml(双击即草稿) ---- */
+  /* 导出 Outlook 前先预览(用户 2026-08-25:导出前要能看到并调整,而不是导出了再改)。
+     预览=真实 buildWeeklyV3Html 输出(所见即导出);可调全篇字号(自动/9~12,持久化)。 */
   window.auExportWeeklyEml = async function () {
     if (typeof window.auEnsureWeeklyData === 'function') {
       const miss = await window.auEnsureWeeklyData();
       if (miss.length) toast('这些模块暂无数据,导出里会留空:' + miss.join('、'), 'warn');
     }
+    auShowV3Preview();
+  };
+  function auShowV3Preview() {
+    document.querySelectorAll('.au-v3-preview-mask').forEach(x => x.remove());
+    const mask = document.createElement('div');
+    mask.className = 'au-v3-preview-mask';
+    mask.style.cssText = 'position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
+    const D0 = (typeof auLoad === 'function') ? auLoad() : {};
+    mask.innerHTML = ''
+      + '<div style="background:var(--c-bg-elev);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:min(1120px,96vw);height:92vh;display:flex;flex-direction:column;overflow:hidden">'
+      + '  <div style="display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--c-line)">'
+      + '    <b>导出预览（与 Outlook 收到的完全一致）</b>'
+      + '    <span style="flex:1"></span>'
+      + '    <label style="font-size:12px">全篇表格字号 <select data-v3fs>'
+      + ['0|自动(装得下的最大)', '9|9px', '10|10px', '11|11px', '12|12px'].map(x => { const [v, t] = x.split('|'); return '<option value="' + v + '"' + ((+D0.v3Fs || 0) === +v ? ' selected' : '') + '>' + t + '</option>'; }).join('')
+      + '    </select></label>'
+      + '    <button class="btn" data-v3cancel>取消</button>'
+      + '    <button class="btn" data-v3go style="background:var(--c-brand);color:#fff;font-weight:600">导出 .eml</button>'
+      + '  </div>'
+      + '  <iframe data-v3frame style="flex:1;border:0;background:#fff"></iframe>'
+      + '</div>';
+    document.body.appendChild(mask);
+    const frame = mask.querySelector('[data-v3frame]');
+    const paint = () => {
+      const m = auAttachV3Images(window.auBuildWeeklyV3Model());
+      frame.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#fff;padding:12px 0">'
+        + AX.buildWeeklyV3Html(m, 'data') + '</body></html>';
+    };
+    mask.querySelector('[data-v3fs]').onchange = e => {
+      const D1 = auLoad(); D1.v3Fs = +e.target.value || 0; auSave();
+      paint();
+    };
+    mask.querySelector('[data-v3cancel]').onclick = () => mask.remove();
+    mask.onclick = e => { if (e.target === mask) mask.remove(); };
+    mask.querySelector('[data-v3go]').onclick = () => { mask.remove(); auDoExportEml().catch(e => toast('邮件导出失败:' + (e && e.message || e), 'err')); };
+    paint();
+  }
+  async function auDoExportEml() {
     const m = auAttachV3Images(window.auBuildWeeklyV3Model());
     const html = AX.buildWeeklyV3Html(m, 'cid');
     const mail = m.mail || {};

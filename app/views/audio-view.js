@@ -955,6 +955,20 @@ async function renderAuBountyImpl() {
 /* ============================================================
    M5 产品维度:自定义标题 + 可加国家的国家块(port 自 country-view,自包含副本)
    ============================================================ */
+/* WoW:涨=红↑ 跌=绿↓(用户 2026-08-25 明确要红涨绿跌);0/空 不加箭头 */
+function auWowCell(v) {
+  if (v == null || !isFinite(v)) return '<span class="wk">—</span>';
+  const pct = (v * 100).toFixed(0) + '%';
+  if (v > 0) return '<span style="color:#C00000;font-weight:600">↑+' + pct + '</span>';
+  if (v < 0) return '<span style="color:#1E7E34;font-weight:600">↓' + pct + '</span>';
+  return '<span>0%</span>';
+}
+/* DOS:沿用色点,超标(渠道>120/全流程>200)数字再红加粗 */
+function auDosCell(v, kind) {
+  const base = dosCell(v, kind);
+  const over = v != null && isFinite(v) && (kind === 'flow' ? v > 200 : v > 120);
+  return over ? '<span style="color:#C00000;font-weight:700">' + base + '</span>' : base;
+}
 function auCbColumns(r, dimOverride) {
   const dim = dimOverride || auW.cb.dim;
   const cyy = r.curYear % 100, py = r.prevYear % 100, wl = r.weekLabels || [];
@@ -965,6 +979,10 @@ function auCbColumns(r, dimOverride) {
   const skuLevel = (dim === 'product' || dim === 'model');
   if (showSeries) cols.push({ key: '__line', label: 'Product Series', cell: o => o.line || '' });
   cols.push({ key: 'key', label: DIM_LABEL[dim] || dim, cell: o => o.key });
+  /* 平板产品/型号表:产品名后加 Product Series 列(用户 2026-08-25:不要只写
+     Acme Slate SE,也要写 Vantor6 这样的系列名)。model 维已有 __line 列则不重复 */
+  if (skuLevel && !showSeries && typeof auW !== 'undefined' && auW.industry === 'tablet' && state.dims.includes('series'))
+    cols.push({ key: '__series', label: 'Product Series', cell: o => o.series || '' });
   cols.push({ key: 'cumCur', label: cyy + '累计SO', cell: o => numCell(o.cumCur) });
   cols.push({ key: 'cumPrev', label: py + '同期SO总', totalOnly: skuLevel, cell: o => numCell(o.cumPrev) });
   cols.push({ key: 'yoy', label: 'SO同比', totalOnly: skuLevel, cell: o => pctCell(o.yoy) });
@@ -972,12 +990,12 @@ function auCbColumns(r, dimOverride) {
   cols.push({ key: 'siPrev', label: py + '同期SI总', totalOnly: skuLevel, cell: o => numCell(o.siPrev) });
   cols.push({ key: 'siYoy', label: 'SI同比', totalOnly: skuLevel, cell: o => pctCell(o.siYoy) });
   wl.forEach((w, i) => cols.push({ key: 'w' + i, label: w, wk: true, sep: i === 0, cell: o => `<span class="wk">${numCell(o.weekly[i])}</span>` }));
-  cols.push({ key: 'wow', label: 'WoW%', cell: o => pctCell(o.wow) });
+  cols.push({ key: 'wow', label: 'WoW%', cell: o => auWowCell(o.wow) });
   cols.push({ key: 'inv', label: '库存', sep: true, cell: o => numCell(o.inv) });
-  cols.push({ key: 'dos', label: 'DOS', cell: o => dosCell(o.dos, 'channel') });
+  cols.push({ key: 'dos', label: 'DOS', cell: o => auDosCell(o.dos, 'channel') });
   if (r.hasFlow) {
     cols.push({ key: 'flowInv', label: '全流程库存', sep: true, cell: o => fcell(o.flowInv) });
-    cols.push({ key: 'flowDos', label: '全流程DOS', cell: o => dosCell(o.flowDos, 'flow') });
+    cols.push({ key: 'flowDos', label: '全流程DOS', cell: o => auDosCell(o.flowDos, 'flow') });
     cols.push({ key: 'dcfdc', label: '国家仓+FDC', cell: o => fcell(o.dcfdc) });
   }
   return cols;

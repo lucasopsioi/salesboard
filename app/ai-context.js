@@ -62,7 +62,7 @@ const TOOL_SCHEMAS = {
     }, required: ['field'],
   },
   report: {
-    description: '汇总表：按维度分组给 累计SO/同期/同比、累计SI、周SO/WoW、库存、DOS、全流程库存与DOS。问「卖了多少/同比/库存/周转天数」首选。',
+    description: '汇总表：按维度分组给 累计SO/同期/同比、累计SI、周SO/WoW、库存、DOS、全流程库存与DOS。问「卖了多少/同比/库存/周转天数」首选。累计恒为年初至今，无期间参数；指定期间用 query。',
     properties: {
       groupDim: { type: 'string', enum: DIM_ENUM },
       filters: FILTERS_SCHEMA,
@@ -70,7 +70,7 @@ const TOOL_SCHEMAS = {
     }, required: ['groupDim'],
   },
   query: {
-    description: 'PSI 时间序列：时间桶 × 一个堆叠维度。问「走势/趋势」用它。',
+    description: 'PSI 时间序列：时间桶 × 一个堆叠维度。问「走势/趋势」用它；指定期间（如1-6月/Q2）的累计也用它：按 month 传 from/to 求和。',
     properties: {
       stackDim: { type: 'string', enum: DIM_ENUM, description: '必填；只看整体也要挑一个（如 country）' },
       metric: { type: 'string', enum: ['sellOut', 'sellIn', 'inv', 'dos'] },
@@ -497,16 +497,42 @@ const AIData = (function () {
         return api.report({ groupDim: a.groupDim || 'series', filters: a.filters || {}, weeks: a.weeks || 9, fromW: a.fromW, toW: a.toW });
       }),
       // 时间序列：stackDim 必填（引擎不传会抛，旧版这里默认 null 导致 query 恒返回空）
-      query: wrap(a => {
+      query: wrap(async a => {
         if (!a.stackDim || !DIM_KEYS.includes(a.stackDim)) {
           return { error: 'stackDim 必填（引擎要求），只能是：' + DIM_KEYS.join('/') + '。想看整体也要挑一个维度，例如 country。' };
         }
-        return api.query({ metric: a.metric || 'sellOut', gran: a.gran || 'month', filters: a.filters || {}, stackDim: a.stackDim, from: a.from, to: a.to, limit: a.limit });
+        const met = a.metric || 'sellOut';
+        const r = await api.query({ metric: met, gran: a.gran || 'month', filters: a.filters || {}, stackDim: a.stackDim, from: a.from, to: a.to, limit: a.limit });
+        // 期间累计由工具算好：模型自己加桶会算错（评测2026-08-25：5645加成5944）。
+        // 只对流量类(sellOut/sellIn)给合计——库存/DOS跨期相加是口径红线，绝不提供。
+        try {
+          if (r && r.data && (met === 'sellOut' || met === 'sellIn')) {
+            const sums = {}; let tot = 0;
+            (r.series || []).forEach(n => {
+              let s = 0; Object.values(r.data[n] || {}).forEach(v => { s += (+v || 0); });
+              sums[n] = s; tot += s;
+            });
+            r.区间合计 = Object.assign({ _全部: tot }, sums);
+          }
+        } catch (e) {}
+        return r;
       }),
       // 经营自定义：按财经维度/指标取数（finUnits/finQtyUnits 不传引擎会按缺省，金额可能不归一）
       financeCustom: wrap(a => api.financeCustom(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),
       // 经营概览 / 产业产品经营看板 / 国家办经营看板
-      financeOverview: wrap(a => api.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),
+      // 年份护栏：模型凭空猜 year（评测2026-08-25抓到猜2023）会拿回全零并照报——改成可读错误让它自纠
+      financeOverview: wrap(async a => {
+        if (a && a.year != null) {
+          try {
+            const m = await api.meta();
+            const years = m && m.finMeta && m.finMeta.years;
+            if (Array.isArray(years) && years.length && years.indexOf(+a.year) < 0) {
+              return { error: '年份 ' + a.year + ' 无财经数据，可用年份：' + years.join('/') + '。不确定就不要传 year（默认最新实际年）。' };
+            }
+          } catch (e) {}
+        }
+        return api.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}));
+      }),
       financeProductBoard: wrap(a => api.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),
       // 注意：国家办看板不支持 lv1，只认 reps + series(LV3 名集)
       financeRepBoard: wrap(a => api.financeRepBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),

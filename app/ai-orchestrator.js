@@ -10,7 +10,7 @@
 
    设计约束（本地 Qwen3-30B / TableGPT-R1 经 LM Studio，见 docs/SPEC-ai-agents.md）：
      · 严格串行，并发度 1 —— 主进程 engine 是单实例同步全表扫描，LM Studio 单模型本来也排队；
-     · 每个子 agent ≤3 轮工具、全局 ≤12 次工具调用、单请求 ≤12000 字符；
+     · 每个子 agent ≤5 轮工具、全局 ≤16 次工具调用、单请求 ≤12000 字符（评测 Run1 证明 3/12 会饿死取数）；
      · 子 agent 只返回「结构化 claims」，综合器不许出现 claims 之外的数字（再用纯函数校验）；
      · 所有 LLM/IPC 调用经注入的 deps 进来 → 纯 Node 可测，问答内容绝不落盘。
 
@@ -26,8 +26,8 @@
      0) 预算常量（本地模型的硬约束）
      ============================================================ */
   const BUDGET = {
-    maxToolRoundsPerAgent: 3,     // 每个子 agent 的工具轮上限
-    maxToolCallsTotal: 12,        // 一次提问全局工具调用预算
+    maxToolRoundsPerAgent: 5,     // 每个子 agent 的工具轮上限（评测2026-08-25：3轮时探索吃光预算，query/report到不了）
+    maxToolCallsTotal: 16,        // 一次提问全局工具调用预算
     reqChars: 12000,              // 单次请求总字符预算
     snapshotChars: 4000,          // 概览层快照上限（深度模式）
     snapshotFastChars: 1200,      // 快速模式快照上限：本地模型每 1000 字符≈250token，直接决定首字时间
@@ -54,6 +54,7 @@
     '8 PSI 与财经的 Sell-in/out 差异 ≤100 台属正常（收入量＝能进收入的 sell-in，DOS>90 递延），此容差只适用于财经↔PSI；跨看板数字打架先说明两边口径，不要断言某一边错。',
     '9 stackDim/groupDim/rowDim 这类必填参数不传会报错或静默返回空；工具返回的字段名以返回值为准（report 行是 key/cumCur/cumPrev/yoy/siCur/inv/dos，不是 label/curYear）。',
     '10 查不到就说查不到，所有数字必须来自工具返回，绝不编造、绝不凭记忆填值。',
+    '11 期间纪律：题目指定了期间，PSI 用 query 显式传 from/to（把返回的桶求和），财经显式传 fromM/toM；report 没有期间参数、其累计列恒为年初至今，不得冒充指定期间；先用 meta 确认数据覆盖范围。用户口头给的数字未经工具核实，不得当作事实或修正依据。',
   ].join('\n');
 
   /* ============================================================
@@ -70,7 +71,7 @@
         '【公式】流量(sellIn/sellOut)＝桶内求和；inv＝取桶内最新日期、再把该日所有行相加（不是保留最后一行）；DOS＝round(桶内最新期库存 ÷ (桶内SO ÷ dosDays))，dosDays 日1/周7/月30（30 写死，不是当月实际天数）——与汇总表 DOS（近4个ISO周÷28、音频走 W_last）不是同一个数，被问到差异要主动说明。纯音频桶 SO=0 → DOS=null 留空；桶里混了平板则返回 0。系列数 >14 时其余并入「其他」，「其他」对 DOS 是无意义相加，不要引用。库存/DOS 绝不能跨桶相加（导出合计行的库存合计是错数）。区间统计：流量报累计/峰值/均值；inv/dos 只报区间末值，DOS 合计恒为「—」。图上数据单位切 K/W 会把 DOS 也缩放，报数时一律回到「台 / 天」。',
         '【层级】Product Line(产业:平板/音频与智能配件) > Product Family(系列) > Product Series(产品代号) > Product(传播名) > Product Model(SKU)。判定产业一律用 contains「音频」（真实取值可能是「音频与智能配件」），不要用等号。',
         '【易错】小计行只在 stackDim 上剔，其它维度的小计不剔；空串维度值会变成一个无名系列（options 查不到、图上却有）。filters 里任一取值拼错会静默返回空图，不报错。psiUnits 与图表同口径：渠道列视同不存在、全部行直接相加（2026-08-21 起，旧版按组剔 ALL 已移除）。',
-        '【取数】趋势 query({stackDim 必填, metric, gran, from:"YYYY-MM-DD", to, filters})，只想看整体也要挑一个维度（如 country）；某维度总量/同比/库存/DOS 用 report({groupDim, filters})；取值先 options({field, filters, contains}) 查精确写法；范围与数据日期用 meta；用户说「当前筛选」先 boardState({boardId:"psi"})。',
+        '【取数】趋势 query({stackDim 必填, metric, gran, from:"YYYY-MM-DD", to, filters})，只想看整体也要挑一个维度（如 country）；全年至今的总量/同比/库存/DOS 用 report({groupDim, filters})——report 无期间参数，指定期间累计改用 query 传 from/to 求和；取值先 options({field, filters, contains}) 查精确写法；范围与数据日期用 meta；用户说「当前筛选」先 boardState({boardId:"psi"})。',
         '【红线】① 库存/DOS 绝不跨期相加；② null 的 DOS 不当 0、不参与平均；③ 渠道列视同不存在：ALL/Online/Offline 只是行标签、彼此无包含关系，一律全加，任何地方不做渠道去重。',
       ].join('\n'),
     },
@@ -96,7 +97,7 @@
         '【单位与版本】实际=USD、预测=MUSD、BP=USD（BP 底表无单位列，这是固定假设），数量恒「台」；调引擎必须显式带 finUnits/finQtyUnits，否则金额差百万倍。「版本」列才是工作底稿（国家办/大区工作底稿），「预测场景」（如 6月预测）不是版本——选错会让全年预测恒 0；大区版本会在国家办版本上做大数调整。',
         '【层级与边界】LV1=产业、LV2=品类、LV3=产品系列、LV4=产品；财经 LV3↔PSI Product Family、LV4↔PSI Product Series，别按名字直接对齐。预测表无国家列（最细到国家办），BP 表无品牌/国家列。财经同比按整月区间、不按日截断，当月未收满时 SI 同比会偏低。财经的「销售毛利」与销毛推演的销毛是两套指标，别互相解释。小计剔除会把国家列的「源为空」也当小计剔掉（正常）；lv4 的空串是合法叶子不剔。',
         '【数字对不上先查底表】财经文件夹里同一类表放了新旧两版会直接翻倍（财经源不做任何去重）；只读每个文件第 1 个 Sheet，三张表必须分成三个文件；25 年 NSIP 为空是底表当年没有「收入量」，不是 bug。财经 Sell-in 与 PSI 差 ≤100 台属正常，>100 台才提。',
-        '【取数】整体 financeOverview({year, fromM, toM})；分系列/产品 financeProductBoard({fromM,toM,lv1,lv3})；分国家办 financeRepBoard({fromM,toM,reps,series})——不支持 lv1，要按产业筛就先取该产业下的 LV3 名集；其它维度组合 financeCustom({rowDim, metrics, fromM, toM})。一律显式传 toM，别依赖缺省。',
+        '【取数】整体 financeOverview({year, fromM, toM})——全盘合计、没有产业切分，不得把它标成某一产业；分产业(lv1)/系列/产品必须用 financeProductBoard({fromM,toM,lv1,lv3})；分国家办 financeRepBoard({fromM,toM,reps,series})——不支持 lv1，要按产业筛就先取该产业下的 LV3 名集；其它维度组合 financeCustom({rowDim, metrics, fromM, toM})。一律显式传 toM，别依赖缺省。',
         '【红线】① 率不能平均、单价不能按百分比同比；② 达成率不给时间进度等于误导；③ 底表没有的字段（NSIP 等）按公式算，不许瞎编、不许换分母，查不到就说查不到。',
       ].join('\n'),
     },
@@ -313,6 +314,7 @@
     '【通用口径】渠道全加不去重；库存取最新期快照、绝不跨期累加；缺数是 null 不是 0，不参与求和平均。',
     'filters 的维度名只能用工具里给的；取值必须先用 options 查到精确写法，拼错会静默返回空。',
     '所有数字必须来自工具返回，查不到就说查不到，绝不编造、绝不凭记忆填值。',
+    '指定期间：query 传 from/to 桶求和，财经传 fromM/toM，report 恒为年初至今；用户口头数字未核实不作事实。',
   ].join('\n');
 
   /* ── 专家卡按需裁剪 ────────────────────────────────────────────
@@ -524,6 +526,18 @@
       }
       const parsed = parseClaims(resp.content || '');
       return { agentId: a.id, agentName: a.name, claims: parsed.claims, notes: parsed.notes, rounds };
+    }
+    // 轮次耗尽但没报错 → 已取到的数据不能浪费：禁用工具强制作答一次（评测发现「取到了没轮次消化」是高频死因）
+    if (!lastErr) {
+      const fin = trimMessages([{ role: 'system', content: sys }].concat(messages, [{
+        role: 'user',
+        content: '工具轮次已用尽，不能再取数。请仅基于上面已返回的工具数据作答；数据不足的部分明说「数据未包含」，绝不编造。同样附 claims JSON。',
+      }]), BUDGET.reqChars);
+      const last = await deps.chat({ system: sys, messages: fin.messages, tools: [], maxTokens: BUDGET.subAgentTokens, streamInto: task.streamInto || null });
+      if (last && !last.error && String(last.content || '').trim()) {
+        const p2 = parseClaims(last.content);
+        return { agentId: a.id, agentName: a.name, claims: p2.claims, notes: p2.notes, rounds: rounds + 1, forcedFinal: true };
+      }
     }
     return { agentId: a.id, agentName: a.name, claims: [], notes: '', error: lastErr || '工具轮次用尽仍未给出结论', rounds };
   }

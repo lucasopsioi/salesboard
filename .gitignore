@@ -12,3 +12,6 @@ demo-data/**/*.xlsx
 # 评测的引擎解析缓存（可再生）
 eval/.engine-cache/
 dist-interview/
+
+# 云端评测密钥（SONG 手工粘贴，绝不入库）
+eval/*.key

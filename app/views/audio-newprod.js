@@ -46,7 +46,19 @@ async function npCountries(np) {
     const plan = info && (info.tables || []).find(t => /上市计划/.test(t.title || ''));
     if (plan) plan.rows.forEach(r => { const c = r[0]; if (c && c !== '—' && !out.includes(c)) out.push(c); });
   } catch (e) { }
-  return out.length ? out : ['墨西哥', '哥伦比亚', '智利', '秘鲁', '巴西', '阿根廷'];
+  const base = out.length ? out : ['墨西哥', '哥伦比亚', '智利', '秘鲁', '巴西', '阿根廷'];
+  // 用户删掉的国家(没首销/不想看)不再进表;「国家 n/N ▾」chip 可随时恢复
+  const rm = np.removed || [];
+  return base.filter(c => rm.indexOf(c) < 0);
+}
+/* 国家管理面板的全量清单 = 当前在表的 ∪ 已删除的 */
+async function npAllCountries(np) {
+  const rm = (np.removed || []).slice();
+  const keep = np.removed; np.removed = [];
+  let all = [];
+  try { all = await npCountries(np); } finally { np.removed = keep; }
+  rm.forEach(c => { if (all.indexOf(c) < 0) all.push(c); });
+  return all;
 }
 
 /* ---------- 取数：产品 × 国家 的日粒度 SO（按渠道拆，便于线上/线下首销识别） ---------- */
@@ -103,13 +115,22 @@ async function npCompute(np) {
       target: adj.target, predDays: pred.days, predFirstSale: eff.predFirst,
       windowN: NP.windowN,
     });
+    /* 手填实际达成(用户 2026-08-25:预售期数据不在 PSI,由人工填)——覆盖系统值,
+       达成率/同比上代跟着手填值重算;系统值留在 row.sysActual 供界面对照 */
+    row.sysActual = row.actual;
+    if (adj.actual != null && adj.actual !== '') {
+      row.actual = +adj.actual;
+      row.manualActual = true;
+      row.attain = row.target ? row.actual / row.target : null;
+      row.yoy = (row.predCum != null && row.predCum > 0) ? row.actual / row.predCum - 1 : null;
+    }
     byCountry[c] = { cur, pred, auto, adj, eff, row };
   }
   const rows = ctrys.map(c => byCountry[c].row);
   const total = W.firstSaleTotal(rows);
   const soldCountries = ctrys.filter(c => byCountry[c].row.actual > 0).length;
   // 全部国家都还没卖 → 「未开卖新品」：表格只保留 计划首销/目标 列（用户 2026-08-21）
-  const notLaunched = ctrys.every(c => byCountry[c].row.actual === 0 && !byCountry[c].auto.first);
+  const notLaunched = ctrys.every(c => byCountry[c].row.actual === 0 && !byCountry[c].auto.first && !byCountry[c].row.manualActual);
   const out = { byCountry, ctrys, total, soldCountries, notLaunched };
   auW.npData = auW.npData || {};
   auW.npData[np.id] = out;
@@ -135,11 +156,11 @@ function npTableModel(np) {
     const planOf = c => { const r = plan && plan.rows.find(x => x[0] === c); return r ? { on: r[2], off: r[3] } : {}; };
     return {
       title: '新品首销计划（尚未开卖 · 开卖后自动切换为达成表）',
-      header: ['国家', '计划首销', '线上首销', '线下首销', '首销目标'],
+      header: ['国家', '计划首销', '线上首销', '线下首销', '首销目标', '实际达成(可手填)'],
       rows: d.ctrys.map(c => {
         const a = (np.adj || {})[c] || {}, pl = planOf(c);
         return [c, pd(a.first) , a.on ? pd(a.on) : (pl.on || '—'), a.off ? pd(a.off) : (pl.off || '—'),
-          a.target == null ? '—' : W.fmtInt(a.target)];
+          a.target == null ? '—' : W.fmtInt(a.target), a.actual == null ? '—' : W.fmtInt(a.actual)];
       }),
       hasTotal: false, notLaunched: true,
     };
@@ -147,7 +168,7 @@ function npTableModel(np) {
   const rows = d.ctrys.map(c => {
     const r = d.byCountry[c].row;
     return [c, pd(r.firstSale), pd(r.onlineFirst), pd(r.offlineFirst),
-      r.firstSale ? pc(r.progress) + (r.done ? '（已收官）' : '') : '—',
+      r.firstSale ? pc(r.progress) : '—',
       W.fmtInt(r.actual), r.target == null ? '—' : W.fmtInt(r.target), pc(r.attain), sp(r.yoy)];
   });
   const t = d.total;
@@ -169,26 +190,35 @@ function npEditableTableHtml(np) {
     + ' title="' + (auto ? '自动识别值,改了即手调优先' : '手填') + '">';
   const numIn = (c, val) =>
     '<input type="number" data-npc="' + auEsc(c) + '" data-npk="target" value="' + (val != null ? val : '') + '" placeholder="台" style="width:84px;text-align:right">';
-  let h = '<div class="au-sec-t" style="font-size:12px">' + auEsc(tm.title) + '<span class="au-note">日期/目标直接在表里改，自动保存并重算</span></div>';
-  h += '<table class="rep-table" style="width:100%"><thead><tr>' + tm.header.map(x => '<th>' + auEsc(x) + '</th>').join('') + '</tr></thead><tbody>';
+  const rmN = (np.removed || []).length;
+  const allN = d.ctrys.length + rmN;
+  let h = '<div class="au-sec-t" style="font-size:12px;position:relative">' + auEsc(tm.title)
+    + ' <span class="chip" data-npmgr style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand);font-size:11px;padding:1px 8px;border-radius:12px" title="勾选要展示的国家,去勾=删除;随时可恢复">国家 <b>' + d.ctrys.length + '/' + allN + '</b> ▾</span>'
+    + '<span class="au-note">日期/目标/实际 直接在表里改，自动保存并重算;行首 ✕ 删除国家</span></div>';
+  h += '<table class="rep-table" style="width:100%"><thead><tr><th style="width:20px"></th>' + tm.header.map(x => '<th>' + auEsc(x) + '</th>').join('') + '</tr></thead><tbody>';
   d.ctrys.forEach(c => {
     const cd = d.byCountry[c], adj = (np.adj || {})[c] || {}, r = cd.row;
     const W = window.WeeklyChips;
     const pc = v => v == null ? '—' : (v * 100).toFixed(0) + '%';
     const sp = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(0) + '%';
+    const rmTd = '<td><button class="row-hide-btn" data-nprm="' + auEsc(c) + '" title="删除这个国家(没首销/不想看;「国家」chip 可恢复)" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;padding:0 3px">✕</button></td>';
+    // 实际达成:手填覆盖系统值(预售期数据不在 PSI);空=用系统值,小字对照
+    const actIn = '<input type="number" data-npc="' + auEsc(c) + '" data-npk="actual" value="' + (adj.actual != null ? adj.actual : '') + '" placeholder="' + (r.sysActual != null ? r.sysActual : 0) + '" style="width:84px;text-align:right" title="手填实际达成(预售期用);清空=回到系统值">'
+      + (r.manualActual ? '<div style="font-size:10px;color:var(--c-brand)">手填 · 系统 ' + W.fmtInt(r.sysActual || 0) + '</div>' : '<div style="font-size:10px;color:var(--c-ink-3)">系统</div>');
     if (tm.notLaunched) {
-      h += '<tr><td>' + auEsc(c) + '</td>'
+      h += '<tr>' + rmTd + '<td>' + auEsc(c) + '</td>'
         + '<td>' + dateIn(c, 'first', adj.first, false) + '</td>'
         + '<td>' + dateIn(c, 'on', adj.on || '', false) + '</td>'
         + '<td>' + dateIn(c, 'off', adj.off || '', false) + '</td>'
-        + '<td style="text-align:right">' + numIn(c, adj.target) + '</td></tr>';
+        + '<td style="text-align:right">' + numIn(c, adj.target) + '</td>'
+        + '<td style="text-align:right">' + actIn + '</td></tr>';
     } else {
-      h += '<tr><td>' + auEsc(c) + '</td>'
+      h += '<tr>' + rmTd + '<td>' + auEsc(c) + '</td>'
         + '<td>' + dateIn(c, 'first', cd.eff.first, !adj.first) + (adj.first ? '<div style="font-size:10px;color:var(--c-brand)">手调</div>' : '<div style="font-size:10px;color:var(--c-ink-3)">自动</div>') + '</td>'
         + '<td>' + dateIn(c, 'on', cd.eff.on, !adj.on) + '</td>'
         + '<td>' + dateIn(c, 'off', cd.eff.off, !adj.off) + '</td>'
-        + '<td>' + (r.firstSale ? pc(r.progress) + (r.done ? '（已收官）' : '') : '—') + '</td>'
-        + '<td style="text-align:right">' + W.fmtInt(r.actual) + '</td>'
+        + '<td>' + (r.firstSale ? pc(r.progress) : '—') + '</td>'
+        + '<td style="text-align:right">' + actIn + '</td>'
         + '<td style="text-align:right">' + numIn(c, adj.target != null ? adj.target : null) + '</td>'
         + '<td style="text-align:right">' + pc(r.attain) + '</td>'
         + '<td style="text-align:right">' + sp(r.yoy) + '</td></tr>';
@@ -198,7 +228,7 @@ function npEditableTableHtml(np) {
     const t = d.total, W = window.WeeklyChips;
     const pc = v => v == null ? '—' : (v * 100).toFixed(0) + '%';
     const sp = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(0) + '%';
-    h += '<tr class="tot" style="font-weight:700"><td>合计</td><td></td><td></td><td></td><td></td>'
+    h += '<tr class="tot" style="font-weight:700"><td></td><td>合计</td><td></td><td></td><td></td><td></td>'
       + '<td style="text-align:right">' + W.fmtInt(t.actual) + '</td>'
       + '<td style="text-align:right">' + (t.target == null ? '—' : W.fmtInt(t.target)) + '</td>'
       + '<td style="text-align:right">' + pc(t.attain) + '</td>'
@@ -280,6 +310,14 @@ async function renderAuNewprod() {
   // 产品候选（当前产业下）
   let prodOpts = [];
   try { prodOpts = await api.options('product', Object.assign({}, auLineFilter())) || []; } catch (e) { }
+  // 路标里的产品(预售期 PSI 还没有销量)也要能选——选中后产品信息照出,达成表走「未开卖」
+  // 模式,可手填计划首销/目标/实际(用户 2026-08-25:路标有的产品在框里选不了)
+  try {
+    npReadRoadmap().products.forEach(pp => {
+      const n2 = String(pp.name || '').trim();
+      if (n2 && prodOpts.indexOf(n2) < 0) prodOpts.push(n2);
+    });
+  } catch (e) { }
 
   let h = head + '<div class="au-toolbar" id="npBar">'
     + '<label>首销期(天)</label><input type="number" id="npWindow" value="' + NP.windowN + '" min="7" max="120" style="width:64px">'
@@ -349,14 +387,46 @@ async function renderAuNewprod() {
           tHost.innerHTML = npEditableTableHtml(np);
           // 表内直改：日期/目标 → 存 adj → 只重算本产品并局部重画本表(不整段刷新、不闪屏)
           tHost._bindAll = function () {
+            const redo = () => npCompute(np).then(() => { tHost.innerHTML = npEditableTableHtml(np); tHost._bindAll(); if (typeof auChipsRefresh === 'function') auChipsRefresh(); });
             tHost.querySelectorAll('input[data-npc]').forEach(inp2 => inp2.onchange = () => {
               const c2 = inp2.dataset.npc, k2 = inp2.dataset.npk;
               np.adj = np.adj || {}; np.adj[c2] = np.adj[c2] || {};
-              if (k2 === 'target') np.adj[c2].target = inp2.value === '' ? null : +inp2.value;
+              if (k2 === 'target' || k2 === 'actual') np.adj[c2][k2] = inp2.value === '' ? null : +inp2.value;
               else np.adj[c2][k2] = inp2.value || null;
               auSave();
-              npCompute(np).then(() => { tHost.innerHTML = npEditableTableHtml(np); tHost._bindAll(); if (typeof auChipsRefresh === 'function') auChipsRefresh(); });
+              redo();
             });
+            // 行首 ✕:删除国家(记进 np.removed,「国家」chip 可恢复)
+            tHost.querySelectorAll('[data-nprm]').forEach(bt => bt.onclick = () => {
+              np.removed = np.removed || [];
+              if (np.removed.indexOf(bt.dataset.nprm) < 0) np.removed.push(bt.dataset.nprm);
+              auSave();
+              redo();
+            });
+            // 「国家 n/N ▾」勾选面板:checked=在表,去勾=删除
+            const chip = tHost.querySelector('[data-npmgr]');
+            if (chip) chip.onclick = async () => {
+              let pnl = tHost.querySelector('.np-mgr-panel'); if (pnl) { pnl.remove(); return; }
+              pnl = document.createElement('div'); pnl.className = 'np-mgr-panel';
+              pnl.style.cssText = 'position:absolute;top:calc(100% - 2px);left:' + Math.max(8, chip.offsetLeft) + 'px;z-index:60;background:var(--c-bg-elev);border:1px solid var(--c-line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:8px 10px;max-height:280px;overflow:auto;min-width:200px';
+              const all = await npAllCountries(np);
+              const rm0 = np.removed || [];
+              all.forEach(c3 => {
+                const row3 = document.createElement('label'); row3.style.cssText = 'display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12px;color:var(--c-ink-1);cursor:pointer';
+                const ck = document.createElement('input'); ck.type = 'checkbox'; ck.checked = rm0.indexOf(c3) < 0;
+                ck.onchange = () => {
+                  np.removed = np.removed || [];
+                  const i3 = np.removed.indexOf(c3);
+                  if (ck.checked) { if (i3 >= 0) np.removed.splice(i3, 1); }
+                  else if (i3 < 0) np.removed.push(c3);
+                  auSave();
+                  redo();
+                };
+                const nm3 = document.createElement('span'); nm3.textContent = c3; nm3.style.flex = '1';
+                row3.appendChild(ck); row3.appendChild(nm3); pnl.appendChild(row3);
+              });
+              chip.parentElement.appendChild(pnl);
+            };
           };
           tHost._bindAll();
         }

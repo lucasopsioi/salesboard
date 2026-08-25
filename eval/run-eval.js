@@ -28,7 +28,9 @@ const argv = process.argv.slice(2);
 const arg = (name, dflt) => { const i = argv.indexOf('--' + name); return i >= 0 ? argv[i + 1] : dflt; };
 const has = (name) => argv.indexOf('--' + name) >= 0;
 const BASE = (arg('base', 'http://localhost:1234/v1') || '').replace(/\/$/, '');
-const KEY = arg('key', process.env.EVAL_API_KEY || '');
+let KEY = arg('key', process.env.EVAL_API_KEY || '');
+/* 密钥文件：作者 自己把 key 粘进 eval/minimax.key（已 .gitignore，绝不入库/不打印），跑分器静默读取 */
+if (!KEY) { try { KEY = require('fs').readFileSync(require('path').join(__dirname, 'minimax.key'), 'utf8').trim(); } catch (e) {} }
 const DRY = has('dry');
 const GGUF = arg('gguf', '');   // 本地 .gguf 路径：不走 HTTP，直接 node-llama-cpp（与主程序 aiChatLocal 同一条路）
 const ONLY = (arg('only', '') || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -123,6 +125,8 @@ let MODEL = arg('model', '');
 async function resolveModel() {
   if (GGUF) { MODEL = 'local-gguf:' + path.basename(GGUF); return; }
   if (MODEL || DRY) return;
+  // MiniMax 原生端点（…/text/chatcompletion_v2）没有 /models —— 用软件同款默认模型
+  if (/chatcompletion/i.test(BASE)) { MODEL = 'MiniMax-Text-01'; return; }
   const r = await fetch(BASE + '/models', { headers: KEY ? { authorization: 'Bearer ' + KEY } : {} });
   if (!r.ok) throw new Error('取模型列表失败 HTTP ' + r.status + '（LM Studio 没开？或用 --model 指定）');
   const j = await r.json();
@@ -138,7 +142,9 @@ async function httpChat(req) {
   if (req.tools && req.tools.length) { body.tools = req.tools; body.tool_choice = 'auto'; }
   try {
     const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 300000);
-    const r = await fetch(BASE + '/chat/completions', {
+    // --base 给的是完整端点（如 MiniMax chatcompletion_v2）就原样用；否则按 OpenAI 惯例拼 /chat/completions
+    const url = /chatcompletion|\/completions$/i.test(BASE) ? BASE : BASE + '/chat/completions';
+    const r = await fetch(url, {
       method: 'POST', signal: ctrl.signal,
       headers: Object.assign({ 'content-type': 'application/json' }, KEY ? { authorization: 'Bearer ' + KEY } : {}),
       body: JSON.stringify(body),
@@ -146,6 +152,8 @@ async function httpChat(req) {
     clearTimeout(to);
     if (!r.ok) return { error: 'HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200) };
     const j = await r.json();
+    // MiniMax 把业务错误放 base_resp（HTTP 仍可能 200）：status_code 非 0 即失败
+    if (j.base_resp && j.base_resp.status_code) return { error: 'MiniMax ' + j.base_resp.status_code + ' ' + (j.base_resp.status_msg || '') };
     const m = (j.choices && j.choices[0] && j.choices[0].message) || {};
     return { content: m.content || '', toolCalls: m.tool_calls || null };
   } catch (e) { return { error: String((e && e.message) || e) }; }
@@ -285,7 +293,7 @@ function asciiJson(obj) {
       question: q.question, answer: res.answer || '',
       singleAgent: !!res.singleAgent,
       verified: res.verified || null,
-      agents: (res.results || []).map(r => ({ agent: r.agentName, rounds: r.rounds, error: r.error || null })),
+      agents: (res.results || []).map(r => ({ agent: r.agentName, rounds: r.rounds, error: r.error || null, claims: r.claims || [], notes: r.notes || '' })),
       toolLog, latencyMs, auto, human: null,
       truth: q.truth || null, severity_if_wrong: q.severity_if_wrong,
     };

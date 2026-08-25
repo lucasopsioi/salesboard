@@ -578,7 +578,10 @@
     // 单专家 → 直接返回它的结论，省掉综合那次 30B 调用（本地模型上这一次就是几十秒~几分钟）
     if (results.length === 1 && !results[0].error) {
       const only = results[0];
-      const text = only.notes || (only.claims || []).map(c => c.metric + '：' + c.value).join('\n');
+      // claims 和 notes 都要进答案：模型守规矩把数字放进 claims JSON 时，notes 往往只是补充说明——
+      // 旧写法 notes||claims 会把装着数字的 claims 整个丢掉（评测 2026-08-25 云端首题逮住的真 bug）
+      const claimsTxt = (only.claims || []).map(c => c.metric + '：' + c.value + (c.unit ? ' ' + c.unit : '')).join('\n');
+      const text = [claimsTxt, only.notes].filter(Boolean).join('\n');
       return { answer: text || '(空回复)', results, verified: { ok: true, unsupported: [] }, singleAgent: true };
     }
 

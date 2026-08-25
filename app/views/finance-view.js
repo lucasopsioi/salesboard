@@ -399,6 +399,7 @@ async function renderOverview(){
       rateRow('NSIP',M.nsip,finFmtNsip,finSignNsip)+
     '</div>';
   finBindUnitExp(host);
+  finBindRowCtl(host);
 }
 /* ---- 产业产品经营看板(4 表)：产品线 / 平板分系列 / 音频分系列 / LV4 产品 ----
    调 financeProductBoard(finOverviewParams())，与总看板同参→顶部筛选自动联动。
@@ -428,15 +429,42 @@ const FIN_RB_COLS=FIN_PB_COLS;
 const FIN_RB_KEYS=FIN_RB_COLS.map(c=>c.key);
 // 单表 HTML：firstLabel=名称列表头；total 行加粗(.tot)；series 表按 faSortSeries 排序。
 // colSrc 默认 FIN_PB_COLS(产品14列)；国家办整体表传 FIN_RB_COLS(含 NSIP同比)。
-function finPbTable(firstLabel, block, colKeys, isSeries, colSrc){
+/* ---- 行隐藏+自定义顺序(用户 2026-08-24 同款):键=表 id(pb-line/pb-tablet/.../rb-lv4),
+   独立桶 sb.fin.rowhide / sb.fin.roworder。新行(新品)不在存档 → append 尾部必显示。
+   合计行不进管线,口径不动。 ---- */
+const FIN_HIDE_LS='sb.fin.rowhide', FIN_ORDER_LS='sb.fin.roworder';
+function finRH(){ return (typeof window!=='undefined'&&window.RowHide)?window.RowHide:require('../row-hide-core.js'); }
+function finRO(){ return (typeof window!=='undefined'&&window.RowOrder)?window.RowOrder:require('../row-order-core.js'); }
+function finLsAll(ls){ try{ return JSON.parse(localStorage.getItem(ls))||{}; }catch(e){ return {}; } }
+function finHideGet(id){ return finLsAll(FIN_HIDE_LS)[id]||[]; }
+function finHideSet(id,arr){ const all=finLsAll(FIN_HIDE_LS); if(arr&&arr.length) all[id]=arr; else delete all[id];
+  try{ localStorage.setItem(FIN_HIDE_LS,JSON.stringify(all)); }catch(e){} }
+function finOrderGet(id){ return finLsAll(FIN_ORDER_LS)[id]||[]; }
+function finOrderSet(id,arr){ const all=finLsAll(FIN_ORDER_LS); if(arr&&arr.length) all[id]=arr; else delete all[id];
+  try{ localStorage.setItem(FIN_ORDER_LS,JSON.stringify(all)); }catch(e){} }
+function finRowsPipeline(rows,secId){
+  if(!secId) return rows;
+  let out=finRH().visible(rows,finHideGet(secId));
+  const saved=finOrderGet(secId);
+  if(saved.length){ const km={}; out.forEach(o=>{ km[o.key]=o; }); out=finRO().apply(out.map(o=>o.key),saved).map(k=>km[k]); }
+  return out;
+}
+function finPbTable(firstLabel, block, colKeys, isSeries, colSrc, secId){
   if(!block) return '';
   const cols=(colSrc||FIN_PB_COLS).filter(c=>colKeys.includes(c.key));
-  const thead='<tr><th class="lft">'+firstLabel+'</th>'+
+  const ctl=!!secId;
+  const thead='<tr>'+(ctl?'<th style="width:30px"></th>':'')+'<th class="lft">'+firstLabel+'</th>'+
     cols.map(c=>`<th class="${c.sep?'col-sep':''}">${c.label}</th>`).join('')+'</tr>';
-  const rowHtml=(o,cls)=>'<tr class="'+(cls||'')+'"><td class="lft">'+o.key+'</td>'+
-    cols.map(c=>`<td class="${c.sep?'col-sep':''}">${c.fmt(o)}</td>`).join('')+'</tr>';
+  const rowHtml=(o,cls)=>cls
+    ? '<tr class="'+cls+'">'+(ctl?'<td></td>':'')+'<td class="lft">'+o.key+'</td>'+
+      cols.map(c=>`<td class="${c.sep?'col-sep':''}">${c.fmt(o)}</td>`).join('')+'</tr>'
+    : '<tr'+(ctl?' draggable="true" data-rowkey="'+encodeURIComponent(o.key)+'"':'')+'>'
+      +(ctl?'<td style="white-space:nowrap"><button class="row-hide-btn" data-finhiderow="'+encodeURIComponent(o.key)+'" title="隐藏此行(不影响合计,标题旁「行」chip 可恢复)" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;padding:0 3px">✕</button><span style="cursor:grab;color:var(--c-ink-3);font-size:10px" title="按住整行拖动调顺序(会记住)">⠿</span></td>':'')
+      +'<td class="lft">'+o.key+'</td>'+
+      cols.map(c=>`<td class="${c.sep?'col-sep':''}">${c.fmt(o)}</td>`).join('')+'</tr>';
   let rows=(block.rows||[]).slice();
   if(isSeries && typeof faSortSeries==='function') rows=faSortSeries(rows);
+  rows=finRowsPipeline(rows,secId);
   let body='';
   if(block.total) body+=rowHtml(block.total,'tot');
   body+=rows.map(o=>rowHtml(o)).join('');
@@ -444,7 +472,77 @@ function finPbTable(firstLabel, block, colKeys, isSeries, colSrc){
 }
 function finPbSection(title, tableHtml, unitId){
   const exp=unitId?'<span class="fin-unit-exp"><button type="button" data-exp="xlsx" data-id="'+unitId+'">📊 Excel</button><button type="button" data-exp="ppt" data-id="'+unitId+'">📑 PPT</button></span>':'';
-  return '<div class="fin-sec-t">'+title+exp+'</div><div class="fa-wrap">'+tableHtml+'</div>';
+  const mgr=unitId?' <span class="chip" data-finmgr="'+unitId+'" style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand);font-size:11px;padding:1px 8px;border-radius:12px">行 <b>—</b> ▾</span>':'';
+  return '<div class="fin-sec-t" style="position:relative">'+title+mgr+exp+'</div><div class="fa-wrap"'+(unitId?' data-finwrap="'+unitId+'"':'')+'>'+tableHtml+'</div>';
+}
+/* 行控件统一绑定:✕/拖拽/管理器面板。repaint 走 fin._expUnits[id].build() 局部重画,零取数 */
+function finBindRowCtl(host){
+  if(!host) return;
+  const repaint=id=>{
+    const u=fin._expUnits[id]; if(!u) return;
+    let d; try{ d=u.build(); }catch(e){ return; }
+    const wrap=host.querySelector('[data-finwrap="'+id+'"]'); if(!wrap) return;
+    wrap.innerHTML=finPbTable(d.firstLabel,d.block,d.colKeys,d.isSeries,d.colSrc,id);
+    bindWrap(wrap,id);
+    syncChip(id);
+  };
+  const allKeysOf=id=>{
+    const u=fin._expUnits[id]; if(!u) return [];
+    let d; try{ d=u.build(); }catch(e){ return []; }
+    let rows=((d.block&&d.block.rows)||[]).slice();
+    if(d.isSeries&&typeof faSortSeries==='function') rows=faSortSeries(rows);
+    const ks=rows.map(o=>o.key);
+    finHideGet(id).forEach(k=>{ if(ks.indexOf(k)<0) ks.push(k); });
+    return ks;
+  };
+  const syncChip=id=>{
+    const chip=host.querySelector('[data-finmgr="'+id+'"]'); if(!chip) return;
+    const b=chip.querySelector('b'); const n=allKeysOf(id).length;
+    if(b) b.textContent=(n-finHideGet(id).length)+'/'+n;
+  };
+  const bindWrap=(wrap,id)=>{
+    wrap.querySelectorAll('[data-finhiderow]').forEach(bt=>bt.onclick=()=>{
+      finHideSet(id,finRH().add(finHideGet(id),decodeURIComponent(bt.dataset.finhiderow)));
+      repaint(id);
+    });
+    let drag=null;
+    wrap.querySelectorAll('tr[data-rowkey]').forEach(tr=>{
+      tr.ondragstart=e=>{ drag=tr.dataset.rowkey; try{ e.dataTransfer.effectAllowed='move'; }catch(_){ } };
+      tr.ondragover=e=>e.preventDefault();
+      tr.ondrop=e=>{
+        e.preventDefault();
+        if(drag==null) return;
+        const keys=[...wrap.querySelectorAll('tr[data-rowkey]')].map(x=>x.dataset.rowkey);
+        const from=keys.indexOf(drag), to=keys.indexOf(tr.dataset.rowkey);
+        drag=null;
+        if(from<0||to<0||from===to) return;
+        finOrderSet(id,finRO().move(keys,from,to).map(decodeURIComponent));
+        repaint(id);
+      };
+    });
+  };
+  host.querySelectorAll('[data-finmgr]').forEach(chip=>{
+    const id=chip.dataset.finmgr;
+    chip.onclick=()=>{
+      let pnl=chip.parentElement.querySelector('.fin-mgr-panel'); if(pnl){ pnl.remove(); return; }
+      pnl=document.createElement('div'); pnl.className='fin-mgr-panel';
+      pnl.style.cssText='position:absolute;top:calc(100% - 2px);left:'+Math.max(8,chip.offsetLeft)+'px;z-index:60;background:var(--c-bg-elev);border:1px solid var(--c-line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:8px 10px;max-height:280px;overflow:auto;min-width:220px';
+      const hid0=finHideGet(id);
+      allKeysOf(id).forEach(k=>{
+        const row=document.createElement('label'); row.style.cssText='display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12px;color:var(--c-ink-1);cursor:pointer';
+        const ck=document.createElement('input'); ck.type='checkbox'; ck.checked=hid0.indexOf(k)<0;
+        ck.onchange=()=>{ finHideSet(id,ck.checked?finRH().remove(finHideGet(id),k):finRH().add(finHideGet(id),k)); repaint(id); };
+        const nm=document.createElement('span'); nm.textContent=k; nm.style.flex='1';
+        row.appendChild(ck); row.appendChild(nm); pnl.appendChild(row);
+      });
+      const all=document.createElement('button'); all.textContent='全部显示'; all.className='btn'; all.style.cssText='margin-top:6px;padding:2px 10px;font-size:11px;width:100%';
+      all.onclick=()=>{ finHideSet(id,[]); repaint(id); pnl.querySelectorAll('input').forEach(c=>{ c.checked=true; }); };
+      pnl.appendChild(all);
+      chip.parentElement.appendChild(pnl);
+    };
+    syncChip(id);
+  });
+  host.querySelectorAll('[data-finwrap]').forEach(w=>bindWrap(w,w.dataset.finwrap));
 }
 // 逐表导出单元注册表(id→{title,kind,build})。build() 在导出时被调用,读取当前数据(闭包引用 fin.prod/fin.repBoard/fin.cust)。
 fin._expUnits={};
@@ -461,19 +559,20 @@ async function renderProductBoard(){
   if(!b || b.error){ host.innerHTML=''; return; }
   const allKeys=FIN_PB_COLS.map(c=>c.key);
   // 登记本块 4 表导出单元(build 闭包读取当前 fin.prod)。
-  const reg=(id,title,fn)=>{ fin._expUnits[id]={title,kind:'table',build:fn}; };
+  const reg=(id,title,fn)=>{ fin._expUnits[id]={title,kind:'table',build:()=>Object.assign({secId:id},fn())}; };
   reg('pb-line','产品线',()=>({firstLabel:'产品线',block:fin.prod.line,colKeys:allKeys,isSeries:false}));
   reg('pb-tablet','平板分系列',()=>({firstLabel:'系列',block:fin.prod.famTablet,colKeys:allKeys,isSeries:true}));
   reg('pb-audio','音频分系列',()=>({firstLabel:'系列',block:fin.prod.famAudio,colKeys:allKeys,isSeries:true}));
   reg('pb-lv4','LV4 产品',()=>({firstLabel:'LV4 产品',block:fin.prod.lv4,colKeys:FIN_PB_LV4_KEYS,isSeries:false}));
   const pbProg=((Math.max(1,(b.toM||12)-(b.fromM||1)+1)/12)*100).toFixed(0);
   let h='<div class="fin-sec-t">产业产品经营看板 <span class="wk" style="font-weight:400">· 时间进度 '+pbProg+'%（'+(b.fromM||1)+'-'+(b.toM||12)+'月实际 ÷ 全年BP/预测）</span></div>';
-  h+=finPbSection('产品线', finPbTable('产品线', b.line, allKeys, false), 'pb-line');
-  h+=finPbSection('平板分系列', finPbTable('系列', b.famTablet, allKeys, true), 'pb-tablet');
-  h+=finPbSection('音频分系列', finPbTable('系列', b.famAudio, allKeys, true), 'pb-audio');
-  h+=finPbSection('LV4 产品', finPbTable('LV4 产品', b.lv4, FIN_PB_LV4_KEYS, false), 'pb-lv4');
+  h+=finPbSection('产品线', finPbTable('产品线', b.line, allKeys, false, null, 'pb-line'), 'pb-line');
+  h+=finPbSection('平板分系列', finPbTable('系列', b.famTablet, allKeys, true, null, 'pb-tablet'), 'pb-tablet');
+  h+=finPbSection('音频分系列', finPbTable('系列', b.famAudio, allKeys, true, null, 'pb-audio'), 'pb-audio');
+  h+=finPbSection('LV4 产品', finPbTable('LV4 产品', b.lv4, FIN_PB_LV4_KEYS, false, null, 'pb-lv4'), 'pb-lv4');
   host.innerHTML=h;
   finBindUnitExp(host);
+  finBindRowCtl(host);
 }
 /* ---- 国家办维度看板(3 表 + 本块独立筛选)：Task 10 ----
    #finSecRep 顶部一条本块专属筛选条(时间/国家办/产品系列)，绑定 fin.rep.*；
@@ -522,14 +621,14 @@ async function renderRepBoard(){
   if(!b || b.error){ box.innerHTML=''; return; }
   // 登记本块 3 表导出单元(build 闭包读取当前 fin.repBoard,renderRepBoard 已每次刷新该字段)。
   const PB=FIN_PB_COLS.map(c=>c.key);
-  const reg=(id,title,fn)=>{ fin._expUnits[id]={title,kind:'table',build:fn}; };
+  const reg=(id,title,fn)=>{ fin._expUnits[id]={title,kind:'table',build:()=>Object.assign({secId:id},fn())}; };
   reg('rb-table','国家办整体',()=>({firstLabel:'国家办',block:fin.repBoard.repTable,colKeys:FIN_RB_KEYS,isSeries:false,colSrc:FIN_RB_COLS}));
   reg('rb-series','国家办×产品系列',()=>({firstLabel:'产品系列',block:fin.repBoard.repSeries,colKeys:PB,isSeries:true}));
   reg('rb-lv4','国家办LV4产品',()=>({firstLabel:'LV4 产品',block:fin.repBoard.lv4,colKeys:FIN_PB_LV4_KEYS,isSeries:false}));
   let h='';
-  h+=finPbSection('国家办整体', finPbTable('国家办', b.repTable, FIN_RB_KEYS, false, FIN_RB_COLS), 'rb-table');
-  h+=finPbSection('国家办 × 产品系列', finPbTable('产品系列', b.repSeries, PB, true), 'rb-series');
-  h+=finPbSection('LV4 产品', finPbTable('LV4 产品', b.lv4, FIN_PB_LV4_KEYS, false), 'rb-lv4');
+  h+=finPbSection('国家办整体', finPbTable('国家办', b.repTable, FIN_RB_KEYS, false, FIN_RB_COLS, 'rb-table'), 'rb-table');
+  h+=finPbSection('国家办 × 产品系列', finPbTable('产品系列', b.repSeries, PB, true, null, 'rb-series'), 'rb-series');
+  h+=finPbSection('LV4 产品', finPbTable('LV4 产品', b.lv4, FIN_PB_LV4_KEYS, false, null, 'rb-lv4'), 'rb-lv4');
   box.innerHTML=h;
   finBindUnitExp(box);
   finStateSave();                // 国家办块独立筛选(fin.rep.*)变化后落盘
@@ -547,13 +646,14 @@ async function renderRepBoard(){
 const FIN_EXP_PCT_KEYS={revYoy:1,gmYoy:1,gmr25:1,gmr26:1,bpAttain:1,fcAttain:1};   // nsipYoy 已改为绝对USD差(单价同比),不再套百分号
 // 把一个看板块(block:{rows,total})按给定列(FIN_PB_COLS/FIN_RB_COLS 子集)转成 {aoa, pctCols, firstLabel}。
 // firstLabel=名称列表头;total 行(若有)以"合计"置顶;series 块按 faSortSeries 排序。
-function finExpBlockAoa(firstLabel, block, colKeys, isSeries, colSrc){
+function finExpBlockAoa(firstLabel, block, colKeys, isSeries, colSrc, secId){
   const cols=(colSrc||FIN_PB_COLS).filter(c=>colKeys.includes(c.key));
   const head=[firstLabel].concat(cols.map(c=>c.label));
   const nz=v=>(v==null||!isFinite(v))?'':v;
   const line=(o,name)=>[name!=null?name:o.key].concat(cols.map(c=>nz(o[c.key])));
   let rows=(block&&block.rows||[]).slice();
   if(isSeries && typeof faSortSeries==='function') rows=faSortSeries(rows);
+  rows=finRowsPipeline(rows,secId);   // 导出与界面同筛同序(用户 2026-08-24:所见即所出)
   const aoa=[head]; const dataRowIdxs=[];
   if(block&&block.total){ dataRowIdxs.push(aoa.length); aoa.push(line(block.total,'合计')); }
   rows.forEach(o=>{ dataRowIdxs.push(aoa.length); aoa.push(line(o)); });
@@ -657,15 +757,15 @@ async function exportFinDashboardXlsx(){
   const sheets=[];
   const add=(name, spec)=>{ if(spec && spec.aoa && spec.aoa.length>1) sheets.push([name, spec]); };
   if(prod && !prod.error){
-    add('产品线',   finExpBlockAoa('产品线', prod.line, PB, false));
-    add('平板系列', finExpBlockAoa('系列', prod.famTablet, PB, true));
-    add('音频系列', finExpBlockAoa('系列', prod.famAudio, PB, true));
-    add('LV4产品',  finExpBlockAoa('LV4 产品', prod.lv4, LV4, false));
+    add('产品线',   finExpBlockAoa('产品线', prod.line, PB, false, null, 'pb-line'));
+    add('平板系列', finExpBlockAoa('系列', prod.famTablet, PB, true, null, 'pb-tablet'));
+    add('音频系列', finExpBlockAoa('系列', prod.famAudio, PB, true, null, 'pb-audio'));
+    add('LV4产品',  finExpBlockAoa('LV4 产品', prod.lv4, LV4, false, null, 'pb-lv4'));
   }
   if(rep && !rep.error){
-    add('国家办整体', finExpBlockAoa('国家办', rep.repTable, FIN_RB_KEYS, false, FIN_RB_COLS));
-    add('国家办×系列', finExpBlockAoa('产品系列', rep.repSeries, PB, true));
-    add('国家办LV4',  finExpBlockAoa('LV4 产品', rep.lv4, LV4, false));
+    add('国家办整体', finExpBlockAoa('国家办', rep.repTable, FIN_RB_KEYS, false, FIN_RB_COLS, 'rb-table'));
+    add('国家办×系列', finExpBlockAoa('产品系列', rep.repSeries, PB, true, null, 'rb-series'));
+    add('国家办LV4',  finExpBlockAoa('LV4 产品', rep.lv4, LV4, false, null, 'rb-lv4'));
   }
   if(cust && !cust.error){
     const metrics=(cust.metrics&&cust.metrics.length)?cust.metrics:fin.custom.metrics;
@@ -693,15 +793,15 @@ async function exportFinDashboardPpt(){
   const slides=[]; // [title, spec]
   const add=(title, spec)=>{ if(spec && spec.aoa && spec.aoa.length>1) slides.push([title, spec]); };
   if(prod && !prod.error){
-    add('产品线', finExpBlockAoa('产品线', prod.line, PB, false));
-    add('平板分系列', finExpBlockAoa('系列', prod.famTablet, PB, true));
-    add('音频分系列', finExpBlockAoa('系列', prod.famAudio, PB, true));
-    add('LV4 产品', finExpBlockAoa('LV4 产品', prod.lv4, LV4, false));
+    add('产品线', finExpBlockAoa('产品线', prod.line, PB, false, null, 'pb-line'));
+    add('平板分系列', finExpBlockAoa('系列', prod.famTablet, PB, true, null, 'pb-tablet'));
+    add('音频分系列', finExpBlockAoa('系列', prod.famAudio, PB, true, null, 'pb-audio'));
+    add('LV4 产品', finExpBlockAoa('LV4 产品', prod.lv4, LV4, false, null, 'pb-lv4'));
   }
   if(rep && !rep.error){
-    add('国家办整体', finExpBlockAoa('国家办', rep.repTable, FIN_RB_KEYS, false, FIN_RB_COLS));
-    add('国家办 × 产品系列', finExpBlockAoa('产品系列', rep.repSeries, PB, true));
-    add('国家办 · LV4 产品', finExpBlockAoa('LV4 产品', rep.lv4, LV4, false));
+    add('国家办整体', finExpBlockAoa('国家办', rep.repTable, FIN_RB_KEYS, false, FIN_RB_COLS, 'rb-table'));
+    add('国家办 × 产品系列', finExpBlockAoa('产品系列', rep.repSeries, PB, true, null, 'rb-series'));
+    add('国家办 · LV4 产品', finExpBlockAoa('LV4 产品', rep.lv4, LV4, false, null, 'rb-lv4'));
   }
   if(cust && !cust.error){
     const metrics=(cust.metrics&&cust.metrics.length)?cust.metrics:fin.custom.metrics;
@@ -736,7 +836,7 @@ async function exportFinDashboardPpt(){
 function finUnitSpec(d){
   if(!d) return null;
   return d.custom ? finExpCustomAoa(d.dimLabel, d.metrics, d.r)
-                  : finExpBlockAoa(d.firstLabel, d.block, d.colKeys, d.isSeries, d.colSrc);
+                  : finExpBlockAoa(d.firstLabel, d.block, d.colKeys, d.isSeries, d.colSrc, d.secId);
 }
 // 总看板单元 → worksheet：aoa_to_sheet 后按 formulaPlan 逐格设活公式(引用同行实际/去年/BP/预测列)。
 function finOverviewSheet(spec){
@@ -911,6 +1011,7 @@ async function renderCustom(){
       '<div id="finCustomChart" style="height:320px"></div>';
     finCustBindSelectors();
     finBindUnitExp(host);
+  finBindRowCtl(host);
   }
   const r=await api.financeCustom(finCustomParams()); fin.cust=r;
   // 登记自定义表导出单元(build 闭包读取当前 fin.cust;指标/维度回退与表渲染一致)。

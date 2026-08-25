@@ -68,8 +68,20 @@ function repSetHidden(arr){ const all=repHiddenAll(); if(arr&&arr.length) all[re
   try{ localStorage.setItem(REP_HIDE_LS,JSON.stringify(all)); }catch(e){} }
 function repHideRow(key){ repSetHidden(repRH().add(repHiddenList(),key)); }
 function repUnhideRow(key){ repSetHidden(repRH().remove(repHiddenList(),key)); }
-// 可见行 = 排序后剔除已隐藏；界面/Excel/PPT 三个出口统一走这里
-function repVisibleRows(rows,cols){ return repRH().visible(repSortRows(rows,cols),repHiddenList()); }
+/* ---- 行自定义顺序(用户 2026-08-24):拖拽后按拆分维度持久化;新行 append 尾部必显示 ---- */
+const REP_ORDER_LS='sb.rep.roworder';
+function repRO(){ return (typeof window!=='undefined'&&window.RowOrder)?window.RowOrder:require('../row-order-core.js'); }
+function repOrderAll(){ try{ return JSON.parse(localStorage.getItem(REP_ORDER_LS))||{}; }catch(e){ return {}; } }
+function repOrderGet(){ return repOrderAll()[rep.dim]||[]; }
+function repOrderSet(arr){ const all=repOrderAll(); if(arr&&arr.length) all[rep.dim]=arr; else delete all[rep.dim];
+  try{ localStorage.setItem(REP_ORDER_LS,JSON.stringify(all)); }catch(e){} }
+// 可见行 = 排序后剔除已隐藏,再按自定义序重排；界面/Excel/PPT 三个出口统一走这里
+function repVisibleRows(rows,cols){
+  let out=repRH().visible(repSortRows(rows,cols),repHiddenList());
+  const saved=repOrderGet();
+  if(saved.length){ const km={}; out.forEach(o=>{ km[o.key]=o; }); out=repRO().apply(out.map(o=>o.key),saved).map(k=>km[k]); }
+  return out;
+}
 
 /* 「已隐藏 N 行 ▾」入口 + 恢复面板（对应国家看板卡片头上的同名 chip） */
 function ensureRepHideUI(){
@@ -84,23 +96,31 @@ function ensureRepHideUI(){
   $('#repHideChip').onclick=toggleRepHidePanel;
   syncRepHideUI();
 }
+function repAllKeys(){
+  const rows=(rep.last&&rep.last.rows)||[];
+  const ks=rows.map(o=>o.key);
+  repHiddenList().forEach(k=>{ if(ks.indexOf(k)<0) ks.push(k); });
+  return ks;
+}
 function syncRepHideUI(){
-  const b=$('#repHideChip'); if(!b) return; const n=repRH().count(repHiddenList());
-  const fld=$('#repHideFld'); if(fld) fld.style.display=n?'':'none';       // 没有隐藏行时整个字段不占位
-  b.textContent='已隐藏 '+n+' 行 ▾';
-  if(!n){ const p=$('#repHidePanel'); if(p) p.remove(); }
+  const b=$('#repHideChip'); if(!b) return;
+  // 常驻(用户 2026-08-24:没隐藏行时也要看得见入口)——「行 n/N ▾」,面板勾选式
+  const n=repRH().count(repHiddenList()), all=repAllKeys().length;
+  const fld=$('#repHideFld'); if(fld) fld.style.display='';
+  b.textContent='行 '+(all-n)+'/'+all+' ▾';
 }
 function toggleRepHidePanel(){
   let p=$('#repHidePanel'); if(p){ p.remove(); return; }
   const fld=$('#repHideFld'); if(!fld) return;
   p=document.createElement('div'); p.id='repHidePanel';
   p.style.cssText='position:absolute;top:100%;left:0;z-index:60;background:var(--c-bg-elev);border:1px solid var(--c-line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:8px 10px;max-height:260px;overflow:auto;min-width:200px';
-  repHiddenList().forEach(k=>{
-    const line=document.createElement('div'); line.style.cssText='display:flex;align-items:center;gap:10px;padding:2px 0;font-size:12px;color:var(--c-ink-1)';
+  const hid0=repHiddenList();
+  repAllKeys().forEach(k=>{
+    const line=document.createElement('label'); line.style.cssText='display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12px;color:var(--c-ink-1);cursor:pointer';
+    const ck=document.createElement('input'); ck.type='checkbox'; ck.checked=hid0.indexOf(k)<0;
+    ck.onchange=()=>{ if(ck.checked) repUnhideRow(k); else repHideRow(k); renderReportTable(); };
     const nm=document.createElement('span'); nm.textContent=k; nm.style.flex='1';
-    const btn=document.createElement('button'); btn.textContent='恢复'; btn.className='btn'; btn.style.cssText='padding:1px 8px;font-size:11px';
-    btn.onclick=()=>{ repUnhideRow(k); renderReportTable(); const q=$('#repHidePanel'); if(q) q.remove(); if(repRH().count(repHiddenList())) toggleRepHidePanel(); };
-    line.appendChild(nm); line.appendChild(btn); p.appendChild(line);
+    line.appendChild(ck); line.appendChild(nm); p.appendChild(line);
   });
   const all=document.createElement('button'); all.textContent='全部恢复'; all.className='btn'; all.style.cssText='margin-top:6px;padding:2px 10px;font-size:11px;width:100%';
   all.onclick=()=>{ repSetHidden([]); renderReportTable(); const q=$('#repHidePanel'); if(q) q.remove(); };
@@ -166,11 +186,29 @@ function renderReportTable(){
   // 行首「隐藏」按钮列：纯界面元素，不进任何导出；✕ 默认透明，hover 到该行才显现(CSS .row-hide-btn)
   const thead='<tr><th style="width:20px"></th>'+cols.map(c=>`<th data-k="${c.key}" class="${rep.custom?'sortable':''}${c.sep?' col-sep':''}${c.wk?' wk':''}"${rep.custom?' title="点击按此列排序（再点切换升↔降）"':''}>${c.label}${TS.arrow(c.key,st)}</th>`).join('')+'</tr>';
   const rows=repVisibleRows(r.rows,cols);
-  const hideTd=o=>`<td><button class="cb-hide-btn row-hide-btn" data-hiderow="${encodeURIComponent(o.key)}" title="隐藏此行（不影响合计，可在上方「已隐藏行」恢复）" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;line-height:1;padding:0 3px">✕</button></td>`;
-  const rowHtml=(o,cls)=>'<tr class="'+(cls||'')+'">'+(cls==='total'?'<td></td>':hideTd(o))+cols.map(c=>`<td class="${c.left?'':''}${c.sep?' col-sep':''}${c.wk?' wk':''}">${c.cell(o)}</td>`).join('')+'</tr>';
+  const hideTd=o=>`<td style="white-space:nowrap"><button class="cb-hide-btn row-hide-btn" data-hiderow="${encodeURIComponent(o.key)}" title="隐藏此行（不影响合计，上方「行」chip 可恢复）" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;line-height:1;padding:0 3px">✕</button><span style="cursor:grab;color:var(--c-ink-3);font-size:10px" title="按住整行拖动调顺序(会记住)">⠿</span></td>`;
+  const rowHtml=(o,cls)=>'<tr class="'+(cls||'')+'"'+(cls==='total'?'':' draggable="true" data-rowkey="'+encodeURIComponent(o.key)+'"')+'>'+(cls==='total'?'<td></td>':hideTd(o))+cols.map(c=>`<td class="${c.left?'':''}${c.sep?' col-sep':''}${c.wk?' wk':''}">${c.cell(o)}</td>`).join('')+'</tr>';
   const tbl=$('#repTable'); if(tbl&&tbl.classList) tbl.classList.add('has-hidecol');   // 让维度名列继续钉住左侧（✕ 列不抢 first-child 的 sticky）
   tbl.innerHTML=thead+rows.map(o=>rowHtml(o)).join('')+(r.total?rowHtml(r.total,'total'):'');
   syncRepHideUI();
+  // 整行拖拽:drop 时以当前显示序为基础移动整体存档
+  (function(){
+    let drag=null;
+    tbl.querySelectorAll('tr[data-rowkey]').forEach(tr=>{
+      tr.ondragstart=e=>{ drag=tr.dataset.rowkey; try{ e.dataTransfer.effectAllowed='move'; }catch(_){ } };
+      tr.ondragover=e=>e.preventDefault();
+      tr.ondrop=e=>{
+        e.preventDefault();
+        if(drag==null) return;
+        const keys=[...tbl.querySelectorAll('tr[data-rowkey]')].map(x=>x.dataset.rowkey);
+        const from=keys.indexOf(drag), to=keys.indexOf(tr.dataset.rowkey);
+        drag=null;
+        if(from<0||to<0||from===to) return;
+        repOrderSet(repRO().move(keys,from,to).map(decodeURIComponent));
+        renderReportTable(); repStateSave&&repStateSave();
+      };
+    });
+  })();
   if(rep.custom) $$('#repTable th.sortable').forEach(th=>th.onclick=()=>{ const k=th.dataset.k;
     const nx=TS.nextSort({key:rep.sortKey,dir:rep.sortDir},k,TS.findCol(cols,k));
     rep.sortKey=nx.key; rep.sortDir=nx.dir; renderReportTable(); repStateSave(); });
@@ -201,8 +239,8 @@ async function exportRepXlsx(){
   const nz=v=>v==null||!isFinite(v)?'':v;
   const line=o=>[o.key,nz(o.cumCur),nz(o.cumPrev),nz(o.yoy),nz(o.siCur),nz(o.siPrev),nz(o.siYoy)].concat(o.weekly).concat([pc(o.wow),o.inv,o.dos,fv(o.flowInv),fv(o.flowDos),fv(o.dcfdc)]);
   const dataRowIdxs=[];
-  // 只剔除已隐藏行，不改导出的行顺序（导出一直是引擎序，本次不动）
-  repRH().visible(r.rows,repHiddenList()).forEach(o=>{ dataRowIdxs.push(aoa.length); aoa.push(line(o)); });
+  // 导出与界面同序同筛(用户 2026-08-24:拖拽序+隐藏,所见即所出)
+  repVisibleRows(r.rows,repColumns(r)).forEach(o=>{ dataRowIdxs.push(aoa.length); aoa.push(line(o)); });
   if(r.total){ dataRowIdxs.push(aoa.length); aoa.push(line(r.total)); }
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   const C=window.FinCalc, EU=window.ExportUtil;
@@ -231,7 +269,7 @@ async function exportRepPpt(){
     row.push(pctCellPpt(o.wow,tot),cell(num(o.inv),{bold:!!tot}),cell(num(o.dos),{bold:!!tot}));
     return row;
   };
-  repRH().visible(r.rows,repHiddenList()).forEach(o=>rowsArr.push(mkrow(o)));   // 已隐藏行不进 PPT；顺序不变
+  repVisibleRows(r.rows,repColumns(r)).forEach(o=>rowsArr.push(mkrow(o)));   // PPT 与界面同序同筛
   if(r.total)rowsArr.push(mkrow(r.total,true));
   s.addTable(rowsArr,{x:0.3,y:0.8,w:12.7,border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true});
   const b64=await pptx.write('base64');

@@ -112,8 +112,10 @@ ok('R5-27 M5 vs 国家看板:同参调用 rows 逐行逐字段严格相等(差�
 const totBad5 = CMP5.filter(k => !eq5(rCb5.total[k], rAu5.total[k]));
 ok('R5-28 M5 vs 国家看板:同参调用 total 逐字段严格相等(含 last4/hasAu,差异:' + (totBad5.join(',') || '无') + ')', totBad5.length === 0);
 // 调用参数名集合也要一致(改了 weeks/fromW/toW 任何一个都会红)
-const argNames5 = src => { const m = /api\.report\(\{([^}]*)\}/.exec(src); if (!m) return []; const out = [], re = /(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:/g; let x; while ((x = re.exec(m[1]))) out.push(x[1]); return out.sort(); };
-const aCb5 = argNames5(srcCb5), aAu5 = argNames5(srcAu5);
+// 2026-08-24:audio-view 新增了周号锚点的 api.report(3参),全文第一个不再是 M5 的调用——
+// 锚定到两侧真正要对齐的函数体内再抓,别抓到别人头上
+const argNames5 = (src, anchor) => { const i0 = anchor ? Math.max(0, src.indexOf(anchor)) : 0; const m = /api\.report\(\{([^}]*)\}/.exec(src.slice(i0)); if (!m) return []; const out = [], re = /(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:/g; let x; while ((x = re.exec(m[1]))) out.push(x[1]); return out.sort(); };
+const aCb5 = argNames5(srcCb5, 'function drawCountryBoard'), aAu5 = argNames5(srcAu5, 'async function renderAuCountryImpl');
 ok('R5-29 两侧 api.report 调用参数名集合一致[' + aAu5.join(',') + ']', aCb5.length === 5 && aCb5.join(',') === aAu5.join(','));
 
 /* ---------- M5 vs PSI 看板:累计SO/SI == query 在自然年区间内各桶求和 ----------

@@ -611,11 +611,11 @@ if (typeof window !== 'undefined') (function () {
 
   window.auBuildWeeklyModel = function () {
     const D = (typeof auLoad === 'function') ? auLoad() : {};
-    const iso = isoWeekOf(new Date());
+    const rw = (typeof auReportWeekInfo === 'function') ? auReportWeekInfo() : AudioWeekly.reportWeek();   // 周号=min(日历上一周,数据W_last)
     const lab = auIndustryLabel();
     const V = window.__appVer || null;
     const model = {
-      week: iso[0] + '-W' + iso[1], dateStr: todayStr(),
+      week: rw.year + '-' + rw.label, dateStr: todayStr(),
       industry: auIndustryKey(), industryLabel: lab,
       version: V && V.version ? ('v' + V.version) : '', builtAt: (V && V.builtAt) || '',
       genTime: new Date().toTimeString().slice(0, 5),
@@ -628,8 +628,7 @@ if (typeof window !== 'undefined') (function () {
     if (fam) {
       const cols = AU_FIN_COLS;
       const mk = (block, first, isSeries) => {
-        let rows = (block.rows || []).slice();
-        if (isSeries) rows.sort((a, b) => { const ra = seriesRank(a.key), rb = seriesRank(b.key); return ra !== rb ? ra - rb : ((b.rev26 || 0) - (a.rev26 || 0)); });
+        const rows = (typeof auFinRows === 'function') ? auFinRows(block, isSeries) : (block.rows || []).slice();
         const all = block.total ? [block.total].concat(rows) : rows;
         return { header: [first].concat(cols.map(c => c.label)), rows: all.map(o => [o.key].concat(cols.map(c => strip(c.fmt(o))))), totalIdx: block.total ? 0 : null };
       };
@@ -743,10 +742,9 @@ if (typeof window !== 'undefined') (function () {
     const ki = cols.findIndex(c => c.key === 'key');
     if (ki >= 0) cols[ki].label = firstLabel || cols[ki].label;
     const skuLevel = (dim === 'product' || dim === 'model');
-    /* 界面上筛掉/隐藏的行,导出也要剔除——用户按国家保存的「产品版本」就是要发出去的版本。
-       此前只有屏幕过滤,.eml/PDF 里隐藏行照印(合计仍是引擎全量,口径不动)。 */
+    /* 界面上筛掉/隐藏/拖拽排序的行,导出完全跟随——所见即所发(合计仍是引擎全量,口径不动) */
     let srcRows = auCbSortRows(r, cols);
-    if (hkey && typeof auRH === 'function') srcRows = auRH().visible(srcRows, auHiddenListK(hkey));
+    if (hkey && typeof auRowsPipeline === 'function') srcRows = auRowsPipeline(srcRows, hkey);
     const rows = srcRows.map(o => cols.map(c => (c.totalOnly && skuLevel) ? '—' : strip(c.cell(o)).replace(/\s+/g, ' ')));
     if (r.total) rows.push(cols.map(c => c.key === 'key' ? '合计' : (c.key === '__line' ? '' : strip(c.cell(r.total)))));
     return { header: cols.map(c => c.label), rows: rows, hasTotal: !!r.total };
@@ -758,8 +756,8 @@ if (typeof window !== 'undefined') (function () {
     const WCp = window.WeeklyChips;
     const lab = auIndustryLabel();
     const V = window.__appVer || null;
-    const iso = isoWeekOf(new Date());
-    const wk = (typeof auWeekShort === 'function') ? auWeekShort() : ('W' + iso[1]);
+    const rw = (typeof auReportWeekInfo === 'function') ? auReportWeekInfo() : AudioWeekly.reportWeek();   // 周号=min(日历上一周,数据W_last)
+    const wk = rw.label;
     const tpl = t => (typeof auTplResolve === 'function') ? auTplResolve(t) : String(t || '');
     const G = D.greet || {};
     const doc = k => {
@@ -767,7 +765,7 @@ if (typeof window !== 'undefined') (function () {
       return d ? WCp.resolveDoc(d, ctx) : '';
     };
     const model = {
-      week: iso[0] + '-' + wk, weekShort: wk, dateStr: todayStr(),
+      week: rw.year + '-' + wk, weekShort: wk, dateStr: todayStr(),
       industry: auIndustryKey(), industryLabel: lab,
       version: V && V.version ? ('v' + V.version) : '', builtAt: (V && V.builtAt) || '',
       genTime: new Date().toTimeString().slice(0, 5),
@@ -783,8 +781,7 @@ if (typeof window !== 'undefined') (function () {
       model.finTitle = '全年达成进度（产业经营）-月度刷新-' + pb.curYear + '-' + String(pb.toM).padStart(2, '0') + '（预测为' + (pb.version || '—') + '）';
       const cols = AU_FIN_COLS;
       const mk = (block, first, isSeries) => {
-        let rows = (block.rows || []).slice();
-        if (isSeries) rows.sort((a, b) => { const ra = seriesRank(a.key), rb = seriesRank(b.key); return ra !== rb ? ra - rb : ((b.rev26 || 0) - (a.rev26 || 0)); });
+        const rows = (typeof auFinRows === 'function') ? auFinRows(block, isSeries) : (block.rows || []).slice();
         const all = block.total ? [block.total].concat(rows) : rows;
         return { header: [first].concat(cols.map(c => c.label)), rows: all.map(o => [o.key].concat(cols.map(c => strip(c.fmt(o))))), totalIdx: block.total ? 0 : null };
       };

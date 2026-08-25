@@ -49,5 +49,30 @@
     return { rows, total };
   }
 
-  return { timeProgress, defaultPick, bountyRows, DEFAULT_RE };
+  /* 周报的「当前周号」= **上一整周**(用户 2026-08-24:本周数据还没出来,周报写的是上周复盘)。
+     取法:今天回退 7 天所在的 ISO 周——天然处理跨年(1月首周回退到上年 W52/W53)。
+     返回 {year, week, label:'W34', full:'2026-W34'}。now 可注入,便于测边界。 */
+  function reportWeek(now) {
+    const d = now ? new Date(now) : new Date();
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() - 7));
+    const dn = t.getUTCDay() || 7;
+    t.setUTCDate(t.getUTCDate() + 4 - dn);
+    const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    const wk = Math.ceil(((t - y0) / 86400000 + 1) / 7);
+    const label = 'W' + String(wk).padStart(2, '0');
+    return { year: t.getUTCFullYear(), week: wk, label: label, full: t.getUTCFullYear() + '-' + label };
+  }
+
+  /* 周号钳制(用户 2026-08-24 补充):音频人工延迟报量,数据可能停在上周甚至上上周——
+     周号 = min(日历上一周, 数据最后有 SO 的周)。数据侧比日历早就用数据的(音频常态),
+     数据侧≥日历(平板当周已有数)仍用日历上一周(本周不完整,不报)。跨年按 (year,week) 比。 */
+  function clampReportWeek(cal, dataYear, dataWeek) {
+    if (dataYear && dataWeek && (dataYear < cal.year || (dataYear === cal.year && dataWeek < cal.week))) {
+      const label = 'W' + String(dataWeek).padStart(2, '0');
+      return { year: dataYear, week: dataWeek, label: label, full: dataYear + '-' + label, src: 'data' };
+    }
+    return { year: cal.year, week: cal.week, label: cal.label, full: cal.full, src: 'cal' };
+  }
+
+  return { timeProgress, defaultPick, bountyRows, DEFAULT_RE, reportWeek, clampReportWeek };
 });

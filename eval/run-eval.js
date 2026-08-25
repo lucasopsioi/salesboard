@@ -8,6 +8,7 @@
      node eval/run-eval.js --dry                 # 干跑：假模型走通全链路（不调LLM，验证管道）
      node eval/run-eval.js                       # 默认打 LM Studio http://localhost:1234/v1
      node eval/run-eval.js --base https://api.minimaxi.com/v1 --key $KEY --model MiniMax-Text-01
+     node eval/run-eval.js --gguf "<路径>.gguf"   # 全本地：node-llama-cpp 直读模型，无需任何服务
      node eval/run-eval.js --only C1,C5-01       # 只跑某组/某题
      node eval/run-eval.js --summarize eval/runs/run-xxx.json   # 人工复核后重算汇总
 
@@ -29,6 +30,7 @@ const has = (name) => argv.indexOf('--' + name) >= 0;
 const BASE = (arg('base', 'http://localhost:1234/v1') || '').replace(/\/$/, '');
 const KEY = arg('key', process.env.EVAL_API_KEY || '');
 const DRY = has('dry');
+const GGUF = arg('gguf', '');   // 本地 .gguf 路径：不走 HTTP，直接 node-llama-cpp（与主程序 aiChatLocal 同一条路）
 const ONLY = (arg('only', '') || '').split(',').map(s => s.trim()).filter(Boolean);
 const SUMMARIZE = arg('summarize', null);
 
@@ -39,7 +41,10 @@ const MARK = { full: 'PASS 完全正确', partial: 'HALF 部分正确', harmless
 const NUM_RE = /-?\d[\d,]*(?:\.\d+)?/g;
 const REFUSE_RE = /没有|未包含|不包含|查不到|无法|不能提供|数据未|不支持|无此/;
 function nums(text) {
-  return (String(text || '').match(NUM_RE) || []).map(s => parseFloat(s.replace(/,/g, ''))).filter(n => isFinite(n));
+  const raw = (String(text || '').match(NUM_RE) || []).map(s => parseFloat(s.replace(/,/g, ''))).filter(n => isFinite(n));
+  // 过滤日期噪声：1..31 的小整数（日/月/序号）与 1900..2100 的年份——否则「2026年1月」会被当成作答数值，
+  // 把诚实的"未查到"误判成编数红线（首次冒烟实测踩到）。出题时期望值别落在这两个区间。
+  return raw.filter(n => !(Number.isInteger(n) && ((n >= 0 && n <= 31) || (n >= 1900 && n <= 2100))));
 }
 function grade(q, answer, res) {
   const t = String(answer || '');
@@ -116,6 +121,7 @@ function printSummary(s, label) {
 /* ---------------- LLM 适配（OpenAI 兼容） ---------------- */
 let MODEL = arg('model', '');
 async function resolveModel() {
+  if (GGUF) { MODEL = 'local-gguf:' + path.basename(GGUF); return; }
   if (MODEL || DRY) return;
   const r = await fetch(BASE + '/models', { headers: KEY ? { authorization: 'Bearer ' + KEY } : {} });
   if (!r.ok) throw new Error('取模型列表失败 HTTP ' + r.status + '（LM Studio 没开？或用 --model 指定）');
@@ -145,6 +151,76 @@ async function httpChat(req) {
   } catch (e) { return { error: String((e && e.message) || e) }; }
 }
 /* 干跑假模型：首轮要一次 meta 工具（验证 runTool/校验链路），次轮给结论 */
+/* ---------------- 本地 GGUF 适配：node-llama-cpp（照主程序 aiChatLocal 的写法） ----------------
+   工具走 JSON 回退协议：把工具说明书渲染进 system，模型输出 {"tool":..,"args":{}}，
+   由 orchestrator 的 deps.parseToolCall（AD.parseToolCall）解析——与云端原生 tools 同一条编排链路。 */
+function toolPromptFromSpecs(tools) {
+  if (!tools || !tools.length) return '';
+  const lines = tools.map(t => {
+    const f = t.function || {};
+    const props = (f.parameters && f.parameters.properties) || {};
+    const req = (f.parameters && f.parameters.required) || [];
+    const ps = Object.keys(props).map(k => {
+      const en = props[k] && props[k].enum ? '，取值:' + props[k].enum.slice(0, 12).join('/') : '';
+      return k + '(' + (req.indexOf(k) >= 0 ? '必填' : '可选') + en + ')';
+    }).join(', ');
+    return '- ' + f.name + '：' + (f.description || '') + (ps ? '  参数: ' + ps : '');
+  });
+  return '\n\n【工具调用协议】需要取数时，只输出一个 JSON 且不要任何其他文字：{"tool":"工具名","args":{...}}\n可用工具：\n'
+    + lines.join('\n')
+    + '\n收到「[工具 X 返回]」后基于返回继续；数据足够时直接给结论（结论中不要再输出工具 JSON）。';
+}
+function makeGgufChat(modelPath) {
+  const st = { mod: null, llama: null, model: null, loading: null };
+  async function ensure() {
+    if (st.model) return;
+    if (!st.loading) st.loading = (async () => {
+      st.mod = await import('node-llama-cpp');
+      st.llama = await st.mod.getLlama();
+      console.log('加载本地模型（18.5GB，首次需数分钟）: ' + modelPath);
+      try {
+        st.model = await st.llama.loadModel({ modelPath });
+      } catch (e) {
+        // 与主程序 ensureLocalModel 相同的兜底：30B-A3B 塞不进显存时 Vulkan 分配失败 → 纯 CPU 重载
+        console.log('GPU 后端装不下（' + String((e && e.message) || e).slice(0, 80) + '）→ 回退纯 CPU 重载…');
+        const cpu = await st.mod.getLlama({ gpu: false });
+        st.model = await cpu.loadModel({ modelPath });
+        st.llama = cpu;
+      }
+      console.log('模型加载完成（后端: ' + (st.llama.gpu || 'cpu') + '）');
+    })();
+    await st.loading;
+  }
+  return async function ggufChat(req) {
+    try {
+      await ensure();
+      const { LlamaChatSession } = st.mod;
+      const system = String(req.system || '') + toolPromptFromSpecs(req.tools);
+      const msgs = (req.messages || []).slice();
+      let lastUser = '（空）';
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i] && msgs[i].role === 'user') { lastUser = String(msgs[i].content || ''); msgs.splice(i, 1); break; }
+      }
+      // 8192：与主程序一致，给口径卡+工具说明+快照留足；每请求独立 context，用完即弃
+      const context = await st.model.createContext({ contextSize: 8192 });
+      try {
+        const session = new LlamaChatSession({ contextSequence: context.getSequence(), systemPrompt: system });
+        if (msgs.length) {
+          const history = [{ type: 'system', text: system }];
+          for (const m of msgs) {
+            if (!m || m.content == null) continue;
+            if (m.role === 'user') history.push({ type: 'user', text: String(m.content) });
+            else if (m.role === 'assistant') history.push({ type: 'model', response: [String(m.content)] });
+          }
+          try { session.setChatHistory(history); } catch (e) {}
+        }
+        const answer = await session.prompt(lastUser, { maxTokens: req.maxTokens || 800, temperature: 0.1 });
+        return { content: String(answer || '') };
+      } finally { try { await context.dispose(); } catch (e) {} }
+    } catch (e) { return { error: String((e && e.message) || e) }; }
+  };
+}
+
 function dryChat(req) {
   const seenTool = (req.messages || []).some(m => String(m.content || '').indexOf('[工具') >= 0);
   if (!seenTool && req.tools && req.tools.length) {
@@ -172,6 +248,7 @@ function asciiJson(obj) {
   const registry = buildRegistry(engine);
   await resolveModel();
   if (!DRY) console.log('模型: ' + MODEL);
+  const CHAT = DRY ? dryChat : (GGUF ? makeGgufChat(GGUF) : httpChat);
 
   const toolStats = { calls: 0, errors: 0 };
   const records = [];
@@ -179,7 +256,7 @@ function asciiJson(obj) {
   for (const q of qs) {
     const toolLog = [];
     const deps = {
-      chat: DRY ? dryChat : httpChat,
+      chat: CHAT,
       runTool: async (n, a) => {
         toolStats.calls++;
         const fn = registry[n];

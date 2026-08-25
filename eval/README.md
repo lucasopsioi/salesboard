@@ -8,8 +8,10 @@
 ```
 node eval/ground-truth.js        # ① 真值核对：题库 vs 引擎（应全 OK）
 node eval/run-eval.js --dry      # ② 干跑：假模型走通全链路，不调 LLM
-node eval/run-eval.js            # ③ 真跑：默认打 LM Studio localhost:1234（先启动并载入模型）
-node eval/run-eval.js --base <url> --key <key> --model <id>   # 云端（OpenAI 兼容）
+node eval/run-eval.js --gguf "D:\workspace\Salesboard LLM版\models\Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf"
+                                 # ③ 真跑·全本地：node-llama-cpp 直读 GGUF（与主程序同一条推理路），什么都不用装
+node eval/run-eval.js            # ③' 或打 LM Studio localhost:1234（OpenAI 兼容服务）
+node eval/run-eval.js --base <url> --key <key> --model <id>   # ③'' 或云端（OpenAI 兼容）
 node eval/run-eval.js --only C1,C5-01    # 只跑某组/某题
 ```
 

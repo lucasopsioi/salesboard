@@ -715,6 +715,30 @@ async function init(){
           }finally{ auSetHidden(v0,keep);auRepaintCbCard(v0); }
         }
         weeklyV3.hideE2E=hideE2E;
+        // ---- 行序 E2E(用户 2026-08-24):拖拽序持久化+导出跟随;财经表筛选chip在位;周号=钳制口径 ----
+        try{
+          const hk=auHKey('M2','family'); const keepOrd=auOrderGet(hk).slice();
+          const tb2=()=>[...document.querySelectorAll('#auSecFamily [data-tbl] tbody tr[data-rowkey]')].map(x=>decodeURIComponent(x.dataset.rowkey));
+          const before=tb2();
+          let ordE2E=null;
+          if(before.length>=2){
+            auOrderSet(hk,[before[1],before[0]].concat(before.slice(2)));
+            auTrack('fam',renderAuDim('family')); await auEnsureWeeklyData();
+            const after=tb2();
+            let expFollows=false;
+            try{ const vm=auBuildWeeklyV3Model(); const t=vm.sales.family&&vm.sales.family.table;
+              expFollows=!!(t&&t.rows.length&&String(t.rows[0][0])===before[1]); }catch(e2){}
+            ordE2E={swapped:after[0]===before[1]&&after[1]===before[0],expFollows,ok:false};
+            ordE2E.ok=ordE2E.swapped&&ordE2E.expFollows;
+            auOrderSet(hk,keepOrd);
+            auTrack('fam',renderAuDim('family')); await auEnsureWeeklyData();
+          }
+          weeklyV3.orderE2E=ordE2E;
+          weeklyV3.finPick=document.querySelectorAll('#auSecFin [data-finpick]').length;
+          weeklyV3.week=(typeof auReportWeekInfo==='function')?auReportWeekInfo():null;
+          if(ordE2E&&!ordE2E.ok) weeklyV3.ok=false;
+          if(weeklyV3.finPick<1) weeklyV3.ok=false;
+        }catch(e2){ weeklyV3.orderE2E={ok:false,err:String(e2&&e2.message||e2)}; weeklyV3.ok=false; }
         // ---- famRep 口径纯度:界面缓存必须与「带产业过滤的直查」同数——首屏竞态(探测前发查询)会在这翻车 ----
         try{
           const wk2=auW.dimWk.family;
@@ -724,12 +748,14 @@ async function init(){
         }catch(e2){weeklyV3.famPure=false;}
         // ---- M2 筛选面板 E2E:去勾一行表要少一行,勾回来要还原(用户 2026-08-24:筛了下面不变) ----
         try{
-          const famChip=famBar?famBar.querySelector('[data-pick]'):null;
+          // orderE2E 在前面重建过 #auSecFamily 的 DOM,famBar 是旧引用 → 重新取
+          const famBar2=document.querySelector('#auSecFamily [data-bar]');
+          const famChip=famBar2?famBar2.querySelector('[data-pick]'):null;
           if(famChip){
             const hk=auHKey('M2','family'); const keep2=auHiddenListK(hk).slice();
             const tb=()=>document.querySelectorAll('#auSecFamily [data-tbl] tbody tr').length;
             famChip.click();
-            const pan=famBar.querySelector('.au-pick-panel');
+            const pan=famBar2.querySelector('.au-pick-panel');
             const cb0=pan?pan.querySelector('input'):null;
             const n0=tb();
             if(cb0){cb0.checked=false;cb0.dispatchEvent(new Event('change'));}

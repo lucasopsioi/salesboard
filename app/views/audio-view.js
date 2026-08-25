@@ -27,6 +27,8 @@ const auW = {
   //   经营模块整段消失且被 auTrack 静默——注释永远独占一行。
   finToM: 0, finUnit: 'MUSD', finDp: 1, finLv1: {}, finDims: null, finLv3Opts: {}, finLv3Sel: [], finRepSel: [], finPb: null, finRb: null,
   cb: { dim: 'product', weeks: 9, fromW: null, toW: null }, cbLast: [], cbZoom: 1, token: 0,
+  // 周号锚点:产业全量数据「最后有 SO 的周」(不受 M4 临时筛选影响);boot 时算,切产业清
+  weekAnchor: null,
   // M2 系列/国家办表各自的周范围(独立于 M5 的 cb;用户 2026-08-24:这俩表没法选周数)
   dimWk: { family: { weeks: 9, fromW: null, toW: null }, repOffice: { weeks: 9, fromW: null, toW: null } },
   indDim: {}, prodOpts: [], modelOpts: [], ctryOpts: [],
@@ -224,6 +226,7 @@ function auSwitchIndustry(key) {
   if (key === auW.industry || !AU_INDS.some(o => o.key === key)) return;
   auW.industry = key;
   auW.finPb = null; auW.finRb = null; auW.prodOpts = []; auW.modelOpts = [];
+  auW.weekAnchor = null;   // 周号锚点按产业算,切产业后 boot 重算
   // M2/M3 里挂着旧产业的取值 → 一并清,否则「切到平板还筛着音频系列」会取空
   auW.finLv3Sel = []; auW.finRepSel = [];
   const B = auLoad().bounty;
@@ -334,6 +337,9 @@ function renderAudio() {
      M4(renderAuInd)自带产业种子逻辑,不吃 auLineFilter,留在闸外无妨,一并放里面求稳。 */
   auTrack('boot', (async () => {
     await auDetectIndustryDim(auW.industry);
+    await auCalcWeekAnchor();          // 周号锚点(音频延迟报量 → 周号落数据末周)
+    renderAuGreet(); renderAuMail();   // 问候/主题里的 {week} 用锚点后的周号重画
+
     /* M4 必须先跑完:它的筛选栏渲染会**清洗存档里当前产业下取不到的残留值**
        (比如音频页签挂着平板的 Slate SE)。M2/M5 现在吃 M4 的范围筛选,
        若并行会拿到未清洗的残留,整章取空(2026-08-24 selftest 抓到的就是这形态)。 */
@@ -349,14 +355,31 @@ function renderAudio() {
 }
 
 /* ---------- v3 模板令牌：{week}=W周号、{产业}=音频/平板 ---------- */
-function auWeekShort() {
-  const d = new Date();
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dn = t.getUTCDay() || 7;
-  t.setUTCDate(t.getUTCDate() + 4 - dn);
-  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-  return 'W' + String(Math.ceil(((t - y0) / 86400000 + 1) / 7)).padStart(2, '0');
+/* 周报周号 = min(日历上一周, 产业数据 W_last)。日历口径在 AudioWeekly.reportWeek,
+   钳制在 clampReportWeek;数据锚点 auW.weekAnchor 由 boot 算(auCalcWeekAnchor)。
+   音频延迟报量时自动落到上周/上上周(用户 2026-08-24 两次指正)。 */
+function auReportWeekInfo() {
+  const cal = AudioWeekly.reportWeek();
+  const d = auW.weekAnchor;
+  return AudioWeekly.clampReportWeek(cal, d && d.year, d && d.week);
 }
+async function auCalcWeekAnchor() {
+  auW.weekAnchor = null;
+  try {
+    const r = await api.report({ groupDim: 'line', weeks: 6, filters: Object.assign({}, auLineFilter()) });
+    const t = r && r.total;
+    if (t && Array.isArray(t.weekly) && Array.isArray(r.weekLabels)) {
+      for (let i = t.weekly.length - 1; i >= 0; i--) {
+        if (+t.weekly[i] > 0) {
+          auW.weekAnchor = { year: r.curYear, week: +String(r.weekLabels[i]).replace(/\D/g, '') };
+          break;
+        }
+      }
+    }
+  } catch (e) { }
+}
+function auWeekShort() { return auReportWeekInfo().label; }
+if (typeof window !== 'undefined') window.auReportWeekInfo = auReportWeekInfo;
 function auTplResolve(tpl) {
   return String(tpl == null ? '' : tpl).split('{week}').join(auWeekShort()).split('{产业}').join(auIndustryLabel());
 }
@@ -495,6 +518,7 @@ async function renderAuDim(dim) {
       auSetHiddenK(hkey, auRH().add(auHiddenListK(hkey), decodeURIComponent(bt.dataset.hiderow)));
       paintTable(); syncChip();
     });
+    auBindRowDrag(tHost, hkey, paintTable);
   };
   chip.onclick = () => auPickPanel(chip.parentElement, chip, allKeys, hkey, () => { paintTable(); syncChip(); });
   paintTable(); syncChip();
@@ -505,10 +529,10 @@ function auDimTableHtml(firstLabel, r, dim, hkey) {
   const ki = cols.findIndex(function (c) { return c.key === 'key'; });
   if (ki >= 0) cols[ki].label = firstLabel;
   let rows = auCbSortRows(r, cols);
-  if (hkey) rows = auRH().visible(rows, auHiddenListK(hkey));   // 只影响显示行;合计仍是全量
+  if (hkey) rows = auRowsPipeline(rows, hkey);   // 隐藏+自定义序,只影响显示行;合计仍是全量
   const hideTd = o => '<td><button class="row-hide-btn" data-hiderow="' + encodeURIComponent(o.key) + '" title="隐藏此行(不影响合计,用上方筛选 chip 可恢复)" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;padding:0 3px">✕</button></td>';
   let h = '<table class="rep-table" style="width:100%"><thead><tr>' + (hkey ? '<th style="width:20px"></th>' : '') + cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') + '</tr></thead><tbody>';
-  rows.forEach(function (o) { h += '<tr>' + (hkey ? hideTd(o) : '') + cols.map(function (c) { return '<td>' + (c.totalOnly ? '<span class="wk">—</span>' : c.cell(o)) + '</td>'; }).join('') + '</tr>'; });
+  rows.forEach(function (o) { h += '<tr' + (hkey ? ' draggable="true" data-rowkey="' + encodeURIComponent(o.key) + '" title="按住整行拖动调顺序(会记住)"' : '') + '>' + (hkey ? hideTd(o) : '') + cols.map(function (c) { return '<td>' + (c.totalOnly ? '<span class="wk">—</span>' : c.cell(o)) + '</td>'; }).join('') + '</tr>'; });
   if (r.total) h += '<tr class="tot">' + (hkey ? '<td></td>' : '') + cols.map(function (c) { return '<td>' + (c.key === 'key' ? '合计' : (c.key === '__line' ? '' : c.cell(r.total))) + '</td>'; }).join('') + '</tr>';
   return h + '</tbody></table>';
 }
@@ -567,14 +591,9 @@ function renderAuMail() {
   bind('#auMailTo', 'to'); bind('#auMailCc', 'cc'); bind('#auMailSubj', 'subject');
 }
 // 当前 ISO 周标签（与导出模型同一口径）
-function auIsoWeekStr() {
-  const d = new Date();
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dn = t.getUTCDay() || 7;
-  t.setUTCDate(t.getUTCDate() + 4 - dn);
-  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-  const wk = Math.ceil(((t - y0) / 86400000 + 1) / 7);
-  return t.getUTCFullYear() + '-W' + String(wk).padStart(2, '0');
+function auIsoWeekStr() { return auReportWeekInfo().full; }
+function auIssueTypeDatalist() {
+  return '<datalist id="auIssueTypeList">' + AU_ISSUE_TYPES.map(t => '<option value="' + t + '">').join('') + '</datalist>';
 }
 function renderAuIssues() {
   const host = $('#auSecIssues'); if (!host) return;
@@ -600,10 +619,10 @@ function renderAuIssues() {
     const over = dd != null && dd < 0 && !closed;
     const soon = dd != null && dd >= 0 && dd <= 7 && !closed;
     const tip = closed ? '已闭环' : (dd == null ? '' : (dd < 0 ? '已超期 ' + (-dd) + ' 天' : (dd === 0 ? '今天到期' : '还剩 ' + dd + ' 天')));
-    const typeOpts = AU_ISSUE_TYPES.concat(AU_ISSUE_TYPES.includes(r.type) || !r.type ? [] : [r.type]);
+    // 类型可自由输入(用户 2026-08-24):datalist 给常用候选,打字写新类型也行
     const stOpts = AU_ISSUE_STATUS.concat(AU_ISSUE_STATUS.includes(r.status) || !r.status ? [] : [r.status]);
     return `<tr${closed ? ' style="opacity:.55"' : ''}>
-      <td style="width:76px"><select data-i="${i}" data-k="type">${typeOpts.map(t => `<option ${t === r.type ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td style="width:76px"><input type="text" data-i="${i}" data-k="type" value="${auEsc(r.type || '')}" list="auIssueTypeList" style="width:68px" placeholder="类型"></td>
       <td><input data-i="${i}" data-k="todo" value="${auEsc(r.todo)}" placeholder="重点工作/通知"></td>
       <td><input data-i="${i}" data-k="prog" value="${auEsc(r.prog)}" placeholder="进展"></td>
       <td style="width:84px"><select data-i="${i}" data-k="status">${stOpts.map(t => `<option ${t === (r.status || '进行中') ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
@@ -674,13 +693,23 @@ const AU_FIN_COLS = [
   { key: 'fc', label: '全年预测', sep: true, fmt: o => auFmtAmt(o.fc) },
   { key: 'fcAttain', label: '全年预测达成率', fmt: o => auFinPct(o.fcAttain) },
 ];
+/* 财经表行 = 默认排序(系列位阶) → 隐藏过滤 → 自定义序。视图与导出都走这一个,永不走样 */
+function auFinRows(block, isSeries) {
+  let rows = ((block && block.rows) || []).slice();
+  if (isSeries) rows.sort((a, b) => { const ra = seriesRank(a.key), rb = seriesRank(b.key); return ra !== rb ? ra - rb : ((b.rev26 || 0) - (a.rev26 || 0)); });
+  return auRowsPipeline(rows, auHKey('FIN', isSeries ? 'series' : 'rep'));
+}
+if (typeof window !== 'undefined') window.auFinRows = auFinRows;
 function auFinTable(firstLabel, block, isSeries) {
   if (!block) return '';
   const cols = AU_FIN_COLS;
-  const thead = '<tr><th class="lft">' + firstLabel + '</th>' + cols.map(c => `<th class="${c.sep ? 'col-sep' : ''}">${c.label}</th>`).join('') + '</tr>';
-  const rowHtml = (o, cls) => '<tr class="' + (cls || '') + '"><td class="lft">' + o.key + '</td>' + cols.map(c => `<td class="${c.sep ? 'col-sep' : ''}">${c.fmt(o)}</td>`).join('') + '</tr>';
-  let rows = (block.rows || []).slice();
-  if (isSeries) rows.sort((a, b) => { const ra = seriesRank(a.key), rb = seriesRank(b.key); return ra !== rb ? ra - rb : ((b.rev26 || 0) - (a.rev26 || 0)); });
+  const thead = '<tr><th style="width:20px"></th><th class="lft">' + firstLabel + '</th>' + cols.map(c => `<th class="${c.sep ? 'col-sep' : ''}">${c.label}</th>`).join('') + '</tr>';
+  const rowHtml = (o, cls) => cls
+    ? '<tr class="' + cls + '"><td></td><td class="lft">' + o.key + '</td>' + cols.map(c => `<td class="${c.sep ? 'col-sep' : ''}">${c.fmt(o)}</td>`).join('') + '</tr>'
+    : '<tr draggable="true" data-rowkey="' + encodeURIComponent(o.key) + '" title="按住整行拖动调顺序(会记住)">'
+      + '<td><button class="row-hide-btn" data-hiderow="' + encodeURIComponent(o.key) + '" title="隐藏此行(不影响合计,标题旁筛选 chip 可恢复)" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;padding:0 3px">✕</button></td>'
+      + '<td class="lft">' + o.key + '</td>' + cols.map(c => `<td class="${c.sep ? 'col-sep' : ''}">${c.fmt(o)}</td>`).join('') + '</tr>';
+  const rows = auFinRows(block, isSeries);
   let body = ''; if (block.total) body += rowHtml(block.total, 'tot');
   body += rows.map(o => rowHtml(o)).join('');
   return '<table class="fa-table"><thead>' + thead + '</thead><tbody>' + body + '</tbody></table>';
@@ -756,7 +785,8 @@ async function renderAuFinImpl() {
   if (!pb || pb.error || !blk) { box.innerHTML = '<div class="au-empty">取数失败' + (pb && pb.error ? ':' + pb.error : '') + '</div>'; return; }
   const prog = (pb.toM - pb.fromM + 1) / 12;
   const note = $('#auFinNote'); if (note) note.textContent = `月度刷新-${pb.curYear}-${String(pb.toM).padStart(2, '0')}（预测为${pb.version || '—'}） · ${pb.fromM}~${pb.toM}月实际 · 时间进度 ${(prog * 100).toFixed(0)}%`;
-  let html = `<div class="au-sec-t" style="font-size:12px">分产品系列(${lab} LV3)</div><div class="fa-wrap">` + auFinTable('系列', blk, true) + '</div>';
+  let html = `<div class="au-sec-t" style="font-size:12px;position:relative">分产品系列(${lab} LV3)`
+    + ` <span class="chip au-pick" data-finpick="series" style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand);font-size:11px;padding:1px 8px;border-radius:12px">系列 <b>—</b> ▾</span></div><div class="fa-wrap" data-fintbl="series">` + auFinTable('系列', blk, true) + '</div>';
   // 国家办表:financeRepBoard 不支持 lv1 → 用本产业 LV3 名集作为 series 过滤(只读间接筛,零引擎改动);
   // 用户选了产品系列则只传选中的那几个,两张表口径一致。
   const seriesNames = selLv3.length ? selLv3.slice() : (lv3Opts.length ? lv3Opts.slice() : (blk.rows || []).map(o => o.key));
@@ -764,8 +794,37 @@ async function renderAuFinImpl() {
   if (selReps.length) rp.reps = selReps;
   const rb = seriesNames.length ? await api.financeRepBoard(rp) : null;
   auW.finRb = rb;
-  if (rb && !rb.error && rb.repTable) html += `<div class="au-sec-t" style="font-size:12px;margin-top:14px">分国家办(${lab})</div><div class="fa-wrap">` + auFinTable('国家办', rb.repTable, false) + '</div>';
+  if (rb && !rb.error && rb.repTable) html += `<div class="au-sec-t" style="font-size:12px;margin-top:14px;position:relative">分国家办(${lab})`
+    + ` <span class="chip au-pick" data-finpick="rep" style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand);font-size:11px;padding:1px 8px;border-radius:12px">国家办 <b>—</b> ▾</span></div><div class="fa-wrap" data-fintbl="rep">` + auFinTable('国家办', rb.repTable, false) + '</div>';
   box.innerHTML = html;
+  /* 隐藏/拖拽/筛选:都在缓存的 blk/rb 上局部重画,零取数零闪屏 */
+  const bindFin = (kind, block, isSeries, label2) => {
+    const wrap = box.querySelector('[data-fintbl="' + kind + '"]');
+    const chipEl = box.querySelector('[data-finpick="' + kind + '"]');
+    if (!wrap || !block) return;
+    const hkey = auHKey('FIN', isSeries ? 'series' : 'rep');
+    const allKeys = () => {
+      const ks = ((block.rows || []).map(o => o.key));
+      auHiddenListK(hkey).forEach(k => { if (ks.indexOf(k) < 0) ks.push(k); });
+      return ks;
+    };
+    const syncChip = () => { if (chipEl) { const b = chipEl.querySelector('b'); const n = allKeys().length; if (b) b.textContent = (n - auHiddenListK(hkey).length) + '/' + n; } };
+    const paint = () => {
+      wrap.innerHTML = auFinTable(label2, block, isSeries);
+      wrap.querySelectorAll('[data-hiderow]').forEach(bt => bt.onclick = () => {
+        auSetHiddenK(hkey, auRH().add(auHiddenListK(hkey), decodeURIComponent(bt.dataset.hiderow)));
+        paint(); syncChip();
+      });
+      auBindRowDrag(wrap, hkey, paint);
+    };
+    if (chipEl) {
+      chipEl.parentElement.style.position = 'relative';
+      chipEl.onclick = () => auPickPanel(chipEl.parentElement, chipEl, allKeys, hkey, () => { paint(); syncChip(); });
+    }
+    paint(); syncChip();
+  };
+  bindFin('series', blk, true, '系列');
+  bindFin('rep', rb && !rb.error ? rb.repTable : null, false, '国家办');
 }
 
 /* ============================================================
@@ -942,6 +1001,42 @@ function auSetHiddenK(key, arr) { const all = auHiddenAll(); if (arr && arr.leng
 function auHiddenKey(v) { return auHKey(v); }
 function auHiddenList(v) { return auHiddenListK(auHiddenKey(v)); }
 function auSetHidden(v, arr) { auSetHiddenK(auHiddenKey(v), arr); }
+/* 行自定义顺序(用户 2026-08-24):拖拽后持久化,重启不丢;新品不在存档里 → append 尾部必显示。
+   键与隐藏共用同一字符串(auHKey),存在独立的 AU_ORDER_LS 桶里互不干扰。 */
+const AU_ORDER_LS = 'sb.audio.roworder';
+function auOrderAll() { try { return JSON.parse(localStorage.getItem(AU_ORDER_LS)) || {}; } catch (e) { return {}; } }
+function auOrderGet(key) { return auOrderAll()[key] || []; }
+function auOrderSet(key, arr) { const all = auOrderAll(); if (arr && arr.length) all[key] = arr; else delete all[key]; try { localStorage.setItem(AU_ORDER_LS, JSON.stringify(all)); } catch (e) { } }
+function auRO() { return (typeof window !== 'undefined' && window.RowOrder) ? window.RowOrder : require('../row-order-core.js'); }
+/* 统一的「隐藏+自定义序」行管线:所有表(视图与导出)都走这一个函数,保证两边永远同序。
+   rows: [{key,...}];返回过滤+重排后的新数组;合计行不进来(口径不动)。 */
+function auRowsPipeline(rows, hkey) {
+  if (!hkey) return (rows || []).slice();
+  let out = auRH().visible(rows || [], auHiddenListK(hkey));
+  const km = {}; out.forEach(o => { km[o.key] = o; });
+  return auRO().apply(out.map(o => o.key), auOrderGet(hkey)).map(k => km[k]);
+}
+if (typeof window !== 'undefined') window.auRowsPipeline = auRowsPipeline;
+/* 整行拖拽:drop 时把「当前显示序」的移动结果整体存档(隐藏行不在其中,恢复后 append 尾部) */
+function auBindRowDrag(scopeEl, orderKey, repaint) {
+  const trs = scopeEl.querySelectorAll('tr[data-rowkey]');
+  let drag = null;
+  trs.forEach(tr => {
+    tr.ondragstart = e => { drag = tr.dataset.rowkey; try { e.dataTransfer.effectAllowed = 'move'; } catch (_) { } };
+    tr.ondragover = e => e.preventDefault();
+    tr.ondrop = e => {
+      e.preventDefault();
+      if (drag == null) return;
+      const keys = [...scopeEl.querySelectorAll('tr[data-rowkey]')].map(x => x.dataset.rowkey);
+      const from = keys.indexOf(drag), to = keys.indexOf(tr.dataset.rowkey);
+      drag = null;
+      if (from < 0 || to < 0 || from === to) return;
+      auOrderSet(orderKey, auRO().move(keys, from, to).map(decodeURIComponent));
+      repaint();
+    };
+  });
+}
+
 /* 勾选面板(M2 与 M5 共用):checked=显示,去勾=隐藏,全走 localStorage 的 hkey,重启不丢。
    新出现的行不在隐藏名单里 → 默认显示,所以「以后新增产品」自动进表。 */
 function auPickPanel(anchor, chip, allKeysFn, hkey, onChange) {
@@ -964,12 +1059,13 @@ function auCbVisibleRows(v, r, cols) { return auRH().visible(auCbSortRows(r, col
 function auCbTableHtml(v, r) {
   const cols = auCbColumns(r);
   const showSeries = cols.some(c => c.key === '__line');
-  const rows = auCbVisibleRows(v, r, cols);
+  const rows = auRowsPipeline(auCbSortRows(r, cols), auHiddenKey(v));
   const thead = '<tr><th style="width:20px"></th>' + cols.map(c => `<th class="${c.sep ? 'col-sep' : ''}${c.wk ? ' wk' : ''}">${c.label}</th>`).join('') + '</tr>';
-  let body = '';
+  let body = '', trAttr = '';
   for (let i = 0; i < rows.length; i++) {
     const o = rows[i];
     let tds = `<td><button class="row-hide-btn" data-hiderow="${encodeURIComponent(o.key)}" title="隐藏此行(不影响合计,卡片头「产品」chip 可恢复)" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;padding:0 3px">✕</button></td>`;
+    trAttr = ` draggable="true" data-rowkey="${encodeURIComponent(o.key)}" title="按住整行拖动调顺序(会记住)"`;
     cols.forEach(c => {
       if (c.key === '__line' && showSeries) {
         if (i > 0 && (rows[i - 1].line || '') === (o.line || '')) return;
@@ -977,7 +1073,8 @@ function auCbTableHtml(v, r) {
         tds += `<td class="col-sep" rowspan="${span}" style="vertical-align:middle;font-weight:600;background:var(--c-bg-sunken)">${o.line || ''}</td>`;
       } else { const cv = c.totalOnly ? '<span class="wk">—</span>' : c.cell(o); tds += `<td class="${c.sep ? 'col-sep' : ''}${c.wk ? ' wk' : ''}">${cv}</td>`; }
     });
-    body += '<tr>' + tds + '</tr>';
+    body += '<tr' + trAttr + '>' + tds + '</tr>';
+    trAttr = '';
   }
   if (r.total) { let tds = '<td></td>'; cols.forEach(c => { if (c.key === '__line') tds += '<td class="col-sep"></td>'; else tds += `<td class="${c.sep ? 'col-sep' : ''}">${c.key === 'key' ? '合计' : c.cell(r.total)}</td>`; }); body += '<tr class="total">' + tds + '</tr>'; }
   return thead + body;
@@ -1016,6 +1113,7 @@ function auRenderCbCard(v, r) {
       auSetHidden(v, auRH().add(auHiddenList(v), decodeURIComponent(bt.dataset.hiderow)));
       paintTable(); syncChip();
     });
+    auBindRowDrag(wrapEl, auHiddenKey(v), paintTable);
   };
   const n0 = allKeys().length;
   head.innerHTML = `<span class="nm">${v}</span>`

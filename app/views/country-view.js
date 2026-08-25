@@ -114,8 +114,21 @@ function cbSetHidden(v,arr){ const all=cbHiddenAll(); if(arr&&arr.length) all[cb
   try{ localStorage.setItem(CB_HIDE_LS,JSON.stringify(all)); }catch(e){} }
 function cbHideRow(v,key){ cbSetHidden(v,cbRH().add(cbHiddenList(v),key)); }
 function cbUnhideRow(v,key){ cbSetHidden(v,cbRH().remove(cbHiddenList(v),key)); }
-// 可见行 = 排序后剔除已隐藏；界面/Excel/图片/PPT 四个出口统一走这里
-function cbVisibleRows(v,r,cols){ return cbRH().visible(cbSortRows(r,cols),cbHiddenList(v)); }
+/* ---- 行自定义顺序(用户 2026-08-24):拖拽后持久化,键与隐藏同串,独立桶 sb.cb.roworder。
+   新出现的行(新品)不在存档 → append 尾部必显示,可再隐藏/排序。 ---- */
+const CB_ORDER_LS='sb.cb.roworder';
+function cbRO(){ return (typeof window!=='undefined'&&window.RowOrder)?window.RowOrder:require('../row-order-core.js'); }
+function cbOrderAll(){ try{ return JSON.parse(localStorage.getItem(CB_ORDER_LS))||{}; }catch(e){ return {}; } }
+function cbOrderGet(v){ return cbOrderAll()[cbHiddenKey(v)]||[]; }
+function cbOrderSet(v,arr){ const all=cbOrderAll(); if(arr&&arr.length) all[cbHiddenKey(v)]=arr; else delete all[cbHiddenKey(v)];
+  try{ localStorage.setItem(CB_ORDER_LS,JSON.stringify(all)); }catch(e){} }
+// 可见行 = 排序后剔除已隐藏,再按自定义序重排；界面/Excel/图片/PPT 四个出口统一走这里
+function cbVisibleRows(v,r,cols){
+  let rows=cbRH().visible(cbSortRows(r,cols),cbHiddenList(v));
+  const saved=cbOrderGet(v);
+  if(saved.length){ const km={}; rows.forEach(o=>{ km[o.key]=o; }); rows=cbRO().apply(rows.map(o=>o.key),saved).map(k=>km[k]); }
+  return rows;
+}
 
 /* ---- 保存缩放(跨启动记住)：localStorage sb.cb.zoom；渲染后自动应用到每张表 ---- */
 const CB_ZOOM_LS='sb.cb.zoom';
@@ -149,13 +162,13 @@ function cbTableHtml(v,r){
   const TS=cbTS(); const st=cbSortState(cols);
   const showSeries=cols.some(c=>c.key==='__line');
   let rows=cbVisibleRows(v,r,cols);
-  const doMerge=showSeries && !TS.isActive(st);   // 只有默认序才按系列合并单元格；自定义排序会打散系列归并
+  const doMerge=showSeries && !TS.isActive(st) && !cbOrderGet(v).length;   // 默认序才按系列合并；列排序/行拖拽序都会打散系列归并
   // 行首「隐藏」按钮列：纯界面元素，不进任何导出
   // 开关关：表头不可点、不出箭头（无 sortable 类=无手型/无 hover），保证「关掉=完全回到默认」
   const thead='<tr><th style="width:20px"></th>'+cols.map(c=>`<th data-k="${c.key}" class="${cb.custom?'sortable':''}${c.sep?' col-sep':''}${c.wk?' wk':''}"${cb.custom?' title="点击按此列排序（再点切换升↔降）· 所有国家的表同步"':''}>${c.label}${TS.arrow(c.key,st)}</th>`).join('')+'</tr>';
   let body='';
   for(let i=0;i<rows.length;i++){ const o=rows[i];
-    let tds=`<td><button class="cb-hide-btn row-hide-btn" data-hiderow="${encodeURIComponent(o.key)}" title="隐藏此行（不影响合计，可在卡片头恢复）" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;line-height:1;padding:0 3px">✕</button></td>`;
+    let tds=`<td style="white-space:nowrap"><button class="cb-hide-btn row-hide-btn" data-hiderow="${encodeURIComponent(o.key)}" title="隐藏此行（不影响合计，卡片头「行」chip 可恢复）" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;line-height:1;padding:0 3px">✕</button><span style="cursor:grab;color:var(--c-ink-3);font-size:10px" title="按住整行拖动调顺序(会记住)">⠿</span></td>`;
     cols.forEach(c=>{
       if(c.key==='__line' && doMerge){
         if(i>0 && (rows[i-1].line||'')===(o.line||'')) return; // 已被上面 rowspan 合并
@@ -163,7 +176,7 @@ function cbTableHtml(v,r){
         tds+=`<td class="col-sep" rowspan="${span}" style="vertical-align:middle;font-weight:600;background:var(--c-bg-sunken)">${o.line||''}</td>`;
       } else { const cv = c.totalOnly ? '<span class="wk">—</span>' : c.cell(o); tds+=`<td class="${c.sep?'col-sep':''}${c.wk?' wk':''}">${cv}</td>`; }
     });
-    body+='<tr>'+tds+'</tr>';
+    body+='<tr draggable="true" data-rowkey="'+encodeURIComponent(o.key)+'">'+tds+'</tr>';
   }
   if(r.total){ let tds='<td></td>'; cols.forEach(c=>{ if(c.key==='__line') tds+='<td class="col-sep"></td>'; else tds+=`<td class="${c.sep?'col-sep':''}">${c.key==='key'?'合计':c.cell(r.total)}</td>`; }); body+='<tr class="total">'+tds+'</tr>'; }
   return thead+body;
@@ -173,12 +186,15 @@ function renderCbCard(v,r){
   const head=document.createElement('div'); head.className='cb-head'; head.style.position='relative';
   const t=r.total||{}; const cyy=r.curYear%100;
   const hidList=cbHiddenList(v);
+  // 全量行 = 本期数据行 ∪ 已隐藏(可能本期无数据也要能恢复)
+  const cbAllKeys=()=>{ const ks=cbSortRows(r,cbColumns(r)).map(o=>o.key); cbHiddenList(v).forEach(k=>{ if(ks.indexOf(k)<0) ks.push(k); }); return ks; };
+  const nAll=cbAllKeys().length;
   head.innerHTML=`<span class="nm">${v}</span>`
     +`<span class="chip">${cyy}累计SO <b>${fmt(t.cumCur)}</b></span>`
     +`<span class="chip">同比 <b class="${t.yoy==null?'':(t.yoy>=0?'pos':'neg')}">${t.yoy==null?'—':(t.yoy*100).toFixed(0)+'%'}</b></span>`
     +`<span class="chip">库存 <b>${fmt(t.inv)}</b></span>`
     +`<span class="chip">DOS <b>${t.dos||'—'}</b></span>`
-    +(hidList.length?`<span class="chip cb-hidchip" style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand)" title="点击管理已隐藏的行（合计不受隐藏影响）">已隐藏 ${hidList.length} 行 ▾</span>`:'')
+    +`<span class="chip cb-hidchip" style="cursor:pointer;background:var(--c-brand-soft);color:var(--c-brand)" title="勾选要展示的行,去勾=隐藏(不影响合计);选择与拖拽顺序都会记住">行 <b>${nAll-hidList.length}/${nAll}</b> ▾</span>`
     +`<span class="fa-exp"><button data-ex="xlsx">📊 Excel</button><button data-ex="png">🖼 图片</button></span>`;
   const wrapEl=document.createElement('div'); wrapEl.className='cb-table-wrap';
   const tbl=document.createElement('table'); tbl.className='rep-table'; tbl.innerHTML=cbTableHtml(v,r); wrapEl.appendChild(tbl);
@@ -187,19 +203,38 @@ function renderCbCard(v,r){
   if(chip) chip.onclick=()=>{
     let p=head.querySelector('.cb-hid-panel'); if(p){ p.remove(); return; }
     p=document.createElement('div'); p.className='cb-hid-panel';
-    p.style.cssText='position:absolute;top:calc(100% - 4px);left:'+Math.max(8,chip.offsetLeft)+'px;z-index:60;background:var(--c-bg-elev);border:1px solid var(--c-line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:8px 10px;max-height:260px;overflow:auto;min-width:200px';
-    cbHiddenList(v).forEach(k=>{
-      const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:10px;padding:2px 0;font-size:12px;color:var(--c-ink-1)';
+    p.style.cssText='position:absolute;top:calc(100% - 4px);left:'+Math.max(8,chip.offsetLeft)+'px;z-index:60;background:var(--c-bg-elev);border:1px solid var(--c-line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:8px 10px;max-height:280px;overflow:auto;min-width:220px';
+    const hid0=cbHiddenList(v);
+    cbAllKeys().forEach(k=>{
+      const row=document.createElement('label'); row.style.cssText='display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12px;color:var(--c-ink-1);cursor:pointer';
+      const ck=document.createElement('input'); ck.type='checkbox'; ck.checked=hid0.indexOf(k)<0;
+      ck.onchange=()=>{ if(ck.checked) cbUnhideRow(v,k); else cbHideRow(v,k); renderCbCards(); };
       const nm=document.createElement('span'); nm.textContent=k; nm.style.flex='1';
-      const btn=document.createElement('button'); btn.textContent='恢复'; btn.className='btn'; btn.style.cssText='padding:1px 8px;font-size:11px';
-      btn.onclick=()=>{ cbUnhideRow(v,k); renderCbCards(); };
-      row.appendChild(nm); row.appendChild(btn); p.appendChild(row);
+      row.appendChild(ck); row.appendChild(nm); p.appendChild(row);
     });
-    const all=document.createElement('button'); all.textContent='全部恢复'; all.className='btn'; all.style.cssText='margin-top:6px;padding:2px 10px;font-size:11px;width:100%';
+    const all=document.createElement('button'); all.textContent='全部显示'; all.className='btn'; all.style.cssText='margin-top:6px;padding:2px 10px;font-size:11px;width:100%';
     all.onclick=()=>{ cbSetHidden(v,[]); renderCbCards(); };
     p.appendChild(all);
     head.appendChild(p);
   };
+  // 整行拖拽:drop 时以当前显示序为基础移动,整体存档(键与隐藏同串,独立桶)
+  (function(){
+    let drag=null;
+    wrapEl.querySelectorAll('tr[data-rowkey]').forEach(tr=>{
+      tr.ondragstart=e=>{ drag=tr.dataset.rowkey; try{ e.dataTransfer.effectAllowed='move'; }catch(_){ } };
+      tr.ondragover=e=>e.preventDefault();
+      tr.ondrop=e=>{
+        e.preventDefault();
+        if(drag==null) return;
+        const keys=[...wrapEl.querySelectorAll('tr[data-rowkey]')].map(x=>x.dataset.rowkey);
+        const from=keys.indexOf(drag), to=keys.indexOf(tr.dataset.rowkey);
+        drag=null;
+        if(from<0||to<0||from===to) return;
+        cbOrderSet(v,cbRO().move(keys,from,to).map(decodeURIComponent));
+        renderCbCards();
+      };
+    });
+  })();
   card.appendChild(head); card.appendChild(wrapEl);
   return card;
 }

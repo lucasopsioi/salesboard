@@ -300,6 +300,7 @@ function renderAudio() {
       '<div class="au-toolbar" id="auGreetBar" style="margin-bottom:2px;flex-wrap:wrap;gap:6px"></div>' +
       '<div class="au-sec" id="auSecIssues"></div>' +
       '<div class="au-sec" id="auSecFin"></div>' +
+      '<div class="au-sec" id="auSecCost"></div>' +
       '<div class="au-sec" id="auSecSalesHead"></div>' +
       '<div class="au-sec" id="auSecOverallNar"></div>' +
       '<div class="au-sec" id="auSecInd"></div>' +
@@ -344,6 +345,7 @@ function renderAudio() {
        (比如音频页签挂着平板的 Slate SE)。M2/M5 现在吃 M4 的范围筛选,
        若并行会拿到未清洗的残留,整章取空(2026-08-24 selftest 抓到的就是这形态)。 */
     if (typeof renderAuInd === 'function') await auTrack('ind', renderAuInd());
+    auTrack('cost', renderAuCost());
     auTrack('fam', renderAuDim('family'));
     auTrack('rep', renderAuDim('repOffice'));
     renderAuCountry();
@@ -825,6 +827,51 @@ async function renderAuFinImpl() {
   };
   bindFin('series', blk, true, '系列');
   bindFin('rep', rb && !rb.error ? rb.repTable : null, false, '国家办');
+}
+
+/* ============================================================
+   M2.5 成本变化(仅平板 · 用户 2026-08-25):Floor FOB 看板的数据,选基准月 A,
+   之后各月显示 A±$XX;涨越多底色越接近 rgb(199,0,11),封顶 50% 透明(白底预混)。
+   行序/名称与 Floor FOB 看板同一套(sortKeys+displayName),不另起口径。
+   ============================================================ */
+async function renderAuCost() {
+  const host = $('#auSecCost');
+  if (!host) return;
+  if (auW.industry !== 'tablet') { host.innerHTML = ''; return; }
+  const head = t => '<div class="au-sec-t">成本变化（Floor FOB）' + (t || '') + '</div>';
+  if (typeof fobEnsureStore !== 'function') { host.innerHTML = head() + '<div class="au-empty">Floor FOB 模块未加载。</div>'; return; }
+  let stF;
+  try { stF = await fobEnsureStore(); } catch (e) { host.innerHTML = head() + '<div class="au-empty">Floor FOB 数据读取失败。</div>'; return; }
+  let mtx = stF.matrix(null, null, '平板');
+  if (!mtx.keys.length) mtx = stF.matrix(null, null, null);
+  const months = stF.monthsPresent();
+  if (!mtx.keys.length || !months.length) {
+    host.innerHTML = head() + '<div class="au-empty">Floor FOB 看板还没有数据——到「Floor FOB」页导入刷新后这里自动出热力表。</div>';
+    return;
+  }
+  const D = auLoad();
+  let baseM = +(D.costBaseM) || months[0];
+  if (months.indexOf(baseM) < 0) baseM = months[0];
+  const mSel = '<select id="auCostBase">' + months.map(mo => '<option value="' + mo + '"' + (mo === baseM ? ' selected' : '') + '>' + FobCore.M.label(mo) + '</option>').join('') + '</select>';
+  const keys = FobReports.sortKeys(stF, mtx.keys, mtx.cells, months, stF.getSettings().boardOrder || 'series_value', false);
+  const cm = AudioWeekly.costChangeModel(mtx.cells, keys, months, baseM, k => stF.displayName(k), mo => FobCore.M.label(mo));
+  let h = head('<span class="au-note">基准月 A 的 Floor FOB 为底,之后各月显示 A±$XX;越红=涨越多(封顶半透明Acme红)</span>')
+    + '<div class="au-toolbar"><label>基准月 A</label>' + mSel + '<span class="au-note">与 Floor FOB 看板同排序;导出周报自动带上本表</span></div>';
+  if (!cm || !cm.rows.length) {
+    h += '<div class="au-empty">基准月没有数据。</div>';
+  } else {
+    h += '<div class="fa-wrap"><table class="fa-table"><thead><tr>' + cm.header.map(x => '<th>' + auEsc(x) + '</th>').join('') + '</tr></thead><tbody>';
+    cm.rows.forEach((row, i) => {
+      h += '<tr>' + row.map((cell, ci) => {
+        const fill = cm.fills[i] && cm.fills[i][ci];
+        return '<td style="' + (ci === 0 ? 'text-align:left' : 'text-align:right') + (fill ? ';background:' + fill : '') + '">' + auEsc(cell) + '</td>';
+      }).join('') + '</tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  host.innerHTML = h;
+  const sel = $('#auCostBase');
+  if (sel) sel.onchange = () => { const D2 = auLoad(); D2.costBaseM = +sel.value; auSave(); renderAuCost(); };
 }
 
 /* ============================================================

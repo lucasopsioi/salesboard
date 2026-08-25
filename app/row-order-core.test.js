@@ -38,5 +38,20 @@ ok('W10 无数据锚点 → 日历兜底', AW.clampReportWeek(cal34, null, null)
 ok('W11 跨年比较按(year,week)', AW.clampReportWeek({ year: 2026, week: 1, label: 'W01', full: '2026-W01' }, 2025, 52).full === '2025-W52');
 ok('W12 src 标记来源', AW.clampReportWeek(cal34, 2026, 32).src === 'data' && AW.clampReportWeek(cal34, null, null).src === 'cal');
 
+/* ---------- 成本变化热力(用户 2026-08-25):rgb(199,0,11) 半透明白底预混 ---------- */
+ok('C1 最大涨幅 = rgba(199,0,11,.5) 白底预混 #E38085', AW.costHeatColor(100, 100) === '#E38085', AW.costHeatColor(100, 100));
+ok('C2 半幅涨 α=0.25 → #F1BFC2', AW.costHeatColor(50, 100) === '#F1BFC2', AW.costHeatColor(50, 100));
+ok('C3 降价走绿系', /^#[0-9A-F]{6}$/.test(AW.costHeatColor(-100, 100)) && AW.costHeatColor(-100, 100) !== AW.costHeatColor(100, 100));
+ok('C4 0/null/无极值 → 不上色', AW.costHeatColor(0, 100) === null && AW.costHeatColor(null, 100) === null && AW.costHeatColor(5, 0) === null);
+
+const cellsC = { 'P1|202602': 489, 'P1|202603': 512, 'P1|202604': 484, 'P2|202602': 200, 'P2|202603': 200, 'P3|202603': 300 };
+const cmC = AW.costChangeModel(cellsC, ['P1', 'P2', 'P3'], [202601, 202602, 202603, 202604], 202602, k => k, m => 'M' + (m % 100));
+ok('C5 表头 = 产品+基准A+之后各月(基准前的月份不出列)', cmC.header.join('|') === '产品|M2 基准A|M3|M4', cmC.header.join('|'));
+ok('C6 基准列绝对值,后月 A±$XX', cmC.rows[0][1] === '$489' && cmC.rows[0][2] === 'A+$23' && cmC.rows[0][3] === 'A-$5', JSON.stringify(cmC.rows[0]));
+ok('C7 持平 = A+$0 且不上色', cmC.rows[1][2] === 'A+$0' && cmC.fills[1][2] === null);
+ok('C8 缺基准的行整行 —', cmC.rows[2][1] === '—' && cmC.rows[2][2] === '—');
+ok('C9 最大涨幅格拿最深色', cmC.fills[0][2] === '#E38085', cmC.fills[0][2]);
+ok('C10 monthsAll 不含基准月 → null', AW.costChangeModel(cellsC, ['P1'], [202603, 202604], 202602, k => k, m => String(m)) === null);
+
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS');
 process.exit(f ? 1 : 0);

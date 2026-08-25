@@ -136,7 +136,11 @@
     h += '<tr>' + hdr.map((x, i) => '<th width="' + cw[i] + '" style="' + thSty(i) + '">' + esc(x) + '</th>').join('') + '</tr>';
     rws.forEach((r, i) => {
       const tot = (opts.totalIdx != null && i === opts.totalIdx) || (opts.totalLast && i === rws.length - 1);
-      h += '<tr>' + hdr.map((_, ci) => '<td width="' + cw[ci] + '" style="' + tdSty(ci, tot, i % 2 === 1) + cellDecor(hdr[ci], (r || [])[ci]) + '">' + esc(wowArrow(hdr[ci], (r || [])[ci])) + '</td>').join('') + '</tr>';
+      const fRow = opts.fills && opts.fills[i];
+      h += '<tr>' + hdr.map((_, ci) => {
+        const fill = fRow && fRow[ci] ? 'background:' + fRow[ci] + ';' : '';
+        return '<td width="' + cw[ci] + '" style="' + tdSty(ci, tot, i % 2 === 1) + fill + cellDecor(hdr[ci], (r || [])[ci]) + '">' + esc(wowArrow(hdr[ci], (r || [])[ci])) + '</td>';
+      }).join('') + '</tr>';
     });
     return h + '</table>';
   }
@@ -445,7 +449,7 @@
       .concat((m.fin && m.fin.tables) || [])
       .concat([S0.family && S0.family.table, S0.rep && S0.rep.table])
       .concat(((S0.countries || []).map(c => c && c.table)))
-      .concat([m.bounty])
+      .concat([m.bounty, m.costChange])
       .concat((m.newprods || []).map(np => np && np.table))
       .concat((m.newprods || []).reduce((a, np) => a.concat((np && np.info && np.info.tables) || []), []))
       .filter(t => t && !t.img && (t.header || []).length);
@@ -461,6 +465,13 @@
     if (m.fin && m.fin.tables && m.fin.tables.length) {
       const fit = sharedFit(m.fin.tables);
       m.fin.tables.forEach(t => { b += v3Visual(t, imgMode, { totalIdx: t.totalIdx }, withG(fit(t))); });
+    }
+
+    // 二·五 成本变化(平板 · Floor FOB 热力,用户 2026-08-25)
+    if (m.costChange && (m.costChange.rows || []).length) {
+      b += v3Section('成本变化（Floor FOB · 基准 ' + (m.costChange.baseLabel || '') + '，单元格越红=涨越多）');
+      b += v3Visual({ header: m.costChange.header, rows: m.costChange.rows }, imgMode,
+        { fills: m.costChange.fills }, withG(null));
     }
 
     // 三 · 销售进展
@@ -821,8 +832,24 @@ if (typeof window !== 'undefined') (function () {
       greet1: tpl(G.l1), greet2: tpl(G.l2), title: tpl(G.titleTpl),
       issues: (typeof auIssuesForExport === 'function' ? auIssuesForExport() : (D.issues || []).slice()),
       mail: Object.assign({ to: '', cc: '', subject: '' }, D.mail || {}),
-      finTitle: null, fin: null, sales: {}, bounty: null, newprods: [],
+      finTitle: null, fin: null, sales: {}, bounty: null, newprods: [], costChange: null,
     };
+    /* 成本变化(仅平板):吃 Floor FOB 看板的数据与排序;基准月 D.costBaseM(界面模块里选) */
+    if (model.industry === 'tablet' && typeof fobW !== 'undefined' && fobW.store && typeof AudioWeekly !== 'undefined') {
+      try {
+        const stF = fobW.store;
+        let mtx = stF.matrix(null, null, '平板');
+        if (!mtx.keys.length) mtx = stF.matrix(null, null, null);
+        const months = stF.monthsPresent();
+        const baseM = +(D.costBaseM) || (months.length ? months[0] : 0);
+        if (mtx.keys.length && months.indexOf(baseM) >= 0) {
+          const keys = FobReports.sortKeys(stF, mtx.keys, mtx.cells, months, stF.getSettings().boardOrder || 'series_value', false);
+          const cm = AudioWeekly.costChangeModel(mtx.cells, keys, months, baseM,
+            k => stF.displayName(k), mo => FobCore.M.label(mo));
+          if (cm) { cm.baseLabel = FobCore.M.label(baseM); model.costChange = cm; }
+        }
+      } catch (e) { }
+    }
     // 全年达成（标题自动带 月度刷新-YYYY-MM（预测为X））
     const pb = (typeof auW !== 'undefined' && auW.finPb) || null;
     const blk = (typeof auW !== 'undefined' && auW.finBlk) || null;

@@ -74,5 +74,52 @@
     return { year: cal.year, week: cal.week, label: cal.label, full: cal.full, src: 'cal' };
   }
 
-  return { timeProgress, defaultPick, bountyRows, DEFAULT_RE, reportWeek, clampReportWeek };
+  /* ---- 成本变化热力(用户 2026-08-25) ----
+     格子底色:涨得越多越接近 rgb(199,0,11)(Acme红),线性到全表最大涨幅,封顶 50% 透明。
+     Outlook 的 Word 引擎不认 rgba —— 按白底预混成实色 hex(rgba(c,α) over white)。
+     降价对称用绿(与周报 WoW 红涨绿跌同语义);0/缺值不上色。 */
+  function costHeatColor(delta, maxAbs) {
+    if (delta == null || !isFinite(delta) || delta === 0 || !(maxAbs > 0)) return null;
+    const a = 0.5 * Math.min(1, Math.abs(delta) / maxAbs);
+    const base = delta > 0 ? [199, 0, 11] : [30, 126, 52];
+    const hex = n => n.toString(16).padStart(2, '0').toUpperCase();
+    const mix = ch => Math.round(255 - (255 - ch) * a);
+    return '#' + hex(mix(base[0])) + hex(mix(base[1])) + hex(mix(base[2]));
+  }
+  /* cells: {"key|month": Floor FOB}; keys 已按用户想要的顺序; monthsAll 升序;
+     baseM=基准月(A); displayOf(key)→行名; labelOf(month)→列头。
+     基准列显示绝对值 $A,之后各月显示 A±$XX;基准缺值的行整行 '—'。 */
+  function costChangeModel(cells, keys, monthsAll, baseM, displayOf, labelOf) {
+    if ((monthsAll || []).indexOf(baseM) < 0) return null;
+    const after = monthsAll.filter(m => m > baseM);
+    const header = ['产品', labelOf(baseM) + ' 基准A'].concat(after.map(labelOf));
+    let maxAbs = 0;
+    const mid = keys.map(k => {
+      const base = cells[k + '|' + baseM];
+      const dRow = after.map(m => {
+        const v = cells[k + '|' + m];
+        if (base == null || v == null) return null;
+        const d = v - base;
+        if (Math.abs(d) > maxAbs) maxAbs = Math.abs(d);
+        return d;
+      });
+      return { k, base, dRow };
+    });
+    const rows = [], fills = [];
+    mid.forEach(x => {
+      const row = [displayOf(x.k), x.base == null ? '—' : '$' + Math.round(x.base).toLocaleString('en-US')];
+      const fRow = [null, null];
+      x.dRow.forEach(d => {
+        if (d == null) { row.push('—'); fRow.push(null); return; }
+        const r = Math.round(d);
+        row.push((r >= 0 ? 'A+$' : 'A-$') + Math.abs(r).toLocaleString('en-US'));
+        fRow.push(costHeatColor(d, maxAbs));
+      });
+      rows.push(row);
+      fills.push(fRow);
+    });
+    return { header, rows, fills, baseMonth: baseM, maxAbs };
+  }
+
+  return { timeProgress, defaultPick, bountyRows, DEFAULT_RE, reportWeek, clampReportWeek, costHeatColor, costChangeModel };
 });

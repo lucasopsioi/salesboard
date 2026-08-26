@@ -35,6 +35,19 @@ const DRY = has('dry');
 const GGUF = arg('gguf', '');   // 本地 .gguf 路径：不走 HTTP，直接 node-llama-cpp（与主程序 aiChatLocal 同一条路）
 const ONLY = (arg('only', '') || '').split(',').map(s => s.trim()).filter(Boolean);
 const SUMMARIZE = arg('summarize', null);
+/* —— 真实数据核验（本地能力）——
+   --data <root>：挂任意数据根目录（需含 psi/finance/flow 三个子目录），或分别用
+   --data-psi/--data-fin/--data-flow 指定。真实数据的跑分记录写 eval/runs-real/（gitignore）。
+   --paramset：改用参数化自检题集（题目实体与真值运行时从当前数据现算，见 param-set.js）。
+   ⚠️ 真实数据 + 云端 API 会把业务数据发出机器——需显式 --allow-cloud-real 放行（本地 --gguf 不受限）。 */
+const DATA = arg('data', '');
+const DATA_PSI = arg('data-psi', DATA ? require('path').join(DATA, 'psi') : '');
+const DATA_FIN = arg('data-fin', DATA ? require('path').join(DATA, 'finance') : '');
+const DATA_FLOW = arg('data-flow', DATA ? require('path').join(DATA, 'flow') : '');
+const REAL = !!(DATA || arg('data-psi', '') || arg('data-fin', '') || arg('data-flow', ''));
+const PARAM = has('paramset');
+const CACHE = arg('cache', REAL ? require('path').join(__dirname, '.engine-cache-real') : '');
+const ALLOW_CLOUD_REAL = has('allow-cloud-real');
 
 const LEVELS = { full: 1, partial: 0.5, harmless: 0, harmful: 0 };
 const MARK = { full: 'PASS 完全正确', partial: 'HALF 部分正确', harmless: 'MISS 错但无害', harmful: 'RED! 错且有害', pending: '?    待人工' };
@@ -249,11 +262,22 @@ function asciiJson(obj) {
     return;
   }
 
-  const qs = SET.questions.filter(q => !ONLY.length || ONLY.some(p => q.id === p || q.id.indexOf(p + '-') === 0 || q.id.indexOf(p) === 0));
-  console.log((DRY ? '[干跑] ' : '[' + BASE + '] ') + '共 ' + qs.length + ' 题');
-
-  const engine = await mountEngine();
+  if (REAL && !DRY && !GGUF && !ALLOW_CLOUD_REAL) {
+    console.error('⚠️ 拒绝执行：挂载了真实数据(--data)且走云端 API——业务数据将离开本机。');
+    console.error('   本地核验请加 --gguf <模型路径>（数据不出机）；确认要发云端请显式加 --allow-cloud-real。');
+    process.exit(2);
+  }
+  const engine = await mountEngine({ psi: DATA_PSI || undefined, fin: DATA_FIN || undefined, flow: DATA_FLOW || undefined, cacheDir: CACHE || undefined });
   const registry = buildRegistry(engine);
+
+  let pool = SET.questions;
+  if (PARAM) {
+    const { buildParamSet } = require('./param-set.js');
+    pool = await buildParamSet(registry);
+    console.log('[参数化题集] 从当前数据现算出 ' + pool.length + ' 题真值');
+  }
+  const qs = pool.filter(q => !ONLY.length || ONLY.some(p => q.id === p || q.id.indexOf(p + '-') === 0 || q.id.indexOf(p) === 0));
+  console.log((DRY ? '[干跑] ' : '[' + BASE + '] ') + (REAL ? '[真实数据] ' : '') + '共 ' + qs.length + ' 题');
   await resolveModel();
   if (!DRY) console.log('模型: ' + MODEL);
   const CHAT = DRY ? dryChat : (GGUF ? makeGgufChat(GGUF) : httpChat);
@@ -306,13 +330,14 @@ function asciiJson(obj) {
     );
   }
 
-  const runsDir = path.join(__dirname, 'runs');
+  const runsDir = path.join(__dirname, REAL ? 'runs-real' : 'runs');   // 真实数据记录隔离存放（gitignore）
   fs.mkdirSync(runsDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
   const file = path.join(runsDir, 'run-' + stamp + (DRY ? '-dry' : '') + '.json');
   const runObj = {
     at: new Date().toISOString(), base: DRY ? 'dry' : BASE, model: DRY ? 'dry' : MODEL,
-    evalSetVersion: SET.meta.version, passBar: SET.meta.passBar,
+    evalSetVersion: PARAM ? 'paramset-runtime' : SET.meta.version, passBar: SET.meta.passBar,
+    dataset: REAL ? ('REAL: ' + (DATA || [DATA_PSI, DATA_FIN, DATA_FLOW].filter(Boolean).join(' | '))) : 'demo-data',
     toolStats, records,
   };
   fs.writeFileSync(file, asciiJson(runObj));

@@ -15,3 +15,7 @@ dist-interview/
 
 # 云端评测密钥（SONG 手工粘贴，绝不入库）
 eval/*.key
+
+# 真实数据的评测记录与解析缓存（绝不入库）
+eval/runs-real/
+eval/.engine-cache-real/

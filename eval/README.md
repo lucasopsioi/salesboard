@@ -45,3 +45,16 @@ node eval/run-eval.js --only C1,C5-01    # 只跑某组/某题
 - 数值命中但溯源器（verifyNumbers）标了无出处数字 → 自动降为 partial 并记备注——这本身是评测发现
 - 单专家路径（fast 模式大多数题）直接返回专家结论、**不经过综合与数字溯源**——线上就是这个行为，评测如实测量
 - 工具成功率只统计通过参数校验后真正执行的调用；参数校验失败（模型自纠环节）不在内
+
+## 真实数据核验（2026-08-25 新增）
+
+```bash
+# 本地模型 + 真实底表（数据不出机，推荐）：
+node eval/run-eval.js --paramset --data "D:\你的真实数据根目录" --gguf "<模型路径>.gguf"
+# 云端 + 真实数据（业务数据会发到 API，需显式放行）：
+node eval/run-eval.js --paramset --data "<根目录>" --base <云端> --allow-cloud-real
+```
+
+- `--data <root>` 需含 psi / finance / flow 三个子目录（或用 --data-psi/--data-fin/--data-flow 分别指定，可只挂 psi）
+- `--paramset`：参数化自检题集（param-set.js）——题目实体与标准答案**运行时从当前数据由引擎现算**，换任何数据都成立
+- 真实数据的跑分记录写 `eval/runs-real/`、解析缓存写 `.engine-cache-real/`，均已 gitignore，**绝不入库**；分享任何材料前不引用其中数字

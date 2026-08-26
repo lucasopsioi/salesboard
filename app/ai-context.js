@@ -477,6 +477,35 @@ const AIData = (function () {
       if (!api) return { error: 'API 不可用' };
       return await fn(args || {});
     };
+    /* filters 维度校验：值塞错维度（如 product 取值塞进 series）引擎会静默返回空，
+       模型据此误判"没数据"（评测2026-08-25 RunB 打掉6题）。查出错放维度就点名纠正。 */
+    async function checkFilterDims(filters) {
+      if (!filters || typeof filters !== 'object') return null;
+      for (const k of Object.keys(filters)) {
+        if (!DIM_KEYS.includes(k)) continue;               // 未知维度名交给参数校验拦
+        const vals = [].concat(filters[k] || []).filter(v => v != null && v !== '');
+        if (!vals.length) continue;
+        let opts; try { opts = await api.options(k, {}); } catch (e) { return null; }
+        if (!Array.isArray(opts)) continue;
+        for (const v of vals) {
+          if (opts.indexOf(v) >= 0) continue;
+          for (const d of DIM_KEYS) {
+            if (d === k) continue;
+            let o2; try { o2 = await api.options(d, {}); } catch (e) { o2 = null; }
+            if (Array.isArray(o2) && o2.indexOf(v) >= 0) {
+              return { error: '『' + v + '』不是 ' + k + ' 的取值，它是 ' + d + ' 的取值——请放进 filters.' + d + ' 后重试。' };
+            }
+          }
+          return { error: '『' + v + '』在 ' + k + ' 维度里不存在。先用 options({field:"' + k + '"}) 查精确取值再试。' };
+        }
+      }
+      return null;
+    }
+    /* 财经比率防误读：模型把 0.3545 读成"0%"（评测RunC C2-02）——结果上附一行字段说明 */
+    const finNote = (r) => {
+      try { if (r && !r.error) r.字段说明 = 'bpAttain/fcAttain/revYoy/gmYoy/gmr 等均为小数比率（0.3545 = 35.45%）；nsip 为 USD/台。'; } catch (e) {}
+      return r;
+    };
     return {
       // 数据源元信息：可用维度、日期范围、有没有财经/IDC/全流程库存。会话开头应先调。
       meta: wrap(() => api.meta()),
@@ -492,15 +521,22 @@ const AIData = (function () {
         return { field: f, 命中: vals.length, 全量: total, 取值: vals.slice(0, lim), 截断: vals.length > lim };
       }),
       // 汇总表：按维度分组的 SO/SI/库存/DOS（+同比）
-      report: wrap(a => {
+      report: wrap(async a => {
         if (a.groupDim && !DIM_KEYS.includes(a.groupDim)) return { error: 'groupDim 只能是：' + DIM_KEYS.join('/') };
-        return api.report({ groupDim: a.groupDim || 'series', filters: a.filters || {}, weeks: a.weeks || 9, fromW: a.fromW, toW: a.toW });
+        const bad = await checkFilterDims(a.filters);
+        if (bad) return bad;
+        const r = await api.report({ groupDim: a.groupDim || 'series', filters: a.filters || {}, weeks: a.weeks || 9, fromW: a.fromW, toW: a.toW });
+        // 工具自述口径：比提示词更贴近模型视线（评测RunC：C1-02 仍拿年初至今冒充Q2）
+        try { if (r && r.rows) r.口径说明 = '累计列(cumCur/siCur)为年初至今口径，不可当指定期间用；指定期间的累计请改用 query(from/to)。yoy/wow 为小数比率(0.228=+22.8%)。'; } catch (e) {}
+        return r;
       }),
       // 时间序列：stackDim 必填（引擎不传会抛，旧版这里默认 null 导致 query 恒返回空）
       query: wrap(async a => {
         if (!a.stackDim || !DIM_KEYS.includes(a.stackDim)) {
           return { error: 'stackDim 必填（引擎要求），只能是：' + DIM_KEYS.join('/') + '。想看整体也要挑一个维度，例如 country。' };
         }
+        const bad = await checkFilterDims(a.filters);
+        if (bad) return bad;
         const met = a.metric || 'sellOut';
         const r = await api.query({ metric: met, gran: a.gran || 'month', filters: a.filters || {}, stackDim: a.stackDim, from: a.from, to: a.to, limit: a.limit });
         // 期间累计由工具算好：模型自己加桶会算错（评测2026-08-25：5645加成5944）。
@@ -518,7 +554,7 @@ const AIData = (function () {
         return r;
       }),
       // 经营自定义：按财经维度/指标取数（finUnits/finQtyUnits 不传引擎会按缺省，金额可能不归一）
-      financeCustom: wrap(a => api.financeCustom(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),
+      financeCustom: wrap(async a => finNote(await api.financeCustom(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})))),
       // 经营概览 / 产业产品经营看板 / 国家办经营看板
       // 年份护栏：模型凭空猜 year（评测2026-08-25抓到猜2023）会拿回全零并照报——改成可读错误让它自纠
       financeOverview: wrap(async a => {
@@ -531,11 +567,11 @@ const AIData = (function () {
             }
           } catch (e) {}
         }
-        return api.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}));
+        return finNote(await api.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})));
       }),
-      financeProductBoard: wrap(a => api.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),
+      financeProductBoard: wrap(async a => finNote(await api.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})))),
       // 注意：国家办看板不支持 lv1，只认 reps + series(LV3 名集)
-      financeRepBoard: wrap(a => api.financeRepBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),
+      financeRepBoard: wrap(async a => finNote(await api.financeRepBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})))),
       // 通用聚合（PSI）
       agg: wrap(a => api.agg(a || {})),
       // IDC 市场聚合：主进程判的是 params.dataset==='idc'（旧版传 source 导致静默返回 PSI 数据冒充 IDC）

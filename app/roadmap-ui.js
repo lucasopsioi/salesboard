@@ -13,6 +13,21 @@
     view: 'chart', chart: { mode: 'usd', country: '', year: '', explode: false, manualFrom: '', manualTo: '', category: '', showSamples: false, timeFrom: '', timeTo: '' },
   };
   window.RM_STATE = state;
+  /* FOB→RRP 推算配置(sb.roadmap.fob.v1):默认开,乘数可调(音频×3/平板×2.5) */
+  state.fobCfg = { on: true, multTablet: 2.5, multAudio: 3 };
+  try { const fc = JSON.parse(localStorage.getItem('sb.roadmap.fob.v1') || 'null'); if (fc) Object.assign(state.fobCfg, fc); } catch (e) { }
+  function saveFobCfg() { try { localStorage.setItem('sb.roadmap.fob.v1', JSON.stringify(state.fobCfg)); } catch (e) { } }
+  let FOBCACHE = null;
+  async function rmFobRefresh() {
+    if (typeof fobEnsureStore !== 'function') return;
+    try {
+      const stF = await fobEnsureStore();
+      const mtx = stF.matrix(null, null, null);
+      const names = {};
+      Object.keys(stF.modelInfo()).forEach(k => { names[k] = stF.displayName(k); });
+      FOBCACHE = { cells: mtx.cells, names, months: stF.monthsPresent() };
+    } catch (e) { FOBCACHE = null; }
+  }
   // 诊断：仅当未捕获错误来自路标代码(roadmap-*)时才弹窗，避免误报宿主app/echarts的无关错误；始终记进调试轨迹。
   if (typeof window !== 'undefined' && !window.__rmDiag) {
     window.__rmDiag = true; let shown = false;
@@ -59,6 +74,7 @@
   function saveBattle() { try { localStorage.setItem(BKEY, JSON.stringify({ battle: state.battle })); } catch (e) {} }
 
   function renderRoadmap() {
+    rmFobRefresh().then(() => { try { if (state.view === 'chart' && el('rmChart')) renderChart(); } catch (e) { } });
     const root = el('rmRoot'); if (!root) return;
     if (root.dataset.built !== '1') {
       if (!document.getElementById('rm-style')) {
@@ -421,8 +437,14 @@
   function renderChart() {
     rmTrace('chart');
     const host = el('rmChart'); if (!host) return;
-    const ps = chartProducts();
+    let ps = chartProducts();
     if (!ps.length) { host.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink3)">暂无产品。切到「列表」点＋产品添加。</div>'; return; }
+    // FOB 推算注入(渲染副本,不落库):缺价产品拿 Floor FOB×乘数 落到对应价格档位
+    state._fobEstIds = null; let _fobEstN = 0;
+    if (state.fobCfg.on && FOBCACHE && typeof RoadmapChart.fobEstimate === 'function') {
+      const est = RoadmapChart.fobEstimate(ps, FOBCACHE, state.fobCfg);
+      ps = est.list; state._fobEstIds = est.estIds; _fobEstN = est.count;
+    }
     const mf = parseFloat(state.chart.manualFrom), mt = parseFloat(state.chart.manualTo);
     const manual = (!isNaN(mf) && !isNaN(mt) && mf !== mt) ? { from: mf, to: mt } : null;
     const isUsd = state.chart.mode === 'usd';
@@ -466,6 +488,7 @@
       }).join('') + '</svg>';
     // 超范围产品计数提示（时间切片器裁掉的产品数）
     if (out.hidden) h += '<div style="position:absolute;left:50%;top:5px;transform:translateX(-50%);font-size:11px;color:var(--c-brand);background:rgba(255,255,255,.88);padding:1px 9px;border-radius:6px;box-shadow:0 1px 2px rgba(16,24,40,.08);z-index:4">' + out.hidden + ' 个产品在时间范围外</div>';
+    if (_fobEstN) h += '<div style="position:absolute;right:14px;top:5px;font-size:11px;color:var(--ink2);background:rgba(255,255,255,.88);padding:1px 9px;border-radius:6px;z-index:4">≈ ' + _fobEstN + ' 个产品价格由 Floor FOB×' + state.fobCfg.multTablet + '/' + state.fobCfg.multAudio + ' 推算</div>';
     // 方框（框样式=全局 boxStyle 经产品级覆盖后所见即所得：填充/透明/加粗/字号）
     out.points.forEach(p => {
       const x = px(p.x), y = p.missing ? py(0.5) : py(p.y);
@@ -473,7 +496,8 @@
       const op = p.missing ? 0.4 : st.opacity;
       const nmSize = st.fontSize, metaSize = Math.max(8, st.fontSize - 2), nmWeight = st.bold ? 700 : 400;
       const dots = p.dots.slice(0, 6).map(c => '<span class="dot" style="background:' + esc(c) + '"></span>').join('');
-      const val = p.missing ? '无本币价' : (state.chart.mode === 'usd' ? ('$' + Math.round(p.value)) : Math.round(p.value));
+      const isEst = state._fobEstIds && state._fobEstIds.has(p.realId);
+      const val = p.missing ? '无本币价' : ((isEst ? '≈' : '') + (state.chart.mode === 'usd' ? ('$' + Math.round(p.value)) : Math.round(p.value)) + (isEst ? '(FOB)' : ''));
       h += '<div class="rmc-box' + (p.missing ? ' missing' : '') + '" data-rid="' + esc(p.realId) + '" style="left:' + x + 'px;top:' + y + 'px;background:' + esc(st.fill) + ';opacity:' + op + '">' +
         '<div class="nm" style="font-weight:' + nmWeight + ';font-size:' + nmSize + 'px">' + esc(p.name) + '</div>' + (dots ? '<div class="dots">' + dots + '</div>' : '') +
         '<div class="meta" style="font-size:' + metaSize + 'px">' + esc(p.config) + '</div><div class="meta" style="font-size:' + metaSize + 'px">' + val + ' · ' + esc(p.shipLate) + '</div></div>';
@@ -487,6 +511,59 @@
     });
     host.innerHTML = h;
     host.querySelectorAll('.rmc-box[data-rid]').forEach(b => b.addEventListener('click', () => { const prod = state.products.find(p => p.id === b.dataset.rid); if (prod) openDialog(prod); }));
+    /* 水平拖拽 = 改上市时间(用户 2026-08-25:生成完的路标直接拖产品定上市时间)。
+       位移<6px 视为点击(仍开编辑框);拖动中顶部浮出目标月份;松手写回 shipLate='YYYY/MM' 持久化。 */
+    (function () {
+      const ts2 = out.tScale;
+      if (ts2.maxN === ts2.minN) return;   // 单一时间点,横轴无意义
+      host.querySelectorAll('.rmc-box[data-rid]').forEach(b => {
+        b.title = '拖动=改上市时间 · 点击=编辑';
+        b.style.touchAction = 'none';
+        b.addEventListener('pointerdown', ev => {
+          if (ev.button !== 0) return;
+          const rid = b.dataset.rid;
+          const rect0 = host.getBoundingClientRect();
+          const startX = ev.clientX;
+          let moved = false, tip = null;
+          const mv = e2 => {
+            if (!moved && Math.abs(e2.clientX - startX) < 6) return;
+            if (!moved) {
+              moved = true;
+              try { b.setPointerCapture(ev.pointerId); } catch (e3) { }
+              b.style.zIndex = 99; b.style.opacity = .75; b.style.cursor = 'grabbing';
+              tip = document.createElement('div');
+              tip.style.cssText = 'position:absolute;top:4px;padding:2px 10px;background:var(--c-brand);color:#fff;font-size:12px;border-radius:6px;z-index:100;pointer-events:none;white-space:nowrap';
+              host.appendChild(tip);
+            }
+            const mx = e2.clientX - rect0.left;
+            b.style.left = mx + 'px';
+            const xn = Math.max(0, Math.min(1, (mx - padL) / (W - padL - padR)));
+            const mo = Math.round(ts2.minN + xn * (ts2.maxN - ts2.minN));
+            b._dropYm = Math.floor((mo - 1) / 12) + '/' + String(((mo - 1) % 12) + 1).padStart(2, '0');
+            tip.textContent = '上市 → ' + b._dropYm;
+            tip.style.left = Math.min(mx, rect0.width - 120) + 'px';
+          };
+          const up = () => {
+            document.removeEventListener('pointermove', mv);
+            document.removeEventListener('pointerup', up);
+            if (tip) tip.remove();
+            if (!moved) return;
+            b._squelchClick = true;
+            const prod = state.products.find(p3 => p3.id === rid);
+            if (prod && b._dropYm) {
+              prod.shipLate = b._dropYm;
+              save();
+              if (typeof toast === 'function') toast(prod.name + ' 上市时间 → ' + b._dropYm, 'ok');
+            }
+            renderChart(); renderTimeSlider();
+          };
+          document.addEventListener('pointermove', mv);
+          document.addEventListener('pointerup', up);
+        });
+        // 拖拽后的 click 吞掉,不误开编辑框(capture 先于既有 bubble 监听)
+        b.addEventListener('click', e4 => { if (b._squelchClick) { b._squelchClick = false; e4.stopImmediatePropagation(); } }, true);
+      });
+    })();
     host.querySelectorAll('.rmc-box.sample[data-sid]').forEach(b => b.addEventListener('click', () => { const sm = state.samples.find(s => s.id === b.dataset.sid); if (sm) openSampleDialog(sm); }));
     // hover 接续链高亮：停在产品上→整条前代+后代链保持原色+连线标红，其余产品/样机/连线变灰；移开全部恢复。孤立产品（无接续关系）不触发。
     (function () {
@@ -552,12 +629,18 @@
       '<span style="margin:0 3px">~</span>' +
       '<input type="date" id="rmTimeTo" value="' + toDateValue(c.timeTo) + '" title="结束(空=自动)" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit">' +
       '<button class="btn" id="rmTimeReset" title="复位为自动全范围" style="padding:4px 8px;margin-left:4px">复位</button>' +
-      '<button class="btn" id="rmBoxStyle" title="全局框样式（单产品可在产品弹窗覆盖）" style="padding:4px 10px;margin-left:12px">框样式…</button>';
+      '<button class="btn" id="rmBoxStyle" title="全局框样式（单产品可在产品弹窗覆盖）" style="padding:4px 10px;margin-left:12px">框样式…</button>' +
+      '<label style="font-size:12px;margin-left:12px" title="缺价产品用 Floor FOB×渠长倍数推算 RRP 落位(≈标注);手填RRP/SKU价永远优先"><input type="checkbox" id="rmFobEst"' + (state.fobCfg.on ? ' checked' : '') + '> ≈FOB推算缺价</label>' +
+      '<span style="font-size:12px;color:var(--ink2)"> 平板×</span><input id="rmFobMt" value="' + state.fobCfg.multTablet + '" style="width:42px;border:1px solid var(--line);border-radius:6px;padding:4px 4px">' +
+      '<span style="font-size:12px;color:var(--ink2)"> 音频×</span><input id="rmFobMa" value="' + state.fobCfg.multAudio + '" style="width:36px;border:1px solid var(--line);border-radius:6px;padding:4px 4px">';
     const rec = () => renderChart();
     el('rmModeUsd').onclick = () => { c.mode = 'usd'; renderChartTools(); rec(); };
     el('rmModeLocal').onclick = () => { c.mode = 'local'; if (!c.country && countries.length) c.country = countries[0]; renderChartTools(); rec(); };
     if (el('rmCountry')) el('rmCountry').onchange = (e) => { c.country = e.target.value; rec(); };
     el('rmYear').onchange = (e) => { c.year = e.target.value; rec(); };
+    el('rmFobEst').onchange = (e) => { state.fobCfg.on = e.target.checked; saveFobCfg(); rec(); };
+    el('rmFobMt').onchange = (e) => { const v = parseFloat(e.target.value); if (v > 0) state.fobCfg.multTablet = v; saveFobCfg(); rec(); };
+    el('rmFobMa').onchange = (e) => { const v = parseFloat(e.target.value); if (v > 0) state.fobCfg.multAudio = v; saveFobCfg(); rec(); };
     el('rmExplode').onchange = (e) => { c.explode = e.target.checked; rec(); };
     el('rmShowSamples').onchange = (e) => { c.showSamples = e.target.checked; rec(); };
     el('rmSampleColor').oninput = (e) => { state.sampleStyle.color = e.target.value; saveSampleStyle(); rec(); };

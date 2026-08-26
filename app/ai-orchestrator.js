@@ -54,7 +54,7 @@
     '8 PSI 与财经的 Sell-in/out 差异 ≤100 台属正常（收入量＝能进收入的 sell-in，DOS>90 递延），此容差只适用于财经↔PSI；跨看板数字打架先说明两边口径，不要断言某一边错。',
     '9 stackDim/groupDim/rowDim 这类必填参数不传会报错或静默返回空；工具返回的字段名以返回值为准（report 行是 key/cumCur/cumPrev/yoy/siCur/inv/dos，不是 label/curYear）。',
     '10 查不到就说查不到，所有数字必须来自工具返回，绝不编造、绝不凭记忆填值。',
-    '11 期间纪律：题目指定了期间，PSI 用 query 显式传 from/to（把返回的桶求和），财经显式传 fromM/toM；report 没有期间参数、其累计列恒为年初至今，不得冒充指定期间；先用 meta 确认数据覆盖范围。用户口头给的数字未经工具核实，不得当作事实或修正依据。',
+    '11 期间纪律：题目指定了期间，PSI 用 query 显式传 from/to（把返回的桶求和），财经显式传 fromM/toM；report 没有期间参数、其累计列恒为年初至今，不得冒充指定期间；先用 meta 确认数据覆盖范围。季度换算：Q1=1-3月、Q2=4-6月、Q3=7-9月、Q4=10-12月。用户口头给的数字未经工具核实，不得当作事实或修正依据。',
   ].join('\n');
 
   /* ============================================================
@@ -314,7 +314,7 @@
     '【通用口径】渠道全加不去重；库存取最新期快照、绝不跨期累加；缺数是 null 不是 0，不参与求和平均。',
     'filters 的维度名只能用工具里给的；取值必须先用 options 查到精确写法，拼错会静默返回空。',
     '所有数字必须来自工具返回，查不到就说查不到，绝不编造、绝不凭记忆填值。',
-    '指定期间：query 传 from/to 桶求和，财经传 fromM/toM，report 恒为年初至今；用户口头数字未核实不作事实。',
+    '指定期间：query 传 from/to 桶求和，财经传 fromM/toM，report 恒为年初至今；季度=Q1:1-3月/Q2:4-6月/Q3:7-9月/Q4:10-12月。用户口头数字未核实不作事实。',
   ].join('\n');
 
   /* ── 专家卡按需裁剪 ────────────────────────────────────────────
@@ -569,11 +569,66 @@
     return hit >= 2;
   }
 
-  /* 主入口：一个问题 → 路由 → 串行跑专家 → 综合 → 数字校验
+  /* 溯源硬门禁：答案里的每个数字回查本轮工具返回原文，查无出处的替换为「?」并强制警示。
+     设计依据（评测 2026-08-25 三轮）：提示词管不住编数的方差（C6-02 三连编、C6-03 施压 2/3 失守），
+     确定性要求只能靠代码层。允许的合法变换：原值、×100、÷100（比率↔百分比）、
+     任意两个工具数的商（占比/同比）与差（pp差/绝对差）——纯编造的数字凑不出任何工具数对。
+     日期豁免：0..31 整数与 1900..2100 年份不查（"2026年1月"不是作答数值）。 */
+  function enforceProvenance(answer, toolTrace) {
+    const text = String(answer || '');
+    if (!text || !toolTrace || !toolTrace.length) return { answer: text, blocked: [] };
+    const NUM = /-?\d[\d,]*(?:\.\d+)?/g;
+    const pool = [];
+    toolTrace.forEach(s => (String(s).match(NUM) || []).forEach(m => {
+      const v = parseFloat(m.replace(/,/g, '')); if (isFinite(v)) pool.push(v);
+    }));
+    if (!pool.length) return { answer: text, blocked: [] };
+    const uniq = [...new Set(pool)].slice(0, 400);
+    const close = (a, b) => Math.abs(a - b) <= Math.max(0.05, Math.abs(b) * 0.002);
+    const backed = (x) => {
+      for (const t of uniq) { if (close(t, x) || close(t * 100, x) || close(t / 100, x)) return true; }
+      for (let i = 0; i < uniq.length; i++) {
+        for (let j = 0; j < uniq.length; j++) {
+          if (i === j) continue;
+          const a = uniq[i], b = uniq[j];
+          if (b !== 0 && (close(a / b, x) || close(100 * a / b, x))) return true;
+          if (close(a - b, x)) return true;
+        }
+      }
+      return false;
+    };
+    const blocked = [];
+    const out = text.replace(NUM, (m) => {
+      const v = parseFloat(m.replace(/,/g, ''));
+      if (!isFinite(v)) return m;
+      if (Number.isInteger(v) && ((v >= 0 && v <= 31) || (v >= 1900 && v <= 2100))) return m;
+      if (backed(v)) return m;
+      blocked.push(m);
+      return '?';
+    });
+    const uniqBlocked = [...new Set(blocked)].slice(0, 12);
+    if (!uniqBlocked.length) return { answer: text, blocked: [] };
+    return {
+      answer: out + '\n\n> ⚠ 溯源门禁：以下数字在本轮工具返回中找不到出处，已替换为「?」。数据未包含时请以「数据未包含」为准：' + uniqBlocked.join('、'),
+      blocked: uniqBlocked,
+    };
+  }
+
+  /* 主入口：一个问题 → 路由 → 串行跑专家 → 综合 → 数字校验 → 溯源硬门禁
      opt.mode: 'fast'(默认) = 只跑当前看板专家、除非问题明显跨领域；'deep' = 总是完整编排 */
   async function orchestrate(question, currentBoard, deps, opt) {
     const mode = (opt && opt.mode) || 'fast';
     const budget = { left: BUDGET.maxToolCallsTotal };
+    // 记录本轮全部工具返回原文——溯源门禁的比对池
+    const toolTrace = [];
+    const baseRunTool = deps.runTool;
+    deps = Object.assign({}, deps, {
+      runTool: async (n, a) => {
+        const out = await baseRunTool(n, a);
+        try { toolTrace.push(JSON.stringify(out)); } catch (e) {}
+        return out;
+      },
+    });
     let tasks = planRoute(question, currentBoard).map(t => Object.assign({}, t, { boardId: currentBoard }));
     if (mode === 'fast' && tasks.length > 1 && !needsMultiAgent(question)) tasks = tasks.slice(0, 1);
     tasks.forEach(t => { t.mode = mode; });
@@ -596,7 +651,8 @@
       // 旧写法 notes||claims 会把装着数字的 claims 整个丢掉（评测 2026-08-25 云端首题逮住的真 bug）
       const claimsTxt = (only.claims || []).map(c => c.metric + '：' + c.value + (c.unit ? ' ' + c.unit : '')).join('\n');
       const text = [claimsTxt, only.notes].filter(Boolean).join('\n');
-      return { answer: text || '(空回复)', results, verified: { ok: true, unsupported: [] }, singleAgent: true };
+      const g1 = enforceProvenance(text, toolTrace);
+      return { answer: g1.answer || '(空回复)', results, verified: { ok: g1.blocked.length === 0, unsupported: g1.blocked }, singleAgent: true, provenanceBlocked: g1.blocked };
     }
 
     if (deps.onProgress) deps.onProgress({ type: 'synth' });
@@ -609,11 +665,17 @@
     });
     if (!resp || resp.error) {
       const fallback = results.map(r => '## ' + r.agentName + '\n' + (r.notes || r.error || '')).join('\n\n');
-      return { answer: fallback || '(综合失败)', results, verified: { ok: true, unsupported: [] }, synthError: (resp && resp.error) || '无响应' };
+      const gf = enforceProvenance(fallback, toolTrace);
+      return { answer: gf.answer || '(综合失败)', results, verified: { ok: gf.blocked.length === 0, unsupported: gf.blocked }, synthError: (resp && resp.error) || '无响应', provenanceBlocked: gf.blocked };
     }
     const answer = splitThink(resp.content || '').answer;
-    const verified = verifyNumbers(answer, results);
-    return { answer: answer || '(空回复)', results, verified };
+    const g2 = enforceProvenance(answer, toolTrace);
+    const verified = verifyNumbers(g2.answer, results);
+    if (g2.blocked.length) {
+      verified.ok = false;
+      verified.unsupported = [...new Set([].concat(verified.unsupported || [], g2.blocked))].slice(0, 12);
+    }
+    return { answer: g2.answer || '(空回复)', results, verified, provenanceBlocked: g2.blocked };
   }
 
   return {
@@ -621,6 +683,6 @@
     splitSections, queryTerms, pickCaliber, ROUTE_HINTS,
     agentForBoard, planRoute, needsMultiAgent, buildSpecialistSystem, buildContextMessage, buildSynthesisPrompt,
     estimateTokens, validateToolArgs, shrinkToolResult, trimMessages, splitThink,
-    parseClaims, verifyNumbers, normalizeCalls, runSpecialist, orchestrate,
+    parseClaims, verifyNumbers, enforceProvenance, normalizeCalls, runSpecialist, orchestrate,
   };
 });

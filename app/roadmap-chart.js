@@ -120,6 +120,48 @@
     const fontSize = _pick(p.fontSize, _pick(g.fontSize, BOX_STYLE_DEFAULT.fontSize));
     return { fill: String(fill), opacity: +opacity, bold: !!bold, fontSize: +fontSize };
   }
+  /* ---- FOB→RRP 推算(用户 2026-08-25:Floor FOB=成本,渠长关系 音频×3、平板×2.5≈RRP) ----
+     只给「没有任何价」的产品注入(手填综合RRP/SKU价永远优先);返回**渲染副本**,绝不落库。
+     匹配:产品的 psiLink/internalCode/name 归一化后与 FOB 型号名互含(候选长度≥3 防误配);
+     FOB 值 = 每个命中型号取最新有数月,再对命中型号求均值(对应"综合"口径)。 */
+  function _fobNorm(x) { return String(x == null ? '' : x).trim().toLowerCase().replace(/\s+/g, '').replace(/[-_/()（）]/g, ''); }
+  function fobEstimate(products, fob, opt) {
+    opt = opt || {};
+    const multTablet = +opt.multTablet > 0 ? +opt.multTablet : 2.5;
+    const multAudio = +opt.multAudio > 0 ? +opt.multAudio : 3;
+    const out = { list: products || [], estIds: new Set(), count: 0 };
+    if (!fob || !fob.cells || !fob.months || !fob.months.length) return out;
+    const keys = Object.keys(fob.names || {});
+    if (!keys.length) return out;
+    const monthsDesc = fob.months.slice().sort((a, b) => b - a);
+    const latestOf = k => {
+      for (const m of monthsDesc) { const v = fob.cells[k + '|' + m]; if (v != null) return v; }
+      return null;
+    };
+    const normed = keys.map(k => ({ k, n: _fobNorm(fob.names[k] || k) })).filter(x => x.n);
+    out.list = (products || []).map(p => {
+      const hasPrice = (p.compositeRrpUsd != null && !isNaN(p.compositeRrpUsd))
+        || ((p.skus || []).some(s => s && s.priceUsd != null && s.priceUsd !== '' && !isNaN(+s.priceUsd)));
+      if (hasPrice) return p;
+      const cands = [p.psiLink, p.internalCode, p.name].map(_fobNorm).filter(c => c.length >= 3);
+      if (!cands.length) return p;
+      const vals = [];
+      normed.forEach(x => {
+        if (cands.some(c => x.n === c || x.n.indexOf(c) >= 0 || c.indexOf(x.n) >= 0)) {
+          const v = latestOf(x.k);
+          if (v != null) vals.push(v);
+        }
+      });
+      if (!vals.length) return p;
+      const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const mult = /音频|耳机|audio|buds/i.test(String(p.category || '')) ? multAudio : multTablet;
+      out.estIds.add(p.id);
+      out.count++;
+      return Object.assign({}, p, { compositeRrpUsd: Math.round(avg * mult), _fobEst: true });
+    });
+    return out;
+  }
+
   function productPoints(products, opts) {
     opts = opts || {}; const mode = opts.mode || 'usd';
     const list = (products || []);
@@ -287,5 +329,5 @@
     const vd = (products || []).map(p => p.shipLate).filter(d => ymNum(d) != null).sort((a, b) => ymNum(a) - ymNum(b));
     return { bands, boxes, lines, yTicks, xLabels: { minD: vd[0] || '', maxD: vd[vd.length - 1] || '' }, geom: { W, H, padL, padR, padT, padB } };
   }
-  return { ymNum, timeScale, priceScale, productValue, productPoints, samplePoints, seriesBands, successionLinks, orthoRoute, successionChain, explodeBySku, filterByYear, pptxRoadmap, skuPriceBoxes, resolveBoxStyle };
+  return { fobEstimate, _fobNorm, ymNum, timeScale, priceScale, productValue, productPoints, samplePoints, seriesBands, successionLinks, orthoRoute, successionChain, explodeBySku, filterByYear, pptxRoadmap, skuPriceBoxes, resolveBoxStyle };
 });

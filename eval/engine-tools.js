@@ -19,18 +19,43 @@ const FIN_UNITS = { actual: 'USD', forecast: 'MUSD', bp: 'USD' };
 const FIN_QTY = { actual: '台', forecast: '台', bp: '台' };
 
 async function mountEngine(opt) {
-  const cache = (opt && opt.cacheDir) || path.join(__dirname, '.engine-cache');
+  opt = opt || {};
+  const cache = opt.cacheDir || path.join(__dirname, '.engine-cache');
   fs.mkdirSync(cache, { recursive: true });
   const engine = new E.Engine(cache);
-  engine.setInvFolder(path.join(ROOT, 'demo-data', 'flow'));
-  engine.setFinFolder(path.join(ROOT, 'demo-data', 'finance'));
-  const r = await engine.refresh(path.join(ROOT, 'demo-data', 'psi'), () => {});
+  // 默认 demo-data；传 opt.{psi,fin,flow} 可挂任意数据目录（含真实底表——本地核验用）
+  engine.setInvFolder(opt.flow || path.join(ROOT, 'demo-data', 'flow'));
+  engine.setFinFolder(opt.fin || path.join(ROOT, 'demo-data', 'finance'));
+  const r = await engine.refresh(opt.psi || path.join(ROOT, 'demo-data', 'psi'), () => {});
   if (r && r.error) throw new Error('engine.refresh 失败: ' + r.error);
   return engine;
 }
 
 function buildRegistry(engine) {
   const DIM = AD.DIM_KEYS;
+  /* 与 app/ai-context.js 的 checkFilterDims 保持一致（改那边记得同步这里） */
+  function checkFilterDims(filters) {
+    if (!filters || typeof filters !== 'object') return null;
+    for (const k of Object.keys(filters)) {
+      if (!DIM.includes(k)) continue;
+      const vals = [].concat(filters[k] || []).filter(v => v != null && v !== '');
+      if (!vals.length) continue;
+      let opts; try { opts = engine.options(k, {}); } catch (e) { return null; }
+      if (!Array.isArray(opts)) continue;
+      for (const v of vals) {
+        if (opts.indexOf(v) >= 0) continue;
+        for (const d of DIM) {
+          if (d === k) continue;
+          let o2; try { o2 = engine.options(d, {}); } catch (e) { o2 = null; }
+          if (Array.isArray(o2) && o2.indexOf(v) >= 0) {
+            return { error: '『' + v + '』不是 ' + k + ' 的取值，它是 ' + d + ' 的取值——请放进 filters.' + d + ' 后重试。' };
+          }
+        }
+        return { error: '『' + v + '』在 ' + k + ' 维度里不存在。先用 options({field:"' + k + '"}) 查精确取值再试。' };
+      }
+    }
+    return null;
+  }
   return {
     meta: async () => engine.meta(),
     options: async (a) => {
@@ -47,13 +72,19 @@ function buildRegistry(engine) {
     report: async (a) => {
       a = a || {};
       if (a.groupDim && !DIM.includes(a.groupDim)) return { error: 'groupDim 只能是：' + DIM.join('/') };
-      return engine.report({ groupDim: a.groupDim || 'series', filters: a.filters || {}, weeks: a.weeks || 9, fromW: a.fromW, toW: a.toW });
+      const bad = checkFilterDims(a.filters);
+      if (bad) return bad;
+      const r = engine.report({ groupDim: a.groupDim || 'series', filters: a.filters || {}, weeks: a.weeks || 9, fromW: a.fromW, toW: a.toW });
+      try { if (r && r.rows) r.口径说明 = '累计列(cumCur/siCur)为年初至今口径，不可当指定期间用；指定期间的累计请改用 query(from/to)。yoy/wow 为小数比率(0.228=+22.8%)。'; } catch (e) {}
+      return r;
     },
     query: async (a) => {
       a = a || {};
       if (!a.stackDim || !DIM.includes(a.stackDim)) {
         return { error: 'stackDim 必填（引擎要求），只能是：' + DIM.join('/') + '。想看整体也要挑一个维度，例如 country。' };
       }
+      const bad = checkFilterDims(a.filters);
+      if (bad) return bad;
       const met = a.metric || 'sellOut';
       const r = engine.query({ metric: met, gran: a.gran || 'month', filters: a.filters || {}, stackDim: a.stackDim, from: a.from, to: a.to, limit: a.limit });
       // 与 app/ai-context.js 的区间合计保持一致（改那边记得同步这里）

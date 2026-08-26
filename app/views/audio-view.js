@@ -1006,15 +1006,15 @@ async function renderAuBountyImpl() {
 function auWowCell(v) {
   if (v == null || !isFinite(v)) return '<span class="wk">—</span>';
   const pct = (v * 100).toFixed(0) + '%';
-  if (v > 0) return '<span style="color:#C00000;font-weight:600">↑+' + pct + '</span>';
-  if (v < 0) return '<span style="color:#1E7E34;font-weight:600">↓' + pct + '</span>';
+  if (v > 0) return '<span style="color:#C00000;font-weight:600;white-space:nowrap">↑+' + pct + '</span>';
+  if (v < 0) return '<span style="color:#1E7E34;font-weight:600;white-space:nowrap">↓' + pct + '</span>';
   return '<span>0%</span>';
 }
 /* DOS:沿用色点,超标(渠道>120/全流程>200)数字再红加粗 */
 function auDosCell(v, kind) {
   const base = dosCell(v, kind);
   const over = v != null && isFinite(v) && (kind === 'flow' ? v > 200 : v > 120);
-  return over ? '<span style="color:#C00000;font-weight:700">' + base + '</span>' : base;
+  return over ? '<span style="color:#C00000;font-weight:700;white-space:nowrap">' + base + '</span>' : base;
 }
 function auCbColumns(r, dimOverride) {
   const dim = dimOverride || auW.cb.dim;

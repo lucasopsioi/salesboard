@@ -57,7 +57,7 @@
     if (n === 1) return [total];
     const raw = hdr.map((h, i) => {
       let m = dispLen(h);
-      (rows || []).forEach(r => { const L = dispLen((r || [])[i]); if (L > m) m = L; });
+      (rows || []).forEach(r => { const L = dispLen(wowArrow(h, (r || [])[i])); if (L > m) m = L; });
       m = Math.min(m, i === 0 ? 30 : 14);            // 封顶,避免一列吃掉整行
       return Math.max(i === 0 ? 8 : 5, m) + 2;
     });
@@ -213,7 +213,8 @@
     const aligns = colAligns(hdr, rows);
     const unit = 0.56 * fs;
     const headU = hdr.map(h => dispLen(h));
-    const maxU = hdr.map((h, i) => { let m = headU[i]; (rows || []).forEach(r => { const L = dispLen((r || [])[i]); if (L > m) m = L; }); return m; });
+    // 量宽用「渲染后的文本」:WoW 列渲染时会前置 ↑/↓ 箭头(2 显示单位),不算进去列就窄一截
+    const maxU = hdr.map((h, i) => { let m = headU[i]; (rows || []).forEach(r => { const L = dispLen(wowArrow(h, (r || [])[i])); if (L > m) m = L; }); return m; });
     const natural = maxU.map(u => Math.ceil(u * unit) + padX * 2 + 2);
     const headW = headU.map(u => Math.ceil(u * unit) + padX * 2 + 2);
     const wraps = hdr.map((h, i) => aligns[i] === 'l' && maxU[i] > 22);

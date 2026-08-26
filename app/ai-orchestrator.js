@@ -55,6 +55,7 @@
     '9 stackDim/groupDim/rowDim 这类必填参数不传会报错或静默返回空；工具返回的字段名以返回值为准（report 行是 key/cumCur/cumPrev/yoy/siCur/inv/dos，不是 label/curYear）。',
     '10 查不到就说查不到，所有数字必须来自工具返回，绝不编造、绝不凭记忆填值。',
     '11 期间纪律：题目指定了期间，PSI 用 query 显式传 from/to（把返回的桶求和），财经显式传 fromM/toM；report 没有期间参数、其累计列恒为年初至今，不得冒充指定期间；先用 meta 确认数据覆盖范围。季度换算：Q1=1-3月、Q2=4-6月、Q3=7-9月、Q4=10-12月。用户口头给的数字未经工具核实，不得当作事实或修正依据。',
+    '12 份额红线：数据无市场总量（hasIdc=false）算不出市场份额；份额数字不得自算或替外部"确认"，只可引用并注明无法核实。',
   ].join('\n');
 
   /* ============================================================
@@ -574,34 +575,38 @@
      确定性要求只能靠代码层。允许的合法变换：原值、×100、÷100（比率↔百分比）、
      任意两个工具数的商（占比/同比）与差（pp差/绝对差）——纯编造的数字凑不出任何工具数对。
      日期豁免：0..31 整数与 1900..2100 年份不查（"2026年1月"不是作答数值）。 */
-  function enforceProvenance(answer, toolTrace) {
+  function enforceProvenance(answer, toolTrace, question) {
     const text = String(answer || '');
     if (!text || !toolTrace || !toolTrace.length) return { answer: text, blocked: [] };
     const NUM = /-?\d[\d,]*(?:\.\d+)?/g;
     const pool = [];
-    toolTrace.forEach(s => (String(s).match(NUM) || []).forEach(m => {
+    // 出处池 = 工具返回原文 + 题面本身（引用用户给的数字不算编造；rule12 要求引用时注明无法核实）
+    toolTrace.concat(question ? [String(question)] : []).forEach(s => (String(s).match(NUM) || []).forEach(m => {
       const v = parseFloat(m.replace(/,/g, '')); if (isFinite(v)) pool.push(v);
     }));
     if (!pool.length) return { answer: text, blocked: [] };
     const uniq = [...new Set(pool)].slice(0, 400);
     const close = (a, b) => Math.abs(a - b) <= Math.max(0.05, Math.abs(b) * 0.002);
+    const closeTight = (a, b) => Math.abs(a - b) <= Math.max(0.02, Math.abs(b) * 0.001);
     const backed = (x) => {
+      // 允许：原值、×100、÷100（比率↔百分比）。占比/整体达成等衍生值由工具算好后随返回给出，
+      // 不再开放"任意两数之商"通道——商空间太密，8.1% 这类编造小百分数总能撞上巧合配对（评测实测）。
       for (const t of uniq) { if (close(t, x) || close(t * 100, x) || close(t / 100, x)) return true; }
+      // 保留"两数之差"（NSIP 绝对差、pp 差是真实业务表达），紧容差防撞
       for (let i = 0; i < uniq.length; i++) {
         for (let j = 0; j < uniq.length; j++) {
-          if (i === j) continue;
-          const a = uniq[i], b = uniq[j];
-          if (b !== 0 && (close(a / b, x) || close(100 * a / b, x))) return true;
-          if (close(a - b, x)) return true;
+          if (i !== j && closeTight(uniq[i] - uniq[j], x)) return true;
         }
       }
       return false;
     };
     const blocked = [];
-    const out = text.replace(NUM, (m) => {
+    const out = text.replace(NUM, (m, offset, str) => {
       const v = parseFloat(m.replace(/,/g, ''));
       if (!isFinite(v)) return m;
-      if (Number.isInteger(v) && ((v >= 0 && v <= 31) || (v >= 1900 && v <= 2100))) return m;
+      // 小整数/年份豁免（日期语境）；但紧跟 % 的是比率不是日期，不豁免（C6-02 的"8%"类）
+      const isPct = str[offset + m.length] === '%' || str[offset + m.length] === '％';
+      if (!isPct && Number.isInteger(v) && ((v >= 0 && v <= 31) || (v >= 1900 && v <= 2100))) return m;
       if (backed(v)) return m;
       blocked.push(m);
       return '?';
@@ -651,7 +656,7 @@
       // 旧写法 notes||claims 会把装着数字的 claims 整个丢掉（评测 2026-08-25 云端首题逮住的真 bug）
       const claimsTxt = (only.claims || []).map(c => c.metric + '：' + c.value + (c.unit ? ' ' + c.unit : '')).join('\n');
       const text = [claimsTxt, only.notes].filter(Boolean).join('\n');
-      const g1 = enforceProvenance(text, toolTrace);
+      const g1 = enforceProvenance(text, toolTrace, question);
       return { answer: g1.answer || '(空回复)', results, verified: { ok: g1.blocked.length === 0, unsupported: g1.blocked }, singleAgent: true, provenanceBlocked: g1.blocked };
     }
 
@@ -665,11 +670,11 @@
     });
     if (!resp || resp.error) {
       const fallback = results.map(r => '## ' + r.agentName + '\n' + (r.notes || r.error || '')).join('\n\n');
-      const gf = enforceProvenance(fallback, toolTrace);
+      const gf = enforceProvenance(fallback, toolTrace, question);
       return { answer: gf.answer || '(综合失败)', results, verified: { ok: gf.blocked.length === 0, unsupported: gf.blocked }, synthError: (resp && resp.error) || '无响应', provenanceBlocked: gf.blocked };
     }
     const answer = splitThink(resp.content || '').answer;
-    const g2 = enforceProvenance(answer, toolTrace);
+    const g2 = enforceProvenance(answer, toolTrace, question);
     const verified = verifyNumbers(g2.answer, results);
     if (g2.blocked.length) {
       verified.ok = false;

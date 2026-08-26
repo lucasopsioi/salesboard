@@ -128,8 +128,10 @@
     const cw = (opts.widths && opts.widths.length === hdr.length) ? opts.widths : colWidths(hdr, rws, TOT);
     const FS = opts.fs || 12, PX = opts.padX != null ? opts.padX : 10, PY = Math.max(3, Math.round((opts.fs || 12) / 2));
     const thSty = i => 'border:1px solid ' + C.line + ';background:' + C.head + ';color:' + C.ink2 + ';font-size:' + FS + 'px;line-height:1.4;font-weight:bold;padding:' + PY + 'px ' + PX + 'px;white-space:nowrap;text-align:' + (al[i] === 'r' ? 'right' : 'left');
+    const WRAPS = opts.wraps || null;   // v3 planFit 给;v2 不给 → 左列保持旧 break-word
     const tdSty = (i, tot, zeb) => 'border:1px solid ' + C.line + ';font-size:' + FS + 'px;line-height:1.4;color:' + C.ink + ';padding:' + PY + 'px ' + PX + 'px;vertical-align:middle;'
-      + (al[i] === 'r' ? 'text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;' : 'text-align:left;word-break:break-word;')
+      + (al[i] === 'r' ? 'text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;'
+        : ('text-align:left;' + (WRAPS ? (WRAPS[i] ? 'word-break:break-word;' : 'white-space:nowrap;') : 'word-break:break-word;')))
       + (tot ? 'font-weight:bold;background:' + C.soft + ';' : (zeb ? 'background:' + C.zebra + ';' : ''));
     let h = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;width:' + TOT + 'px;margin:0 0 8px" width="' + TOT + '" border="0">';
     h += '<colgroup>' + cw.map(w => '<col width="' + w + '" style="width:' + w + 'px">').join('') + '</colgroup>';
@@ -198,6 +200,52 @@
     }
     return { fs: 9, padX: 2, total: TOT };
   }
+  /* ---- v3 列规划(用户 2026-08-25 排版重做) ----
+     先定字号,再按内容给每列**自然宽度**(不换行所需);只有左对齐且数据行最长>22 显示单位
+     的「长文本列」(待办/进展/长产品名)才允许换行,其余列一律 nowrap 拿足自然宽。
+     wrap 列在 [max(0.6×自然,120,表头宽), 自然宽] 之间按比例分剩余宽度。
+     锁定列+wrap 下限仍超总宽 → tight=true(bestFs 会降字号;9px 仍超才等比硬压)。
+     列宽合计恒等于总宽(colgroup 恒等,Word 不 autofit)。 */
+  function planFit(header, rows, TOT, fs) {
+    const hdr = header || [], n = hdr.length;
+    const padX = Math.max(2, Math.round(fs * (fs > 9 ? 0.7 : 0.5)));
+    if (!n) return { fs, padX, total: TOT, widths: [], aligns: [], wraps: [], tight: false };
+    const aligns = colAligns(hdr, rows);
+    const unit = 0.56 * fs;
+    const headU = hdr.map(h => dispLen(h));
+    const maxU = hdr.map((h, i) => { let m = headU[i]; (rows || []).forEach(r => { const L = dispLen((r || [])[i]); if (L > m) m = L; }); return m; });
+    const natural = maxU.map(u => Math.ceil(u * unit) + padX * 2 + 2);
+    const headW = headU.map(u => Math.ceil(u * unit) + padX * 2 + 2);
+    const wraps = hdr.map((h, i) => aligns[i] === 'l' && maxU[i] > 22);
+    const minW = natural.map((w, i) => wraps[i] ? Math.max(Math.round(w * 0.6), 120, headW[i]) : w);
+    const minTotal = minW.reduce((a, b) => a + b, 0);
+    const widths = natural.slice();
+    let tight = false;
+    if (minTotal > TOT) {
+      tight = true;
+      const k = TOT / minTotal;
+      for (let i = 0; i < n; i++) { widths[i] = Math.max(36, Math.floor(minW[i] * k)); if (aligns[i] === 'l') wraps[i] = true; }
+    } else {
+      const wi = [];
+      for (let i = 0; i < n; i++) if (wraps[i]) wi.push(i);
+      if (wi.length) {
+        const lockW = natural.reduce((a, w, i) => a + (wraps[i] ? 0 : w), 0);
+        const avail = TOT - lockW;
+        const natSum = wi.reduce((a, i) => a + natural[i], 0);
+        wi.forEach(i => { widths[i] = Math.max(minW[i], Math.min(natural[i], Math.floor(avail * natural[i] / natSum))); });
+      }
+    }
+    const diff = TOT - widths.reduce((a, b) => a + b, 0);
+    if (diff !== 0) { let bi = 0; widths.forEach((w, i) => { if (w > widths[bi]) bi = i; }); widths[bi] += diff; }
+    return { fs, padX, total: TOT, widths, aligns, wraps, tight };
+  }
+  // 目标字号往下找,第一个不触发硬压(tight)的;9px 仍 tight 就 9(极端兜底)
+  function bestFs(header, rows, TOT, maxFs) {
+    for (let fs = Math.min(12, maxFs || 12); fs >= 9; fs--) {
+      if (!planFit(header, rows, TOT, fs).tight) return fs;
+    }
+    return 9;
+  }
   /* 同结构组：共用 列宽 + 对齐 + 字号（合并全组行一起量），上下表逐列对齐且观感一致 */
   function sharedFit(items) {
     const list = (items || []).filter(t => t && (t.header || []).length && !t.img);
@@ -211,7 +259,7 @@
       const hdr = grp[0].header.slice();
       grp.forEach(t => { if (String(t.header[0]).length > String(hdr[0]).length) hdr[0] = t.header[0]; });
       const allRows = grp.reduce((a, t) => a.concat(t.rows || []), []);
-      shared[k] = Object.assign({ widths: colWidths(hdr, allRows, V3_INNER), aligns: colAligns(hdr, allRows) }, fitFont(hdr, allRows, V3_INNER));
+      shared[k] = planFit(hdr, allRows, V3I, arguments.length > 1 && arguments[1] ? arguments[1] : bestFs(hdr, allRows, V3I, 12));
     });
     return t => (t && !t.img) ? (shared[sig(t)] || null) : null;
   }
@@ -220,9 +268,9 @@
     t = t || {};
     if (t.img) {
       const src = (imgMode === 'cid' && t.cid) ? ('cid:' + t.cid) : t.img;
-      return '<img src="' + src + '" width="' + V3_INNER + '" style="width:' + V3_INNER + 'px;display:block;border:1px solid ' + C.line + ';margin:0 0 8px" alt="' + esc(t.title || '数据表') + '">';
+      return '<img src="' + src + '" width="' + V3I + '" style="width:' + V3I + 'px;display:block;border:1px solid ' + C.line + ';margin:0 0 8px" alt="' + esc(t.title || '数据表') + '">';
     }
-    const f = fit || fitFont(t.header, t.rows, V3_INNER);
+    const f = fit || planFit(t.header, t.rows, V3I, bestFs(t.header, t.rows, V3I, 12));
     return oneTable(t.header, t.rows, Object.assign({}, opts || {}, f));
   }
 
@@ -389,7 +437,10 @@
   const V3_COLS = 6;                                     // 类型/重点工作/进展/状态/截止时间/涉及
   /* 内嵌内容宽度：外层格子有 6px 内边距 + 边框,嵌 1000px 会顶破右边(用户截图红框实锤,
      财经表最后一列被切)。1000 − 2×6(padding) − 4(边框余量) = 984。 */
-  const V3_INNER = W_TOTAL - 16;
+  /* v3 页宽可调(用户 2026-08-25:1000px 在 100% 缩放下偏窄要放大才占满)。
+     默认 1200;预览里可选 1000~1440,存 D.v3W。V3I=内表宽(外层格子 padding 16)。 */
+  let V3W = 1200, V3I = V3W - 16;
+  const V3_INNER = 984;   // 兼容旧引用名(仅作 fallback 默认值,v3 实际用 V3I)
   const V3_BORDER = '#A6A6A6';
   const V3_TXT = 'font-family:' + FONT + ';font-size:12pt;line-height:1.6;color:' + C.ink + ';';
   function v3Cell(inner, opts) {
@@ -412,6 +463,8 @@
   function v3Visual(t, imgMode, opts, fit) { return '<tr>' + v3Cell(v3Unit(t, imgMode, opts, fit), { pad: '6px' }) + '</tr>'; }
 
   function buildWeeklyV3Html(model, imgMode) {
+    V3W = (+((model || {}).v3W) >= 900 && +((model || {}).v3W) <= 1600) ? +model.v3W : 1200;
+    V3I = V3W - 16;
     const m = model || {};
     let b = '';
     // 问候(表外)
@@ -421,7 +474,7 @@
     b += '<div style="height:8px;line-height:8px;font-size:8px">&nbsp;</div>';
 
     // 大表开场
-    b += '<table cellpadding="0" cellspacing="0" width="' + W_TOTAL + '" border="0" style="border-collapse:collapse;table-layout:fixed;width:' + W_TOTAL + 'px;font-family:' + FONT + '">';
+    b += '<table cellpadding="0" cellspacing="0" width="' + V3W + '" border="0" style="border-collapse:collapse;table-layout:fixed;width:' + V3W + 'px;font-family:' + FONT + '">';
     // 6 列列宽：类型 90 / 重点工作 330 / 进展 220 / 状态 80 / 截止 130 / 涉及 150 = 1000
     const IW = [90, 330, 220, 80, 130, 150];
     b += '<colgroup>' + IW.map(w => '<col width="' + w + '" style="width:' + w + 'px">').join('') + '</colgroup>';
@@ -454,24 +507,24 @@
       .concat((m.newprods || []).reduce((a, np) => a.concat((np && np.info && np.info.tables) || []), []))
       .filter(t => t && !t.img && (t.header || []).length);
     let gfs = 12;
-    allT.forEach(t => { gfs = Math.min(gfs, fitFont(t.header, t.rows, V3_INNER).fs); });
+    allT.forEach(t => { gfs = Math.min(gfs, bestFs(t.header, t.rows, V3I, 12)); });
     if (+m.v3Fs) gfs = +m.v3Fs;
     gfs = Math.max(9, Math.min(12, gfs));
-    const GF = { fs: gfs, padX: Math.max(2, Math.round(gfs * (gfs > 9 ? 0.7 : 0.5))) };
-    const withG = f => Object.assign({}, f || fitFont([], [], V3_INNER), GF);
+    /* withG:共享组给的 plan 直接用;散表按统一字号现算列规划(列宽/换行随字号一起定) */
+    const withG = (f, t) => f || (t ? planFit(t.header, t.rows, V3I, gfs) : planFit([], [], V3I, gfs));
 
     // 二 · 全年达成进度
     if (m.finTitle) b += v3Section(m.finTitle);
     if (m.fin && m.fin.tables && m.fin.tables.length) {
-      const fit = sharedFit(m.fin.tables);
-      m.fin.tables.forEach(t => { b += v3Visual(t, imgMode, { totalIdx: t.totalIdx }, withG(fit(t))); });
+      const fit = sharedFit(m.fin.tables, gfs);
+      m.fin.tables.forEach(t => { b += v3Visual(t, imgMode, { totalIdx: t.totalIdx }, withG(fit(t), t)); });
     }
 
     // 二·五 成本变化(平板 · Floor FOB 热力,用户 2026-08-25)
     if (m.costChange && (m.costChange.rows || []).length) {
       b += v3Section('成本变化（Floor FOB · 基准 ' + (m.costChange.baseLabel || '') + '，单元格越红=涨越多）');
       b += v3Visual({ header: m.costChange.header, rows: m.costChange.rows }, imgMode,
-        { fills: m.costChange.fills }, withG(null));
+        { fills: m.costChange.fills }, withG(null, m.costChange));
     }
 
     // 三 · 销售进展
@@ -479,26 +532,26 @@
     if (S.overall || S.family || S.rep || (S.countries || []).length) b += v3Section('销售进展');
     if (S.overall) {
       if (S.overall.text) b += v3Narrative(S.overall.text);
-      if (S.overall.kpis && S.overall.kpis.length) b += '<tr>' + v3Cell(cardRow(S.overall.kpis, true, V3_INNER), { pad: '6px' }) + '</tr>';
+      if (S.overall.kpis && S.overall.kpis.length) b += '<tr>' + v3Cell(cardRow(S.overall.kpis, true, V3I), { pad: '6px' }) + '</tr>';
       if (S.overall.img || S.overall.cid) b += v3Visual({ img: S.overall.img, cid: S.overall.cid, title: '周度销售进展' }, imgMode);
     }
     const dimGroup = [S.family && S.family.table, S.rep && S.rep.table]
       .concat((S.countries || []).map(c => c && c.table)).filter(Boolean);
-    const dimFit = sharedFit(dimGroup);
+    const dimFit = sharedFit(dimGroup, gfs);
     if (S.family) {
       if (S.family.text) b += v3Narrative(S.family.text);
-      if (S.family.table) b += v3Visual(S.family.table, imgMode, { totalLast: !!S.family.table.hasTotal }, withG(dimFit(S.family.table)));
+      if (S.family.table) b += v3Visual(S.family.table, imgMode, { totalLast: !!S.family.table.hasTotal }, withG(dimFit(S.family.table), S.family.table));
     }
     if (S.rep) {
       if (S.rep.text) b += v3Narrative(S.rep.text);
-      if (S.rep.table) b += v3Visual(S.rep.table, imgMode, { totalLast: !!S.rep.table.hasTotal }, withG(dimFit(S.rep.table)));
+      if (S.rep.table) b += v3Visual(S.rep.table, imgMode, { totalLast: !!S.rep.table.hasTotal }, withG(dimFit(S.rep.table), S.rep.table));
     }
     const cbs = (S.countries || []).filter(c => c && (c.text || c.table));
     if (cbs.length) {
       // 六国与系列/国家办同结构 → 用同一个 dimFit，整篇逐列对齐、字号一致
       cbs.forEach(c => {
         if (c.text) b += v3Narrative(c.text);
-        if (c.table) b += v3Visual(c.table, imgMode, { totalLast: !!c.table.hasTotal }, withG(dimFit(c.table)));
+        if (c.table) b += v3Visual(c.table, imgMode, { totalLast: !!c.table.hasTotal }, withG(dimFit(c.table), c.table));
       });
     }
 
@@ -506,7 +559,7 @@
     if (m.bounty && m.bounty.rows && m.bounty.rows.length) {
       b += v3Section('$0-50美金扩大覆盖悬赏奖 SI 进展');
       if (m.bounty.note) b += v3Narrative(m.bounty.note);
-      b += v3Visual(m.bounty, imgMode, { totalLast: true }, withG(null));
+      b += v3Visual(m.bounty, imgMode, { totalLast: true }, withG(null, m.bounty));
     }
 
     // 四 · 新品进展
@@ -515,7 +568,7 @@
       nps.forEach(np => {
         b += v3Section('新品进展-' + (np.name || ''));
         if (np.text) b += v3Narrative(np.text);
-        if (np.table) b += v3Visual(np.table, imgMode, { totalLast: !!np.table.hasTotal }, withG(null));
+        if (np.table) b += v3Visual(np.table, imgMode, { totalLast: !!np.table.hasTotal }, withG(null, np.table));
       });
       // 新品信息(全部新品合一个区块)
       const infos = nps.filter(np => np.info);
@@ -526,7 +579,7 @@
           tables.forEach(t => {
             if (!t) return;
             if (t.title) b += v3Narrative(t.title + '：');
-            b += v3Visual(t, imgMode, {}, withG(null));
+            b += v3Visual(t, imgMode, {}, withG(null, t));
           });
         });
       }
@@ -826,6 +879,7 @@ if (typeof window !== 'undefined') (function () {
     const model = {
       week: rw.year + '-' + wk, weekShort: wk, dateStr: todayStr(),
       v3Fs: +(D.v3Fs) || 0,   // 预览里锁定的全篇字号(0=自动)
+      v3W: +(D.v3W) || 1200,  // 页宽(预览里可调 1000~1440)
       industry: auIndustryKey(), industryLabel: lab,
       version: V && V.version ? ('v' + V.version) : '', builtAt: (V && V.builtAt) || '',
       genTime: new Date().toTimeString().slice(0, 5),
@@ -924,6 +978,9 @@ if (typeof window !== 'undefined') (function () {
       + '  <div style="display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--c-line)">'
       + '    <b>导出预览（与 Outlook 收到的完全一致）</b>'
       + '    <span style="flex:1"></span>'
+      + '    <label style="font-size:12px">页宽 <select data-v3w>'
+      + [1000, 1120, 1200, 1320, 1440].map(v => '<option value="' + v + '"' + ((+D0.v3W || 1200) === v ? ' selected' : '') + '>' + v + 'px</option>').join('')
+      + '    </select></label>'
       + '    <label style="font-size:12px">全篇表格字号 <select data-v3fs>'
       + ['0|自动(装得下的最大)', '9|9px', '10|10px', '11|11px', '12|12px'].map(x => { const [v, t] = x.split('|'); return '<option value="' + v + '"' + ((+D0.v3Fs || 0) === +v ? ' selected' : '') + '>' + t + '</option>'; }).join('')
       + '    </select></label>'
@@ -941,6 +998,10 @@ if (typeof window !== 'undefined') (function () {
     };
     mask.querySelector('[data-v3fs]').onchange = e => {
       const D1 = auLoad(); D1.v3Fs = +e.target.value || 0; auSave();
+      paint();
+    };
+    mask.querySelector('[data-v3w]').onchange = e => {
+      const D1 = auLoad(); D1.v3W = +e.target.value || 1200; auSave();
       paint();
     };
     mask.querySelector('[data-v3cancel]').onclick = () => mask.remove();

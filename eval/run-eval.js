@@ -147,6 +147,14 @@ async function resolveModel() {
   if (!MODEL) throw new Error('模型列表为空');
 }
 async function httpChat(req) {
+  // 空回复/瞬时错误重试一次（评测抓到 MiniMax 1000 unknown error 与空回复各两例）
+  const first = await httpChatOnce(req);
+  if (first && !first.error && String(first.content || '').trim()) return first;
+  if (first && first.toolCalls && first.toolCalls.length) return first;
+  await new Promise(r => setTimeout(r, 2000));
+  return httpChatOnce(req);
+}
+async function httpChatOnce(req) {
   const body = {
     model: MODEL, temperature: 0.1, stream: false,
     max_tokens: req.maxTokens || 800,

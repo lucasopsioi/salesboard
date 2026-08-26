@@ -527,7 +527,11 @@ const AIData = (function () {
         if (bad) return bad;
         const r = await api.report({ groupDim: a.groupDim || 'series', filters: a.filters || {}, weeks: a.weeks || 9, fromW: a.fromW, toW: a.toW });
         // 工具自述口径：比提示词更贴近模型视线（评测RunC：C1-02 仍拿年初至今冒充Q2）
-        try { if (r && r.rows) r.口径说明 = '累计列(cumCur/siCur)为年初至今口径，不可当指定期间用；指定期间的累计请改用 query(from/to)。yoy/wow 为小数比率(0.228=+22.8%)。'; } catch (e) {}
+        try { if (r && r.rows) r.口径说明 = '累计列(cumCur/siCur)为年初至今口径，不可当指定期间用；指定期间的累计请改用 query(from/to)。yoy/wow 为小数比率(0.228=+22.8%)。';
+          if (Array.isArray(r.rows) && r.rows.length >= 2) {
+            const tot = r.rows.reduce((a, x) => a + (x.cumCur || 0), 0);
+            if (tot > 0) r.占比_按累计SO = Object.fromEntries(r.rows.map(x => [x.key, +(100 * (x.cumCur || 0) / tot).toFixed(1) + "%"]));
+          } } catch (e) {}
         return r;
       }),
       // 时间序列：stackDim 必填（引擎不传会抛，旧版这里默认 null 导致 query 恒返回空）
@@ -549,6 +553,7 @@ const AIData = (function () {
               sums[n] = s; tot += s;
             });
             r.区间合计 = Object.assign({ _全部: tot }, sums);
+            if (tot > 0) r.区间占比 = Object.fromEntries(Object.entries(sums).map(([k, v]) => [k, +(100 * v / tot).toFixed(1) + "%"]));
           }
         } catch (e) {}
         return r;
@@ -571,7 +576,34 @@ const AIData = (function () {
       }),
       financeProductBoard: wrap(async a => finNote(await api.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})))),
       // 注意：国家办看板不支持 lv1，只认 reps + series(LV3 名集)
-      financeRepBoard: wrap(async a => finNote(await api.financeRepBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})))),
+      /* RepBoard 原始返回太肥（5处×16字段），会被 4000 字符截断切掉关键字段（评测RunC C2-02 因此读出"0%"）——
+         AI 面只投影核心字段；界面看板不走这里，不受影响 */
+      financeRepBoard: wrap(async a => {
+        a = a || {};
+        // 国家办/系列取值校验：模型会编占位名（评测抓到 reps:["国家办1"…]→全零→"0%"）——报可用清单让它自纠
+        if ((a.reps && a.reps.length) || (a.series && a.series.length)) {
+          try {
+            const ov = await api.financeOverview({});
+            const dims = (ov && ov.dims) || {};
+            const badRep = (a.reps || []).find(v => (dims.reps || []).indexOf(v) < 0);
+            if (badRep) return { error: '『' + badRep + '』不是国家办取值。可用国家办：' + (dims.reps || []).join('、') + '。不筛选就不要传 reps。' };
+            const badSer = (a.series || []).find(v => (dims.lv3 || []).indexOf(v) < 0);
+            if (badSer) return { error: '『' + badSer + '』不是 series(LV3) 取值。可用：' + (dims.lv3 || []).join('、') + '。' };
+          } catch (e) {}
+        }
+        const r = await api.financeRepBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}));
+        try {
+          if (r && r.repTable && Array.isArray(r.repTable.rows)) {
+            const yy = String(r.curYear || '').slice(2);
+            const slim = (x) => ({ 国家办: x.key, 收入: x['rev' + yy], 收入同比: x.revYoy, 销毛率: x['gmr' + yy], NSIP: x['nsip' + yy], BP: x.bp, BP达成: x.bpAttain, 预测达成: x.fcAttain });
+            const out = { curYear: r.curYear, prevYear: r.prevYear, fromM: r.fromM, toM: r.toM, 行: r.repTable.rows.map(slim) };
+            if (r.repTable.total) out.合计 = slim(r.repTable.total);
+            if (out.合计 && out.合计.BP达成 != null) out.整体BP达成率 = (100 * out.合计.BP达成).toFixed(2) + "%（=Σ实际收入÷Σ全年BP；率不可对各国家办取平均）";
+            return finNote(out);
+          }
+        } catch (e) {}
+        return finNote(r);
+      }),
       // 通用聚合（PSI）
       agg: wrap(a => api.agg(a || {})),
       // IDC 市场聚合：主进程判的是 params.dataset==='idc'（旧版传 source 导致静默返回 PSI 数据冒充 IDC）

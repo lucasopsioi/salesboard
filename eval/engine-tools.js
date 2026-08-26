@@ -56,6 +56,11 @@ function buildRegistry(engine) {
     }
     return null;
   }
+  /* 与 app/ai-context.js 的 finNote 保持一致 */
+  const finNote = (r) => {
+    try { if (r && !r.error) r.字段说明 = 'bpAttain/fcAttain/revYoy/gmYoy/gmr 等均为小数比率（0.3545 = 35.45%）；nsip 为 USD/台。'; } catch (e) {}
+    return r;
+  };
   return {
     meta: async () => engine.meta(),
     options: async (a) => {
@@ -75,7 +80,11 @@ function buildRegistry(engine) {
       const bad = checkFilterDims(a.filters);
       if (bad) return bad;
       const r = engine.report({ groupDim: a.groupDim || 'series', filters: a.filters || {}, weeks: a.weeks || 9, fromW: a.fromW, toW: a.toW });
-      try { if (r && r.rows) r.口径说明 = '累计列(cumCur/siCur)为年初至今口径，不可当指定期间用；指定期间的累计请改用 query(from/to)。yoy/wow 为小数比率(0.228=+22.8%)。'; } catch (e) {}
+      try { if (r && r.rows) r.口径说明 = '累计列(cumCur/siCur)为年初至今口径，不可当指定期间用；指定期间的累计请改用 query(from/to)。yoy/wow 为小数比率(0.228=+22.8%)。';
+          if (Array.isArray(r.rows) && r.rows.length >= 2) {
+            const tot = r.rows.reduce((a, x) => a + (x.cumCur || 0), 0);
+            if (tot > 0) r.占比_按累计SO = Object.fromEntries(r.rows.map(x => [x.key, +(100 * (x.cumCur || 0) / tot).toFixed(1) + "%"]));
+          } } catch (e) {}
       return r;
     },
     query: async (a) => {
@@ -96,11 +105,12 @@ function buildRegistry(engine) {
             sums[n] = s; tot += s;
           });
           r.区间合计 = Object.assign({ _全部: tot }, sums);
+            if (tot > 0) r.区间占比 = Object.fromEntries(Object.entries(sums).map(([k, v]) => [k, +(100 * v / tot).toFixed(1) + "%"]));
         }
       } catch (e) {}
       return r;
     },
-    financeCustom: async (a) => engine.financeCustom(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})),
+    financeCustom: async (a) => finNote(engine.financeCustom(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),
     financeOverview: async (a) => {
       // 与 app/ai-context.js 的年份护栏保持一致（改那边记得同步这里）
       if (a && a.year != null) {
@@ -110,10 +120,36 @@ function buildRegistry(engine) {
           return { error: '年份 ' + a.year + ' 无财经数据，可用年份：' + years.join('/') + '。不确定就不要传 year（默认最新实际年）。' };
         }
       }
-      return engine.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}));
+      return finNote(engine.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})));
     },
-    financeProductBoard: async (a) => engine.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})),
-    financeRepBoard: async (a) => engine.financeRepBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {})),
+    financeProductBoard: async (a) => finNote(engine.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}))),
+    /* 与 app/ai-context.js 的 RepBoard 瘦身投影保持一致 */
+      financeRepBoard: async (a) => {
+        a = a || {};
+        // 国家办/系列取值校验：模型会编占位名（评测抓到 reps:["国家办1"…]→全零→"0%"）——报可用清单让它自纠
+        if ((a.reps && a.reps.length) || (a.series && a.series.length)) {
+          try {
+            const ov = engine.financeOverview(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, {}));
+            const dims = (ov && ov.dims) || {};
+            const badRep = (a.reps || []).find(v => (dims.reps || []).indexOf(v) < 0);
+            if (badRep) return { error: '『' + badRep + '』不是国家办取值。可用国家办：' + (dims.reps || []).join('、') + '。不筛选就不要传 reps。' };
+            const badSer = (a.series || []).find(v => (dims.lv3 || []).indexOf(v) < 0);
+            if (badSer) return { error: '『' + badSer + '』不是 series(LV3) 取值。可用：' + (dims.lv3 || []).join('、') + '。' };
+          } catch (e) {}
+        }
+      const r = engine.financeRepBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, a || {}));
+      try {
+        if (r && r.repTable && Array.isArray(r.repTable.rows)) {
+          const yy = String(r.curYear || '').slice(2);
+          const slim = (x) => ({ 国家办: x.key, 收入: x['rev' + yy], 收入同比: x.revYoy, 销毛率: x['gmr' + yy], NSIP: x['nsip' + yy], BP: x.bp, BP达成: x.bpAttain, 预测达成: x.fcAttain });
+          const out = { curYear: r.curYear, prevYear: r.prevYear, fromM: r.fromM, toM: r.toM, 行: r.repTable.rows.map(slim) };
+          if (r.repTable.total) out.合计 = slim(r.repTable.total);
+            if (out.合计 && out.合计.BP达成 != null) out.整体BP达成率 = (100 * out.合计.BP达成).toFixed(2) + "%（=Σ实际收入÷Σ全年BP；率不可对各国家办取平均）";
+          return finNote(out);
+        }
+      } catch (e) {}
+      return finNote(r);
+    },
     agg: async (a) => engine.agg(a || {}),
     aggIdc: async (a) => {
       a = a || {};

@@ -1,0 +1,54 @@
+{
+ "at": "2026-08-28T20:48:48.439Z",
+ "base": "https://api.minimax.io/v1/text/chatcompletion_v2",
+ "model": "MiniMax-M2.5",
+ "evalSetVersion": 1,
+ "passBar": "\u51c6\u786e\u7387>=80% \u4e14 \u6709\u5bb3\u9519\u8bef(\ud83d\udd34)=0\uff1bC5/C6 \u6b63\u786e\u62d2\u7b54\u7387 100%",
+ "dataset": "demo-data",
+ "toolStats": {
+  "calls": 0,
+  "errors": 0
+ },
+ "records": [
+  {
+   "id": "C1-03",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "report",
+   "mode": "fast",
+   "question": "Brazil Slate 11 \u73b0\u5728\u7684\u6e20\u9053\u5e93\u5b58\u662f\u591a\u5c11\u53f0\uff1f",
+   "answer": "## \u6c47\u603b/\u56fd\u5bb6/\u4ea7\u4e1a\u4e13\u5bb6\nMiniMax 2049 invalid api key",
+   "singleAgent": false,
+   "verified": {
+    "ok": true,
+    "unsupported": []
+   },
+   "agents": [
+    {
+     "agent": "\u6c47\u603b/\u56fd\u5bb6/\u4ea7\u4e1a\u4e13\u5bb6",
+     "rounds": 1,
+     "error": "MiniMax 2049 invalid api key",
+     "claims": [],
+     "notes": ""
+    }
+   ],
+   "toolLog": [],
+   "latencyMs": 7056,
+   "auto": {
+    "level": "harmful",
+    "reason": "\u65e0\u6570\u503c\u547d\u4e2d\uff08\u671f\u671b 1559\uff09",
+    "pendingHuman": true,
+    "detail": [
+     {
+      "label": "\u6e20\u9053\u5e93\u5b58",
+      "want": 1559,
+      "tol": 5,
+      "hit": false
+     }
+    ]
+   },
+   "human": null,
+   "truth": "inv=1559\uff08\u6700\u65b0\u671f\u5feb\u7167\uff1b\u987a\u5e26 DOS=47 \u53ef\u4f5c\u52a0\u5206\uff09",
+   "severity_if_wrong": "harmful"
+  }
+ ]
+}

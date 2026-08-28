@@ -1,14 +1,14 @@
 # eval/ —— AI 问答评测体系
 
 > 30 道题、四级判分、红线制。跑在 demo-data（固定种子，全虚构）上，全程可公开演示。
-> 方法论与设计决策见notes《作战包/Salesboard-评测集框架.md》。
+> 方法论、判分标准与五轮迭代结论见 [docs/EVALUATION.md](../docs/EVALUATION.md)。
 
 ## 快速开始
 
 ```
 node eval/ground-truth.js        # ① 真值核对：题库 vs 引擎（应全 OK）
 node eval/run-eval.js --dry      # ② 干跑：假模型走通全链路，不调 LLM
-node eval/run-eval.js --gguf "D:\workspace\Salesboard LLM版\models\Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf"
+node eval/run-eval.js --gguf ".\models\Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf"
                                  # ③ 真跑·全本地：node-llama-cpp 直读 GGUF（与主程序同一条推理路），什么都不用装
 node eval/run-eval.js            # ③' 或打 LM Studio localhost:1234（OpenAI 兼容服务）
 node eval/run-eval.js --base <url> --key <key> --model <id>   # ③'' 或云端（OpenAI 兼容）

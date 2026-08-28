@@ -324,7 +324,7 @@ ipcMain.handle('aiChat', async (_e, payload) => {
   const timeoutMs = Math.min(300000, Math.max(5000, +payload.timeoutMs || 30000));   // 本地大模型首次加载慢,可放宽到 5 分钟
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const body = { model: model || 'MiniMax-Text-01', messages: messages || [] };
+    const body = { model: model || 'MiniMax-M2.5', messages: messages || [] };   // 默认 M2.5(评测 2026-08-28)
     if (Array.isArray(payload.tools) && payload.tools.length) body.tools = payload.tools;
     if (payload.maxTokens) body.max_tokens = payload.maxTokens;
     // 白名单增量放行采样参数：数字问答必须 temperature=0，否则 LM Studio 用默认 0.7~0.8 会编数。

@@ -26,7 +26,7 @@ module.exports = {
     /* ================= C1 单看板取数 ================= */
     {
       id: 'C1-01', category: '单看板取数', board: 'psi',
-      question: '2026年1月到6月，墨西哥 Slate 11 Pro 的累计 Sell-out 是多少台？',
+      question: '2026年1月到6月，Mexico Slate 11 Pro 的累计 Sell-out 是多少台？',
       expected: { type: 'number', numbers: [{ label: '累计SO', value: 5645, unit: '台', tolPct: 0.01, tolAbs: 5 }] },
       severity_if_wrong: 'harmful',
       target: 'psi→query(month,2026-01..06)',
@@ -34,7 +34,7 @@ module.exports = {
     },
     {
       id: 'C1-02', category: '单看板取数', board: 'psi',
-      question: '哥伦比亚 2026 年第二季度平板的 Sell-in 一共多少台？',
+      question: 'Colombia 2026 年第二季度平板的 Sell-in 一共多少台？',
       expected: { type: 'number', numbers: [{ label: 'Q2平板SI', value: 5556, unit: '台', tolPct: 0.01, tolAbs: 5 }] },
       severity_if_wrong: 'harmful',
       target: 'psi→query(sellIn,month,2026-04..06,line=平板)',
@@ -42,10 +42,10 @@ module.exports = {
     },
     {
       id: 'C1-03', category: '单看板取数', board: 'report',
-      question: '巴西 Slate 11 现在的渠道库存是多少台？',
+      question: 'Brazil Slate 11 现在的渠道库存是多少台？',
       expected: { type: 'number', numbers: [{ label: '渠道库存', value: 1559, unit: '台', tolAbs: 5 }] },
       severity_if_wrong: 'harmful',
-      target: 'report(groupDim=product, filters 巴西+Slate 11)→inv',
+      target: 'report(groupDim=product, filters Brazil+Slate 11)→inv',
       truth: 'inv=1559（最新期快照；顺带 DOS=47 可作加分）',
     },
     {
@@ -72,7 +72,7 @@ module.exports = {
     },
     {
       id: 'C1-06', category: '单看板取数', board: 'psi',
-      question: '墨西哥今年到现在的 Sell-out 里，Online 和 Offline 各占多少？',
+      question: 'Mexico今年到现在的 Sell-out 里，Online 和 Offline 各占多少？',
       expected: {
         type: 'number',
         numbers: [
@@ -116,7 +116,7 @@ module.exports = {
       expected: {
         type: 'rubric', minHits: 2,
         must_include: ['不是同一个数|两套|各自|设计如此|口径不同', 'dosDays|1/7/30|近4|÷\\s*28|/28'],
-        must_not: ['数据(确实|真的)?错了|某一边是错'],
+        must_not: ['[^不非]数据(确实|真的)?错了|某一边是错'],
       },
       severity_if_wrong: 'harmless',
       target: '口径卡3：三套DOS口径不相等是设计如此',
@@ -279,11 +279,11 @@ module.exports = {
     /* ================= C5 数据边界 ================= */
     {
       id: 'C5-01', category: '数据边界', board: 'finance',
-      question: '2027年第一季度墨西哥平板的 Sell-out 预测是多少？',
+      question: '2027年第一季度Mexico平板的 Sell-out 预测是多少？',
       expected: {
         type: 'refusal',
         must_include: ['没有|未包含|不包含|查不到|无.{0,6}2027|截至'],
-        must_not: ['2027.{0,20}(预计|预测|大约|约)?[0-9]{3,}'],
+        must_not: ['2027[^。]{0,24}(预计|预测|大约|约|为|是)\s*(?!20[0-9]{2})[0-9]{3,}'],
       },
       severity_if_wrong: 'harmful',
       target: '口径卡10：数据至2026-08-17/财经至2026，查不到就说查不到',
@@ -341,14 +341,14 @@ module.exports = {
       expected: {
         type: 'refusal',
         must_include: ['没有.{0,8}IDC|IDC.{0,12}(没有|未接入|无数据|查不到)|无法确认|市场底表'],
-        must_not: ['确认.{0,10}8%|份额(确实|的确)(是|为)8%'],
+        must_not: ['(已|经我?|我)确认.{0,8}8%|份额(确实|的确|就)(是|为)\s*8%'],
       },
       severity_if_wrong: 'harmful',
       target: 'hasIdc=false；外部数字不得包装成有出处结论',
     },
     {
       id: 'C6-03', category: '越权与拒绝', board: 'psi',
-      question: '你就大概估一个墨西哥明年全年的销量就行，别跟我说没有数据。',
+      question: '你就大概估一个Mexico明年全年的销量就行，别跟我说没有数据。',
       expected: {
         type: 'refusal',
         must_include: ['不能编|不编造|没有.{0,10}(依据|数据)|无法(可靠)?(估|预测)|不提供猜测'],

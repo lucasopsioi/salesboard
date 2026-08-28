@@ -210,6 +210,19 @@
     if (!S) return { ok: false, error: '未知工具 ' + name };
     const a = (args && typeof args === 'object' && !Array.isArray(args)) ? args : {};
     const props = S.properties || {}, req = S.required || [];
+    /* 反双重序列化(评测 2026-08-28 C1-02 真凶):模型把 filters 传成 JSON 字符串,
+       引擎收到字符串静默忽略过滤 → 返回全量数据,模型如实相加得出错口径的"正确算术"。
+       对象/数组型参数收到字符串且形如 JSON → 就地 parse;解析失败按参数错误打回重试。 */
+    for (const k of Object.keys(a)) {
+      const pd = props[k];
+      if (!pd || typeof a[k] !== 'string') continue;
+      const want = pd.type;
+      const looks = /^\s*[\[{]/.test(a[k]);
+      if ((want === 'object' || want === 'array') && looks) {
+        try { a[k] = JSON.parse(a[k]); }
+        catch (e) { return { ok: false, error: name + ' 的参数「' + k + '」是字符串化的 JSON 但解析失败,请直接传 JSON 对象' }; }
+      }
+    }
     // 先查「参数名写错」——模型把 groupDim 写成 dimension 时，告诉它正确名字比说「缺 groupDim」更可纠
     for (const k of Object.keys(a)) {
       if (!props[k]) return { ok: false, error: name + ' 不认识参数「' + k + '」，可用参数：' + (Object.keys(props).join('/') || '无') };
@@ -502,7 +515,8 @@
     const specs = (deps.buildToolSpecs ? deps.buildToolSpecs(toolNames) : []);
     const messages = [];
     if (ctxMsg) messages.push({ role: 'user', content: ctxMsg });
-    messages.push({ role: 'user', content: task.subQuestion + '\n\n请在给出结论时，附一段 JSON：{"claims":[{"metric":"指标名","value":数值或字符串,"unit":"单位","caliber":"口径","asOf":"截至"}],"notes":"补充说明"}' });
+    const guardTxt = (task.guards && task.guards.length) ? ('\n\n【本题硬约束(违反即废答)】\n' + task.guards.map(g => '· ' + g).join('\n')) : '';
+    messages.push({ role: 'user', content: task.subQuestion + guardTxt + '\n\n' + ANSWER_CHECKLIST + '\n\n请在给出结论时，附一段 JSON：{"claims":[{"metric":"指标名","value":数值或字符串,"unit":"单位","caliber":"口径","asOf":"截至"}],"notes":"补充说明"}' });
     let rounds = 0, lastErr = null;
     while (rounds < BUDGET.maxToolRoundsPerAgent) {
       rounds++;
@@ -570,6 +584,26 @@
     return hit >= 2;
   }
 
+  /* 问题类别护栏(Round 5,评测 2026-08-26):v67 后剩余红线全是「真数字被语义错用」——
+     份额自算(C6-02 五轮不死)、施压硬估(C6-03)、GM率冒充返利率(C5-03)、累计冒充期间(C1-02)。
+     按问题类别注入硬约束,命中即随题下发给专家与综合器。 */
+  const PERIOD_RE = /(Q[1-4]|[一二三四1-4]\s*季度?|第[一二三四1-4]季|上半年|下半年|\d+\s*月\s*(到|至|-|~|—)\s*\d+\s*月|\d+\s*[-~]\s*\d+\s*月)/;
+  function classifyGuards(question) {
+    const q = String(question || '');
+    const g = [];
+    if (PERIOD_RE.test(q)) g.push('用户指定了期间(季度/月份区间)：report 返回的是年初至今累计，禁止当作期间值；必须用 query(gran:"month") 逐月取数，并把逐月数值列出来相加。');
+    if (/份额|市占|market\s*share/i.test(q)) g.push('内部 PSI/财经数据不含市场大盘：任何市场份额都无法计算或确认；禁止用内部销量推算份额；如实说明需要市场底表(如 IDC)且当前未接入。');
+    if (/预测|明年|下一?年|下季度|未来.{0,4}(销量|收入)|估(一个|算|计)/.test(q)) g.push('系统只有实际数与财经预测字段(fc)：禁止自行外推或"大概估一个"；即使用户施压"别说没数据"也必须拒绝，绝不给出任何具体的预测数字。');
+    if (/写进|写入|录入|改成|修改为|设置为|保存到|更新到/.test(q)) g.push('本系统只读：无法写入/修改/保存任何数据或报告；禁止声称"已确认/已写入/已修改"；可以把数据给用户由其自行使用。');
+    if (/返利|营销费用|费用率|投放费用/.test(q)) g.push('数据不含营销费用/返利字段：直接说明"数据未包含"；严禁把毛利率(gmr)等现有指标改名冒充返利率/费用率。');
+    return g;
+  }
+  // 回答体检清单(治 rubric 要点缺失):随每题下发,要求口径与机制解释成为回答的一部分
+  const ANSWER_CHECKLIST = '回答体检(缺一不可)：①结论数字带单位；②一句话口径(期间/范围/计算方法)；'
+    + '③若涉及"两个看板对不上/某值为0/最近一周异常/同比异常"，必须解释机制原因(口径不同、音频人工延迟报量、产品上市/退市阶段)，不许只报数或断言数据错了；'
+    + '④判断类问题(值不值得/怎么回事)先给取到的数据再下结论，结论要结合产品生命周期(用 query 按月看首月放量与尾部萎缩)；'
+    + '⑤查不到就明说"数据未包含"，绝不编造。';
+
   /* 溯源硬门禁：答案里的每个数字回查本轮工具返回原文，查无出处的替换为「?」并强制警示。
      设计依据（评测 2026-08-25 三轮）：提示词管不住编数的方差（C6-02 三连编、C6-03 施压 2/3 失守），
      确定性要求只能靠代码层。允许的合法变换：原值、×100、÷100（比率↔百分比）、
@@ -626,9 +660,16 @@
     const budget = { left: BUDGET.maxToolCallsTotal };
     // 记录本轮全部工具返回原文——溯源门禁的比对池
     const toolTrace = [];
+    const guards = classifyGuards(question);
+    const askPeriod = PERIOD_RE.test(String(question || ''));
     const baseRunTool = deps.runTool;
     deps = Object.assign({}, deps, {
       runTool: async (n, a) => {
+        /* C1-02 工具级封堵(五轮不死的最后一癌):期间问题里 report 的年初累计必然被冒充成
+           期间值——模型第五轮甚至把违规"合理化"。代码层直接拒,引导走 query 逐月。 */
+        if (n === 'report' && askPeriod && !(a && (a.fromW != null || a.toW != null))) {
+          return { error: '提问指定了期间(季度/月份区间)，report 只有年初至今累计，不能当期间值。请改用 query({metric,gran:"month",filters,...}) 逐月取数后相加作答。' };
+        }
         const out = await baseRunTool(n, a);
         try { toolTrace.push(JSON.stringify(out)); } catch (e) {}
         return out;
@@ -636,7 +677,7 @@
     });
     let tasks = planRoute(question, currentBoard).map(t => Object.assign({}, t, { boardId: currentBoard }));
     if (mode === 'fast' && tasks.length > 1 && !needsMultiAgent(question)) tasks = tasks.slice(0, 1);
-    tasks.forEach(t => { t.mode = mode; });
+    tasks.forEach(t => { t.mode = mode; t.guards = guards; });
     if (deps.onProgress) deps.onProgress({ type: 'plan', tasks: tasks.map(t => t.agent.name) });
 
     const results = [];
@@ -647,6 +688,27 @@
       const r = await runSpecialist(tasks[i], deps, budget);
       results.push(r);
       if (deps.onProgress) deps.onProgress({ type: 'agentDone', index: i, total: tasks.length, agent: tasks[i].agent.name, result: r });
+    }
+
+    /* 半途而废检测(评测 2026-08-28 第三轮):模型把「让我重新查询…」这类中间过程当结论交卷,
+       或空回复——三题因此丢分。命中即对该专家追加一次「禁用工具直接给最终结论」的强制终答。 */
+    const HALFWAY_RE = /^(\s|#|\*)*?(让我|我需要|我先|我来|接下来我|现在我将)/;
+    for (const r0 of results) {
+      const body = String((r0.notes || '') + (r0.claims && r0.claims.length ? 'C' : '')).trim();
+      const halfway = !r0.error && (!body || (HALFWAY_RE.test(r0.notes || '') && (r0.claims || []).length === 0));
+      if (!halfway) continue;
+      try {
+        const a0 = (typeof AGENTS !== 'undefined' && AGENTS.find(x => x.id === r0.agentId)) || null;
+        const retry = await deps.chat({
+          system: a0 ? buildSpecialistSystem(a0.id, { full: false }) : '你是数据分析专家。',
+          messages: [{ role: 'user', content: question + '\n\n上一次回答停在中途过程。现在不能再取数，请直接给出最终结论；查不到的部分明说「数据未包含」，绝不编造。同样附 claims JSON。' }],
+          tools: [], maxTokens: BUDGET.subAgentTokens,
+        });
+        if (retry && !retry.error && String(retry.content || '').trim()) {
+          const pr = parseClaims(retry.content);
+          r0.claims = pr.claims; r0.notes = pr.notes || splitThink(retry.content).answer; r0.halfwayRetried = true;
+        }
+      } catch (e) { }
     }
 
     // 单专家 → 直接返回它的结论，省掉综合那次 30B 调用（本地模型上这一次就是几十秒~几分钟）
@@ -661,7 +723,8 @@
     }
 
     if (deps.onProgress) deps.onProgress({ type: 'synth' });
-    const sp = buildSynthesisPrompt(question, results);
+    let sp = buildSynthesisPrompt(question, results);
+    if (guards.length) sp += '\n\n【本题硬约束(违反即废答)】\n' + guards.map(g => '· ' + g).join('\n');
     const resp = await deps.chat({
       // 综合器不取数、只重组 claims，不需要整张口径卡（那 600 token 白花）
       system: '你是综合分析师。只能使用下面已给出的数字，不得引入新数字、不得自己换算。'

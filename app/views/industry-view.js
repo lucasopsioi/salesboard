@@ -191,7 +191,7 @@ function renderIndChart(b){
     legend:{top:6,left:'center',textStyle:{fontFamily:YH,fontSize:12,color:CT().ink2()}},
     grid:{left:62,right:24,top:42,bottom:periods.length>16?56:34},
     dataZoom:[{type:'inside',zoomOnMouseWheel:'ctrl',moveOnMouseWheel:false}],
-    xAxis:{type:'category',data:periods,axisLabel:{fontFamily:YH,fontSize:11,color:CT().ink3(),rotate:periods.length>16?40:0},axisLine:{lineStyle:{color:CT().line()}},axisTick:{show:false}},
+    xAxis:{type:'category',data:periods,axisLabel:{fontFamily:YH,fontSize:11,color:CT().ink3(),rotate:periods.length>16?40:0,formatter:indAxisLab},axisLine:{lineStyle:{color:CT().line()}},axisTick:{show:false}},
     yAxis:[{type:'value',axisLabel:{fontFamily:YH,fontSize:10,color:CT().ink3(),formatter:v=>indFmt(v)},splitLine:{lineStyle:{color:CT().lineSoft()}}}],
     series},true);
   const scope=indScopeLabel();
@@ -205,6 +205,14 @@ function renderIndChart(b){
    - 起点=首个SellOut>0日(可用"上市日"输入框覆盖;无SO时退SellIn首日)
    - 沿用主筛选的地理/产业条件(indCmpBase),产品维度由本区块的 A/B 选择
    ============================================================ */
+/* ECharts 画布内的轴标签不是 DOM 文本节点，i18n 的 MutationObserver 覆盖不到，
+   这里按当前语言现翻一遍（词典里已有 1月→Jan 等条目）。 */
+const indAxisLab = v => {
+  try {
+    if (typeof SbI18n === 'undefined' || SbI18n.getLang() !== 'en') return v;
+    return SbI18n.trText(String(v), true);
+  } catch (e) { return v; }
+};
 const IND_LC_GRAN_LAB={day:'天',week:'周',month:'月'};
 async function renderIndLcCtrl(){
   const row=$('#indLcCtrl'); if(!row) return;
@@ -299,7 +307,7 @@ function renderIndLcChart(){
         h+='<br>'+p.marker+p.seriesName+': '+(p.value==null?'-':(lc.metric==='dos'?p.value+'天':indFmtU(p.value)))+(b?('<span style="color:#aaa">('+b.date+')</span>'):''); }); return h; }},
     legend:{top:4,left:'center',textStyle:{fontFamily:YH,fontSize:11,color:CT().ink2()}},
     grid:{left:62,right:24,top:40,bottom:cats.length>16?52:32},
-    xAxis:{type:'category',data:cats,axisLabel:{fontFamily:YH,fontSize:10,color:CT().ink3(),rotate:cats.length>16?40:0},axisLine:{lineStyle:{color:CT().line()}},axisTick:{show:false}},
+    xAxis:{type:'category',data:cats,axisLabel:{fontFamily:YH,fontSize:10,color:CT().ink3(),rotate:cats.length>16?40:0,formatter:indAxisLab},axisLine:{lineStyle:{color:CT().line()}},axisTick:{show:false}},
     yAxis:[{type:'value',axisLabel:{fontFamily:YH,fontSize:10,color:CT().ink3(),formatter:v=>lc.metric==='dos'?v:indFmt(v)},splitLine:{lineStyle:{color:CT().lineSoft()}}}],
     series:[
       {name:nmA,type:'line',smooth:!!ind.smooth,symbol:'circle',symbolSize:4,lineStyle:{width:2.4,color:CT().ink3()},itemStyle:{color:CT().ink3()},data:sA,z:4},

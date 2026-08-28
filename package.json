@@ -19,7 +19,8 @@
   },
   "devDependencies": {
     "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "pptxgenjs": "^4.0.1"
   },
   "build": {
     "appId": "io.lucasopsioi.salesboard",

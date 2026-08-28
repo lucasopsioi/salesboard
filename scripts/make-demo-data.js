@@ -37,20 +37,20 @@ const jitter = amp => 1 + (rnd() * 2 - 1) * amp;
 const ri = (a, b) => Math.floor(a + rnd() * (b - a + 1));
 
 /* ---------- 地理 ---------- */
-const REGION = '拉美大区';
+const REGION = 'LatAm Region';
 const GEO = [
-  { rep: '墨西哥国家办', country: '墨西哥', w: 1.00, big: true },
-  { rep: '巴西国家办', country: '巴西', w: 0.92, big: true },
-  { rep: '安第斯国家办', country: '哥伦比亚', w: 0.46, big: true },
-  { rep: '安第斯国家办', country: '秘鲁', w: 0.34, big: true },
-  { rep: '南锥国家办', country: '智利', w: 0.38, big: true },
-  { rep: '南锥国家办', country: '阿根廷', w: 0.30, big: true },
-  { rep: '安第斯国家办', country: '厄瓜多尔', w: 0.16, big: false },
-  { rep: '中美加勒比国家办', country: '巴拿马', w: 0.12, big: false },
-  { rep: '中美加勒比国家办', country: '多米尼加', w: 0.11, big: false },
-  { rep: '中美加勒比国家办', country: '危地马拉', w: 0.10, big: false },
-  { rep: '中美加勒比国家办', country: '哥斯达黎加', w: 0.08, big: false },
-  { rep: '南锥国家办', country: '乌拉圭', w: 0.07, big: false },
+  { rep: 'Mexico Office', country: 'Mexico', w: 1.00, big: true },
+  { rep: 'Brazil Office', country: 'Brazil', w: 0.92, big: true },
+  { rep: 'Andes Office', country: 'Colombia', w: 0.46, big: true },
+  { rep: 'Andes Office', country: 'Peru', w: 0.34, big: true },
+  { rep: 'Southern Cone Office', country: 'Chile', w: 0.38, big: true },
+  { rep: 'Southern Cone Office', country: 'Argentina', w: 0.30, big: true },
+  { rep: 'Andes Office', country: 'Ecuador', w: 0.16, big: false },
+  { rep: 'CenAm & Caribbean Office', country: 'Panama', w: 0.12, big: false },
+  { rep: 'CenAm & Caribbean Office', country: 'Dominican Rep.', w: 0.11, big: false },
+  { rep: 'CenAm & Caribbean Office', country: 'Guatemala', w: 0.10, big: false },
+  { rep: 'CenAm & Caribbean Office', country: 'Costa Rica', w: 0.08, big: false },
+  { rep: 'Southern Cone Office', country: 'Uruguay', w: 0.07, big: false },
 ];
 const CHANNELS = [{ name: 'Online', share: 0.42 }, { name: 'Offline', share: 0.58 }];
 
@@ -240,7 +240,7 @@ function buildFinForecast() {
           return u ? fn(u) : 0;
         });
         if (vals.every(v => !v)) return;
-        rows.push(['BrandX', REGION, rep, p.line, lv2, p.family, p.product, p.models[0], metric, order, unit, '大区工作底稿', '6月预测'].concat(vals));
+        rows.push(['BrandX', REGION, rep, p.line, lv2, p.family, p.product, p.models[0], metric, order, unit, 'Region working draft', 'Jun forecast'].concat(vals));
       };
       // 预测普遍比实际乐观一点（这样达成率会在 85%~95%，看起来像真的）
       mk('净销售收入', 10, 'MUSD', u => +(u * p.price * 0.63 * 1.08 / 1e6).toFixed(4));
@@ -266,7 +266,7 @@ function buildFinBP() {
         const ym = 2026 * 100 + m;
         const u = Math.round(monthUnits(p, ym) * repW / allW * 1.15);   // BP 比实际再高一档
         if (!u) continue;
-        const base = ['2026年BP', REGION, rep, p.line, lv2, p.family, p.product];
+        const base = ['2026 BP', REGION, rep, p.line, lv2, p.family, p.product];
         rows.push(base.concat(['净销售收入', ym, Math.round(u * p.price * 0.63)]));
         rows.push(base.concat(['销售毛利', ym, Math.round(u * p.price * 0.63 * 0.23)]));
         rows.push(base.concat(['收入量', ym, u]));

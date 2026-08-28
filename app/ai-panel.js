@@ -9,7 +9,8 @@
 (function () {
   const CFG_KEY = 'minimax.ai.cfg';          // 故意不用 sb.* 前缀：不进存档，不外带 API Key
   const DEFAULT_BASE = 'https://api.minimax.chat/v1/text/chatcompletion_v2';
-  const MODELS = ['MiniMax-Text-01', 'MiniMax-M1', 'abab6.5s-chat'];
+  // M2.5 为默认(评测 2026-08-28:30题 78.3% vs Text-01 58.3%,延迟低30%,工具成功率94%);旧模型保留可选
+  const MODELS = ['MiniMax-M2.5', 'MiniMax-Text-01', 'MiniMax-M1'];
   const LM_DEFAULT_BASE = 'http://127.0.0.1:1234/v1';   // LM Studio 本地服务器默认地址(0.4.x)
   const MAX_TOOL_ROUNDS = 5;                  // 工具循环上限
 

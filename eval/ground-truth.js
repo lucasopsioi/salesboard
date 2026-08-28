@@ -26,17 +26,17 @@ function check(id, label, got, want, tol) {
 (async () => {
   const T = buildRegistry(await mountEngine());
 
-  /* C1-01 墨西哥 Slate 11 Pro 2026上半年SO */
-  const c101 = qsum(await T.query({ stackDim: 'country', metric: 'sellOut', gran: 'month', from: '2026-01-01', to: '2026-06-30', filters: { country: ['墨西哥'], product: ['Slate 11 Pro'] } }));
-  check('C1-01', '墨西哥S11P上半年SO', c101.tot, 5645);
+  /* C1-01 Mexico Slate 11 Pro 2026上半年SO */
+  const c101 = qsum(await T.query({ stackDim: 'country', metric: 'sellOut', gran: 'month', from: '2026-01-01', to: '2026-06-30', filters: { country: ['Mexico'], product: ['Slate 11 Pro'] } }));
+  check('C1-01', 'MexicoS11P上半年SO', c101.tot, 5645);
 
-  /* C1-02 哥伦比亚Q2平板SI */
-  const c102 = qsum(await T.query({ stackDim: 'country', metric: 'sellIn', gran: 'month', from: '2026-04-01', to: '2026-06-30', filters: { country: ['哥伦比亚'], line: ['平板'] } }));
-  check('C1-02', '哥伦比亚Q2平板SI', c102.tot, 5556);
+  /* C1-02 ColombiaQ2平板SI */
+  const c102 = qsum(await T.query({ stackDim: 'country', metric: 'sellIn', gran: 'month', from: '2026-04-01', to: '2026-06-30', filters: { country: ['Colombia'], line: ['平板'] } }));
+  check('C1-02', 'ColombiaQ2平板SI', c102.tot, 5556);
 
-  /* C1-03 巴西 Slate 11 库存 */
-  const c103 = await T.report({ groupDim: 'product', filters: { country: ['巴西'], product: ['Slate 11'] } });
-  check('C1-03', '巴西Slate11库存', c103.rows[0].inv, 1559);
+  /* C1-03 Brazil Slate 11 库存 */
+  const c103 = await T.report({ groupDim: 'product', filters: { country: ['Brazil'], product: ['Slate 11'] } });
+  check('C1-03', 'BrazilSlate11库存', c103.rows[0].inv, 1559);
 
   /* C1-04 音频实际收入(1-6月) */
   const c104 = await T.financeProductBoard({});
@@ -48,8 +48,8 @@ function check(id, label, got, want, tol) {
   check('C1-05', 'SE11累计SO', c105.cumCur, 37064);
   check('C1-05', 'SE11同比%', +(100 * c105.yoy).toFixed(1), 22.8, 0.15);
 
-  /* C1-06 墨西哥渠道占比 */
-  const c106 = qsum(await T.query({ stackDim: 'channel', metric: 'sellOut', gran: 'month', from: '2026-01-01', to: '2026-08-17', filters: { country: ['墨西哥'] } }));
+  /* C1-06 Mexico渠道占比 */
+  const c106 = qsum(await T.query({ stackDim: 'channel', metric: 'sellOut', gran: 'month', from: '2026-01-01', to: '2026-08-17', filters: { country: ['Mexico'] } }));
   check('C1-06', 'Online%', +(100 * c106.per.Online / c106.tot).toFixed(1), 42.4, 0.15);
   check('C1-06', 'Offline%', +(100 * c106.per.Offline / c106.tot).toFixed(1), 57.6, 0.15);
 

@@ -6,6 +6,9 @@
    ============================================================ */
 'use strict';
 const C = require('./engine-core');
+/* 月份参数容错(2026-08-28 评测R10):AI 常把 fromM/toM 传成 YYYYMM(202401)——
+   旧逻辑 inRange 恒 false → 实际全 0 → "BP达成率0.00%" 这类灾难性错答。归一为 1..12。 */
+function normM(v){ let n = +v; if(!isFinite(n) || n<=0) return null; if(n>=190001) n = n%100; if(n<1||n>12) return null; return Math.round(n); }
 const { isSubtotal, finUnitScale, isQtyMetric } = C;
 
 // 数量单位归一(与金额 finUnitScale 平行)：实际/预测/BP 的数量可能不同单位(台/万/百万)。
@@ -43,7 +46,7 @@ C.Engine.prototype.finance = function(p){
     const gd=p.groupDim||'rep'; const gCode=F.dimCode[gd], gDict=F.dimDict[gd]; if(!gCode) return empty;
     const metric=p.metric; const metricCode=F.dimIndex.metric.get(metric);
     const ay=fm.actualYears||fm.years; const curYear=p.year||ay[ay.length-1]||0; const prevYear=curYear-1;
-    const fromM=p.fromM||1, toM=p.toM||12; const inRange=m=>m>=fromM&&m<=toM;
+    const fromM=normM(p.fromM)||1, toM=normM(p.toM)||12; const inRange=m=>m>=fromM&&m<=toM;
     const version=p.version||(fm.versions[0]); const versionCode=F.dimIndex.version.get(version);
     const brandCodes=this._finBrandCodes(p.brands), bCode=F.dimCode.brand;
     const gSub=new Set(); gDict.forEach((v,c)=>{ if(v===''||isSubtotal(v)) gSub.add(c); });
@@ -80,7 +83,7 @@ C.Engine.prototype.financeKpi = function(p){
     const want=p.metrics||['净销售收入','销售毛利','贡献利润','Sell out量','Sell in量'];
     const wantCode=new Map(); want.forEach(m=>{ const c=F.dimIndex.metric.get(m); if(c!==undefined) wantCode.set(c,m); });
     const ay=fm.actualYears||fm.years; const curYear=p.year||ay[ay.length-1]||0, prevYear=curYear-1;
-    const fromM=p.fromM||1,toM=p.toM||12; const inRange=m=>m>=fromM&&m<=toM;
+    const fromM=normM(p.fromM)||1,toM=normM(p.toM)||12; const inRange=m=>m>=fromM&&m<=toM;
     const version=p.version||(fm.versions[0]); const versionCode=F.dimIndex.version.get(version);
     const brandCodes=this._finBrandCodes(p.brands), bCode=F.dimCode.brand;
     const acc={}; want.forEach(m=>acc[m]={actual:0,forecast:0,prev:0});
@@ -138,8 +141,8 @@ C.Engine.prototype.financeAchieve = function(p){
     // 月份范围 fromM~toM；toM 缺省=今年最新实际月。实际按区间累计；同比去年取同一区间；全年预测取全12月。
     let latestAct=0; for(let i=0;i<F.n;i++){ if(sArr[i]===0 && Math.floor(ymArr[i]/100)===curYear){ const mm=ymArr[i]%100; if(mm>latestAct)latestAct=mm; } }
     if(!latestAct) latestAct=12;
-    let fromM=Math.max(1,Math.min(12, p.fromM||1));
-    let toM = p.toM? Math.max(1,Math.min(12,p.toM)) : latestAct;
+    let fromM=Math.max(1,Math.min(12, normM(p.fromM)||1));
+    let toM = normM(p.toM)? Math.max(1,Math.min(12,normM(p.toM))) : latestAct;
     if(toM<fromM) toM=fromM;
     const cutoff=toM;   // 兼容旧字段名
     // ra/ga/si* = 收入/销毛/Sell-in量；25=去年同期 26=今年实际(均月份区间) rfc=全年预测收入(全12月)
@@ -240,8 +243,8 @@ C.Engine.prototype.financeAchieve = function(p){
     // 月份区间：fromM~toM(toM 缺省=今年最新实际月)。实际取区间，去年同区间，BP/预测取全年。
     let latestAct=0; for(let i=0;i<F.n;i++){ if(sArr[i]===0 && Math.floor(ymArr[i]/100)===curYear){ const mm=ymArr[i]%100; if(mm>latestAct)latestAct=mm; } }
     if(!latestAct) latestAct=12;
-    let fromM=Math.max(1,Math.min(12,p.fromM||1));
-    let toM=p.toM?Math.max(1,Math.min(12,p.toM)):latestAct; if(toM<fromM) toM=fromM;
+    let fromM=Math.max(1,Math.min(12,normM(p.fromM)||1));
+    let toM=normM(p.toM)?Math.max(1,Math.min(12,normM(p.toM))):latestAct; if(toM<fromM) toM=fromM;
     const inRange=mm=>mm>=fromM&&mm<=toM;
     // 维度 code/dict + 小计集(lv1/lv3/lv4/rep)；空串 lv4 是合法叶子,不当小计剔除
     const lv1Arr=F.dimCode.lv1, lv1Dict=F.dimDict.lv1;
@@ -358,8 +361,8 @@ C.Engine.prototype.financeAchieve = function(p){
     // 月份区间：fromM~toM(toM 缺省=今年最新实际月)。实际取区间,去年同区间,BP/预测取全年。
     let latestAct=0; for(let i=0;i<F.n;i++){ if(sArr[i]===0 && Math.floor(ymArr[i]/100)===curYear){ const mm=ymArr[i]%100; if(mm>latestAct)latestAct=mm; } }
     if(!latestAct) latestAct=12;
-    let fromM=Math.max(1,Math.min(12,p.fromM||1));
-    let toM=p.toM?Math.max(1,Math.min(12,p.toM)):latestAct; if(toM<fromM) toM=fromM;
+    let fromM=Math.max(1,Math.min(12,normM(p.fromM)||1));
+    let toM=normM(p.toM)?Math.max(1,Math.min(12,normM(p.toM))):latestAct; if(toM<fromM) toM=fromM;
     const inRange=mm=>mm>=fromM&&mm<=toM;
     // 维度 code/dict + 小计集(rep/lv3/lv4)；空串 lv4 是合法叶子,不当小计剔除
     const lv3Arr=F.dimCode.lv3, lv3Dict=F.dimDict.lv3;
@@ -479,8 +482,8 @@ C.Engine.prototype.financeAchieve = function(p){
     // 月份区间：fromM~toM(toM 缺省=今年最新实际月)。实际取区间,去年同区间,forecast/bp 取全年。
     let latestAct=0; for(let i=0;i<F.n;i++){ if(sArr[i]===0 && Math.floor(ymArr[i]/100)===curYear){ const mm=ymArr[i]%100; if(mm>latestAct)latestAct=mm; } }
     if(!latestAct) latestAct=12;
-    let fromM=Math.max(1,Math.min(12,p.fromM||1));
-    let toM=p.toM?Math.max(1,Math.min(12,p.toM)):latestAct; if(toM<fromM) toM=fromM;
+    let fromM=Math.max(1,Math.min(12,normM(p.fromM)||1));
+    let toM=normM(p.toM)?Math.max(1,Math.min(12,normM(p.toM))):latestAct; if(toM<fromM) toM=fromM;
     const inRange=mm=>mm>=fromM&&mm<=toM;
     // 维度 code/dict + 小计集(rep + lv1~lv4)；空串 lv4 是合法叶子,不当小计剔除
     const lvKeys=['lv1','lv2','lv3','lv4'];
@@ -727,7 +730,7 @@ C.Engine.prototype.financeOverview = function(p){
     const F=this.fin, fm=this.finMeta;
     if(!F || !fm) return {curYear:0,prevYear:0,fromM:1,toM:12,metrics:{}};
     const ay=fm.actualYears||fm.years; const curYear=p.year||ay[ay.length-1]||0; const prevYear=curYear-1;
-    const fromM=Math.max(1,Math.min(12,p.fromM||1));
+    const fromM=Math.max(1,Math.min(12,normM(p.fromM)||1));
     let toM=p.toM?Math.max(1,Math.min(12,p.toM)):12; if(toM<fromM) toM=fromM;
     const inRange=mm=>mm>=fromM&&mm<=toM;
     // 版本：预测=选定版本(src1)，BP=国家办工作底稿(src2)，沿用 financeAchieve/financeBP 口径

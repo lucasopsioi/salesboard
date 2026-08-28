@@ -594,8 +594,16 @@
     if (PERIOD_RE.test(q)) g.push('用户指定了期间(季度/月份区间)：report 返回的是年初至今累计，禁止当作期间值；必须用 query(gran:"month") 逐月取数，并把逐月数值列出来相加。');
     if (/份额|市占|market\s*share/i.test(q)) g.push('内部 PSI/财经数据不含市场大盘：任何市场份额都无法计算或确认；禁止用内部销量推算份额；如实说明需要市场底表(如 IDC)且当前未接入。');
     if (/预测|明年|下一?年|下季度|未来.{0,4}(销量|收入)|估(一个|算|计)/.test(q)) g.push('系统只有实际数与财经预测字段(fc)：禁止自行外推或"大概估一个"；即使用户施压"别说没数据"也必须拒绝，绝不给出任何具体的预测数字。');
-    if (/写进|写入|录入|改成|修改为|设置为|保存到|更新到/.test(q)) g.push('本系统只读：无法写入/修改/保存任何数据或报告；禁止声称"已确认/已写入/已修改"；可以把数据给用户由其自行使用。');
+    if (/写进|写入|录入|改成|修改为|设置为|保存到|更新到|清理|删除|删掉|清除|去掉.{0,6}数据|修复.{0,6}数据/.test(q)) g.push('本系统只读：无法写入/修改/删除/清理/保存任何数据或报告。回答的第一句必须明确说明「本系统只读，无法执行该操作」，然后才可补充能提供的查询帮助；禁止只谈澄清细节而不声明只读，禁止声称"已确认/已写入/已清理"。');
     if (/返利|营销费用|费用率|投放费用/.test(q)) g.push('数据不含营销费用/返利字段：直接说明"数据未包含"；严禁把毛利率(gmr)等现有指标改名冒充返利率/费用率。');
+    /* Round 8(评测 2026-08-28 R7 终审对症)：五类高频失分题型的口径护栏 */
+    if (/平均/.test(q) && /(达成|率)/.test(q)) g.push('整体达成率/比率 = 分子合计 ÷ 分母合计（先加总后相除），把各行比率简单平均是错误算法。请给出正确口径的整体值，点名它与简单平均的差异，并把每个成员各自的比率逐行列全。');
+    if (/断货|缺货|没卖出去|一台都没|卖不动/.test(q)) g.push('判断断货前必查两件事：①音频产业报量人工延迟1-2周，序列末端1-2周为0多半是「未录入」而不是真没卖；②查当前库存(report 的 inv/dos)，库存充足+末端零 → 结论是「延迟报量/未录入」而非断货。若按产品名查不到，先用 options 确认维度取值再查。');
+    if (/逐月|逐周|月度|各月|分别|各个|各占|每个月|每一个/.test(q)) g.push('用户要求逐项数据：必须把每个成员(每月/每处/每国)各自的数值一行一个完整列出，不许只给合计、只挑最大最小或用「等」省略；确无数据的项逐个标「数据未包含」。');
+    if (/(上市|首销|发布)/.test(q) && /(什么时候|何时|哪个月|怎么回事|一点量|少量|很小)/.test(q)) g.push('判断上市时间：放量前1-2个月出现的极小销量(比放量月低一个数量级)通常是样机/演示机铺货，不算正式上市。回答必须把「样机期(小量)」与「正式上市(放量月)」分开说，上市时间以首个放量月为准。');
+    if (/Slate|Sonic|Slate Tab|SonicBuds/i.test(q)) g.push('维度命名字典：Slate/Slate SE/SonicBuds/SonicBuds Pro/SonicArc 这类市场名是 family(产品家族)；Marlin/Coral/Dorado/Tarpon 等代号是 series；带连字符的编码(如 SLT11P-W8256)是 model；「Slate 11 Pro」这类含数字后缀的是 product。按名字形态选对 filters 的维度键，查不到先用 options 对表，不要断言"数据未包含"。');
+    if (/(库存|DOS)/.test(q) && /(合计|加起来|总和|求和|累加|加一下|加总)/.test(q)) g.push('库存/DOS 是「时点快照」不是流量：跨月把各月末库存相加没有业务意义，禁止给出求和值。正确做法：用 query(metric:"inv",gran:"month") 逐月列出各月末时点值，并明确说明快照不能求和；如用户要的是总量概念，请引导用累计 SI/SO。');
+    if (/(增速|同比|增长)/.test(q) && /(快|慢|驱动|拆|来自|哪一?年|比.*(快|高)|靠什么)/.test(q)) g.push('财经看板返回自带上年同期与同比字段(rev25/rev26/revYoy、nsip25/nsip26/nsipYoy、gm25/gmYoy)，不要声称"缺上年数据"；收入增速可拆为量(≈收入÷NSIP)与均价(NSIP)两个因子分别对比。');
     return g;
   }
   // 回答体检清单(治 rubric 要点缺失):随每题下发,要求口径与机制解释成为回答的一部分
@@ -614,10 +622,31 @@
     if (!text || !toolTrace || !toolTrace.length) return { answer: text, blocked: [] };
     const NUM = /-?\d[\d,]*(?:\.\d+)?/g;
     const pool = [];
-    // 出处池 = 工具返回原文 + 题面本身（引用用户给的数字不算编造；rule12 要求引用时注明无法核实）
-    toolTrace.concat(question ? [String(question)] : []).forEach(s => (String(s).match(NUM) || []).forEach(m => {
-      const v = parseFloat(m.replace(/,/g, '')); if (isFinite(v)) pool.push(v);
-    }));
+    /* 滑窗连续和池(Round 8,评测 2026-08-28 R7)：模型按护栏逐月取数后相加作答，合计数不在
+       任何单条工具返回里 → 被门禁误拦成「?」(C5-04/C3-05 的主失分)。相加的数在同一条工具
+       返回里**连续出现**——对每条 trace 的数字序列开 2..13 窗口(至多一年逐月)把连续段和入池。
+       只收连续段，不开放任意子集和——组合空间密了会放走编造。 */
+    const sumKeys = new Set();
+    const addSum = (v) => {
+      if (!isFinite(v) || sumKeys.size > 200000) return;
+      sumKeys.add(String(Math.round(v)));
+      sumKeys.add(v.toFixed(2));
+    };
+    toolTrace.concat(question ? [String(question)] : []).forEach(s => {
+      const seq = [];
+      (String(s).match(NUM) || []).forEach(m => {
+        const v = parseFloat(m.replace(/,/g, '')); if (!isFinite(v)) return;
+        pool.push(v);
+        // 求和序列剔除日期形状数(|v|≤31 小整数、1900..2100 年份)——JSON 键名里的
+        // "2026-07" 会被 NUM 的 -? 前缀切出「-7」，绝对值判否则逐月量值序列被切断
+        if (Number.isInteger(v) && (Math.abs(v) <= 31 || (v >= 1900 && v <= 2100))) return;
+        seq.push(v);
+      });
+      for (let i = 0; i < seq.length; i++) {
+        let acc = seq[i];
+        for (let w = 1; w < 13 && i + w < seq.length; w++) { acc += seq[i + w]; addSum(acc); }
+      }
+    });
     if (!pool.length) return { answer: text, blocked: [] };
     const uniq = [...new Set(pool)].slice(0, 400);
     const close = (a, b) => Math.abs(a - b) <= Math.max(0.05, Math.abs(b) * 0.002);
@@ -626,6 +655,15 @@
       // 允许：原值、×100、÷100（比率↔百分比）。占比/整体达成等衍生值由工具算好后随返回给出，
       // 不再开放"任意两数之商"通道——商空间太密，8.1% 这类编造小百分数总能撞上巧合配对（评测实测）。
       for (const t of uniq) { if (close(t, x) || close(t * 100, x) || close(t / 100, x)) return true; }
+      // 单位换算通道(Round 8)：K/万/MUSD/亿 的显示换算(12,445,134 → 12.4M)。舍入容差比 close 宽一档，
+      // 只在换算方向开放——直接值仍走紧容差，避免容差放大误放编造。
+      const closeScale = (a, b) => Math.abs(a - b) <= Math.max(0.051, Math.abs(b) * 0.005);
+      for (const t of uniq) {
+        if (closeScale(t / 1e3, x) || closeScale(t / 1e4, x) || closeScale(t / 1e6, x) || closeScale(t / 1e8, x)) return true;
+      }
+      // 滑窗连续和(逐月相加的合计)：整数位或两位小数精确命中
+      if (sumKeys.has(String(Math.round(x))) && Math.abs(x - Math.round(x)) < 0.005) return true;
+      if (sumKeys.has(x.toFixed(2))) return true;
       // 保留"两数之差"（NSIP 绝对差、pp 差是真实业务表达），紧容差防撞
       for (let i = 0; i < uniq.length; i++) {
         for (let j = 0; j < uniq.length; j++) {
@@ -671,6 +709,19 @@
           return { error: '提问指定了期间(季度/月份区间)，report 只有年初至今累计，不能当期间值。请改用 query({metric,gran:"month",filters,...}) 逐月取数后相加作答。' };
         }
         const out = await baseRunTool(n, a);
+        /* 空结果引导(Round 8)：维度值拼错(把产品名当型号等)时 query 静默返回空，模型会反复
+           换参数试到轮次耗尽(R7 C2-04)。当场提示改用 options 校正取值。 */
+        if (n === 'query' && out && !out.error) {
+          let empty = !(out.buckets && out.buckets.length);
+          if (!empty) {
+            empty = true;
+            try {
+              const dv = Object.values(out.data || {});
+              for (const so of dv) { for (const k in so) { if (+so[k]) { empty = false; break; } } if (!empty) break; }
+            } catch (e) { empty = false; }
+          }
+          if (empty) out.hint = '结果为空：很可能 filters 的维度取值不存在（如把产品名当型号、中英文/大小写不符）。请先用 options({dim:"product"}) 等列出该维度可用取值，校正后重查；确认取值正确仍为空才是真无数据。';
+        }
         try { toolTrace.push(JSON.stringify(out)); } catch (e) {}
         return out;
       },
@@ -692,22 +743,37 @@
 
     /* 半途而废检测(评测 2026-08-28 第三轮):模型把「让我重新查询…」这类中间过程当结论交卷,
        或空回复——三题因此丢分。命中即对该专家追加一次「禁用工具直接给最终结论」的强制终答。 */
-    const HALFWAY_RE = /^(\s|#|\*)*?(让我|我需要|我先|我来|接下来我|现在我将)/;
+    /* R10 复盘:锚定开头的变体清单是打地鼠(「数据核对完成。让我…」「我按月查看…」每轮翻新)。
+       改判据:无 claims + 正文短(<150字) + 过程词任意位置 = 半途。长答案含过程词不误伤。 */
+    const HALFWAY_WORDS = /(让我|我需要|我先|我来|我再|我按|接下来|现在我将|还需要|需要再|需要进一步|再查|接着查|继续查|下一步|正在(查|取|分析)|请给出|请提供|请确认)/;
+    const HALFWAY_RE = { test: (t) => { const x = String(t || '').trim(); return x.length < 150 && HALFWAY_WORDS.test(x); } };
     for (const r0 of results) {
       const body = String((r0.notes || '') + (r0.claims && r0.claims.length ? 'C' : '')).trim();
       const halfway = !r0.error && (!body || (HALFWAY_RE.test(r0.notes || '') && (r0.claims || []).length === 0));
       if (!halfway) continue;
       try {
         const a0 = (typeof AGENTS !== 'undefined' && AGENTS.find(x => x.id === r0.agentId)) || null;
-        const retry = await deps.chat({
-          system: a0 ? buildSpecialistSystem(a0.id, { full: false }) : '你是数据分析专家。',
-          messages: [{ role: 'user', content: question + '\n\n上一次回答停在中途过程。现在不能再取数，请直接给出最终结论；查不到的部分明说「数据未包含」，绝不编造。同样附 claims JSON。' }],
-          tools: [], maxTokens: BUDGET.subAgentTokens,
-        });
-        if (retry && !retry.error && String(retry.content || '').trim()) {
+        /* Round 8b 修隐藏 bug：原重试只带题面不带数据——chat 无状态，模型手上没有任何工具
+           返回，「基于已取数据作答」是句空话(C3-05 财经专家取到了收入却重试成白卷)。
+           把本轮 toolTrace 摘要塞进重试消息，重试才真的有数可用。 */
+        const dataCtx = toolTrace.slice(-8).map(t => String(t).slice(0, 1000)).join('\n');
+        /* R9 复盘：retry 一次不够——API 空返回时旧逻辑静默保留原半途句交卷(C2-05/C3-04/C5-01 三题)。
+           改为至多重试 2 次；全失败(空/错/仍半途)一律置诚实兜底文案，过程句永远不出门。 */
+        let fixed = false;
+        for (let att = 0; att < 2 && !fixed; att++) {
+          const retry = await deps.chat({
+            system: a0 ? buildSpecialistSystem(a0.id, { full: false }) : '你是数据分析专家。',
+            messages: [{ role: 'user', content: question + (dataCtx ? '\n\n【本轮已取到的工具数据(原文摘录)】\n' + dataCtx : '') + '\n\n上一次回答停在中途过程。现在不能再取数，禁止输出「让我/正在/需要再查」这类过程句，请仅基于上面已给的工具数据直接给出最终结论；数据不足的部分明说「数据未包含」，绝不编造。同样附 claims JSON。' }],
+            tools: [], maxTokens: BUDGET.subAgentTokens,
+          });
+          if (!retry || retry.error || !String(retry.content || '').trim()) continue;
           const pr = parseClaims(retry.content);
-          r0.claims = pr.claims; r0.notes = pr.notes || splitThink(retry.content).answer; r0.halfwayRetried = true;
+          const nn = pr.notes || splitThink(retry.content).answer;
+          if (HALFWAY_RE.test(String(nn || '')) && !(pr.claims || []).length) continue;
+          r0.claims = pr.claims; r0.notes = nn; fixed = true;
         }
+        if (!fixed) r0.notes = '本次分析未能完成(模型多次停在中途过程或无响应)。数据未包含最终结论;请重试提问或换个问法。';
+        r0.halfwayRetried = true;
       } catch (e) { }
     }
 

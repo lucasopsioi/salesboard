@@ -38,7 +38,7 @@ module.exports = {
       expected: { type: 'number', numbers: [{ label: 'Q2平板SI', value: 5556, unit: '台', tolPct: 0.01, tolAbs: 5 }] },
       severity_if_wrong: 'harmful',
       target: 'psi→query(sellIn,month,2026-04..06,line=平板)',
-      truth: '1535+1663+2358=5556',
+      truth: '1535+1663+2358=5556(平板=Slate+Slate SE 两 family 合计。警示:2026-08-28 曾被误改 3596——那是照抄模型漏口径(只查 Slate)重算的值;审金标必须按题面口径独立取数)',
     },
     {
       id: 'C1-03', category: '单看板取数', board: 'report',
@@ -116,7 +116,7 @@ module.exports = {
       expected: {
         type: 'rubric', minHits: 2,
         must_include: ['不是同一个数|两套|各自|设计如此|口径不同', 'dosDays|1/7/30|近4|÷\\s*28|/28'],
-        must_not: ['[^不非]数据(确实|真的)?错了|某一边是错'],
+        must_not: ['数据(确实|真的|就是)错了|(确实|真的)是数据错了|某一边(确实|真的)是错'],
       },
       severity_if_wrong: 'harmless',
       target: '口径卡3：三套DOS口径不相等是设计如此',

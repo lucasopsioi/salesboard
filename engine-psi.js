@@ -7,9 +7,19 @@
 const C = require('./engine-core');
 const { FLOW, buildFilters, seriesAllowedSet, ymdInt, hasFilterVal, bucketOf, MAX_SERIES, isSubtotal } = C;
 
+/* metric 容错归一(2026-08-28 评测R10):AI/外部调用常传小写或别名,原实现 s[metric]
+   取不到字段会在下标处直接抛 TypeError 崩掉整次查询。 */
+const METRIC_ALIAS = { sellin:'sellIn', sellout:'sellOut', selin:'sellIn', selout:'sellOut',
+  si:'sellIn', so:'sellOut', inventory:'inv', stock:'inv', dos:'dos', inv:'inv',
+  sellIn:'sellIn', sellOut:'sellOut' };
 C.Engine.prototype.query = function(p){
   const s=this.store; if(!s) return {buckets:[],series:[],data:{},capped:false,total:0};
-  const sd=p.stackDim, metric=p.metric||'sellOut', gran=p.gran||'month', flow=FLOW[metric]?1:0;
+  const rawMet = p.metric || 'sellOut';
+  const metric = METRIC_ALIAS[rawMet] || METRIC_ALIAS[String(rawMet).toLowerCase()] || null;
+  if(!metric || !s[metric]) return {buckets:[],series:[],data:{},capped:false,total:0,
+    error:'metric 无效:「'+rawMet+'」。可用: sellIn / sellOut / inv / dos(大小写敏感,已尝试自动归一失败)'};
+  p = Object.assign({}, p, { metric });
+  const sd=p.stackDim, gran=p.gran||'month', flow=FLOW[metric]?1:0;
   const isDos=(metric==='dos'); const dosDays={day:1,week:7,month:30}[gran]||30;
   // 音频延迟录入:DOS 曲线上,纯音频 cell 在没有 SO 的桶置空(null → 图上留空,不造数)。混合 cell 不动。
   const AU=isDos?C.audioDimInfo(s):null, auCode=AU?s.dimCode[AU.dim]:null;

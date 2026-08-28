@@ -50,7 +50,7 @@ const CACHE = arg('cache', REAL ? require('path').join(__dirname, '.engine-cache
 const ALLOW_CLOUD_REAL = has('allow-cloud-real');
 
 const LEVELS = { full: 1, partial: 0.5, harmless: 0, harmful: 0 };
-const MARK = { full: 'PASS 完全正确', partial: 'HALF 部分正确', harmless: 'MISS 错但无害', harmful: 'RED! 错且有害', pending: '?    待人工' };
+const MARK = { full: 'PASS 完全正确', partial: 'HALF 部分正确', harmless: 'MISS 错但无害', harmful: 'RED! 错且有害', pending: '?    待人工', excluded: 'SKIP 空回复剔除' };
 
 /* ---------------- 评分 ---------------- */
 const NUM_RE = /-?\d[\d,]*(?:\.\d+)?/g;
@@ -108,15 +108,17 @@ function grade(q, answer, res) {
 
 /* ---------------- 汇总 ---------------- */
 function summarize(records, toolStats) {
-  const done = records.filter(r => (r.human || r.auto.level) !== 'pending');
   const lv = (r) => r.human || r.auto.level;
+  // excluded = API 空回复(服务端方差)，剔除不计分母(用户 2026-08-28 裁定)
+  const excluded = records.filter(r => lv(r) === 'excluded');
+  const done = records.filter(r => lv(r) !== 'pending' && lv(r) !== 'excluded');
   const score = done.reduce((a, r) => a + (LEVELS[lv(r)] || 0), 0);
   const red = done.filter(r => lv(r) === 'harmful');
-  const pend = records.filter(r => (r.human || r.auto.level) === 'pending');
+  const pend = records.filter(r => lv(r) === 'pending');
   const lat = records.map(r => r.latencyMs).sort((a, b) => a - b);
   const p50 = lat.length ? lat[Math.floor(lat.length / 2)] : 0;
   return {
-    total: records.length, graded: done.length, pending: pend.length,
+    total: records.length, graded: done.length, pending: pend.length, excluded: excluded.map(r => r.id),
     accuracy: done.length ? +(score / done.length).toFixed(3) : null,
     harmful: red.map(r => r.id),
     toolCalls: toolStats.calls, toolErrors: toolStats.errors,
@@ -127,7 +129,7 @@ function summarize(records, toolStats) {
 }
 function printSummary(s, label) {
   console.log('\n===== 汇总 ' + (label || '') + ' =====');
-  console.log('已判 ' + s.graded + '/' + s.total + (s.pending ? ('（待人工 ' + s.pending + '）') : ''));
+  console.log('已判 ' + s.graded + '/' + s.total + (s.pending ? ('（待人工 ' + s.pending + '）') : '') + (s.excluded && s.excluded.length ? ('（空回复剔除 ' + s.excluded.length + ': ' + s.excluded.join(',') + '）') : ''));
   console.log('准确率(已判): ' + (s.accuracy == null ? '-' : (100 * s.accuracy).toFixed(1) + '%') + '   有害错误: ' + s.harmful.length + (s.harmful.length ? ' ← ' + s.harmful.join(',') : ' ✔'));
   console.log('工具调用: ' + s.toolCalls + ' 次，失败 ' + s.toolErrors + '，成功率 ' + (s.toolSuccessRate == null ? '-' : (100 * s.toolSuccessRate).toFixed(1) + '%') + '   延迟p50: ' + s.latencyP50s + 's');
   if (s.needHumanReview.length) console.log('待人工复核: ' + s.needHumanReview.join(', '));
@@ -315,11 +317,21 @@ function asciiJson(obj) {
       onProgress: () => {},
     };
     const t0 = Date.now();
-    let res;
-    try { res = await O.orchestrate(q.question, q.board || null, deps, { mode: q.mode || 'fast' }); }
-    catch (e) { res = { answer: '', error: String((e && e.message) || e), results: [], verified: null }; }
+    let res, emptyRuns = 0;
+    /* 空回复自动重跑(用户 2026-08-28：空返回不算分数)：API 偶发空 content 是服务端方差，
+       同题重跑至多 2 次；三次全空 → excluded，不进分母。 */
+    const isEmptyAns = (r) => { if (!r) return true; const t = String(r.answer || '').trim(); return !t || t.replace(/\s/g, '').length < 10 || /^\((空回复|综合失败)\)/.test(t); };   // <10字残句=API截断,同空回复
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { res = await O.orchestrate(q.question, q.board || null, deps, { mode: q.mode || 'fast' }); }
+      catch (e) { res = { answer: '', error: String((e && e.message) || e), results: [], verified: null }; }
+      if (!isEmptyAns(res)) break;
+      emptyRuns++;
+      if (attempt < 2) console.log(q.id.padEnd(6) + ' 空回复，重跑 ' + (attempt + 1) + '/2 ...');
+    }
     const latencyMs = Date.now() - t0;
-    const auto = res.error ? { level: 'pending', reason: '执行异常: ' + res.error, pendingHuman: true } : grade(q, res.answer, res);
+    const auto = (emptyRuns >= 3 || (isEmptyAns(res) && res.error))
+      ? { level: 'excluded', reason: 'API 空回复/异常 ×' + emptyRuns + '，剔除不计分母' }
+      : res.error ? { level: 'pending', reason: '执行异常: ' + res.error, pendingHuman: true } : grade(q, res.answer, res);
     const rec = {
       id: q.id, category: q.category, board: q.board || null, mode: q.mode || 'fast',
       question: q.question, answer: res.answer || '',

@@ -114,7 +114,7 @@ const near = (a, b) => (a == null && b == null) || (a != null && b != null && Ma
   ok('④-8 国家办表合计收入 = 系列表合计收入', near(rb.repTable.total.rev26, tot.rev26), rb.repTable.total.rev26 + ' vs ' + tot.rev26);
 
   /* ---------- ⑤ 新品首销：从日序列独立重算 ---------- */
-  const NPN = 'Slate 12 Pro', PRED = 'Slate 11 Pro', WIN = 30, C0 = '墨西哥';
+  const NPN = 'Slate 12 Pro', PRED = 'Slate 11 Pro', WIN = 30, C0 = 'Mexico';   // demo 地理已英文化(2026-08-28 评测金标需要)
   const fetchDays = (product, c) => {
     const q = eng.query({ metric: 'sellOut', gran: 'day', stackDim: 'channel', filters: Object.assign({}, LF, { product: [product], country: [c] }) });
     const days = [];

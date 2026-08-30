@@ -601,7 +601,7 @@
     if (/断货|缺货|没卖出去|一台都没|卖不动/.test(q)) g.push('判断断货前必查两件事：①音频产业报量人工延迟1-2周，序列末端1-2周为0多半是「未录入」而不是真没卖；②查当前库存(report 的 inv/dos)，库存充足+末端零 → 结论是「延迟报量/未录入」而非断货。若按产品名查不到，先用 options 确认维度取值再查。');
     if (/逐月|逐周|月度|各月|分别|各个|各占|每个月|每一个/.test(q)) g.push('用户要求逐项数据：必须把每个成员(每月/每处/每国)各自的数值一行一个完整列出，不许只给合计、只挑最大最小或用「等」省略；确无数据的项逐个标「数据未包含」。');
     if (/(上市|首销|发布)/.test(q) && /(什么时候|何时|哪个月|怎么回事|一点量|少量|很小)/.test(q)) g.push('判断上市时间：放量前1-2个月出现的极小销量(比放量月低一个数量级)通常是样机/演示机铺货，不算正式上市。回答必须把「样机期(小量)」与「正式上市(放量月)」分开说，上市时间以首个放量月为准。');
-    if (/Slate|Sonic|Slate Tab|SonicBuds/i.test(q)) g.push('维度命名字典：Slate/Slate SE/SonicBuds/SonicBuds Pro/SonicArc 这类市场名是 family(产品家族)；Marlin/Coral/Dorado/Tarpon 等代号是 series；带连字符的编码(如 SLT11P-W8256)是 model；「Slate 11 Pro」这类含数字后缀的是 product。按名字形态选对 filters 的维度键，查不到先用 options 对表，不要断言"数据未包含"。');
+    if (/Slate|Sonic|Slate Tab|SonicBuds/i.test(q)) g.push('维度命名字典：Slate/Slate SE/SonicBuds/SonicBuds Pro/SonicArc 这类市场名是 family(产品家族)；Marlin/Coral/Dorado/Tarpon 等代号是 series；带连字符的编码(如 SLT11P-W8256)是 model；「Slate 11 Pro」这类含数字后缀的是 product。按名字形态选对 filters 的维度键，查不到先用 options 对表，不要断言"数据未包含"。问「某一个产品」(如 Slate 11)的数值时必须用 product 维度过滤到该单品——用 family(家族)合计冒充单品是严重错误(家族含多个产品,数值必然偏大)。');
     if (/(库存|DOS)/.test(q) && /(合计|加起来|总和|求和|累加|加一下|加总)/.test(q)) g.push('库存/DOS 是「时点快照」不是流量：跨月把各月末库存相加没有业务意义，禁止给出求和值。正确做法：用 query(metric:"inv",gran:"month") 逐月列出各月末时点值，并明确说明快照不能求和；如用户要的是总量概念，请引导用累计 SI/SO。');
     if (/(增速|同比|增长)/.test(q) && /(快|慢|驱动|拆|来自|哪一?年|比.*(快|高)|靠什么)/.test(q)) g.push('财经看板返回自带上年同期与同比字段(rev25/rev26/revYoy、nsip25/nsip26/nsipYoy、gm25/gmYoy)，不要声称"缺上年数据"；收入增速可拆为量(≈收入÷NSIP)与均价(NSIP)两个因子分别对比。');
     return g;
@@ -610,7 +610,7 @@
   const ANSWER_CHECKLIST = '回答体检(缺一不可)：①结论数字带单位；②一句话口径(期间/范围/计算方法)；'
     + '③若涉及"两个看板对不上/某值为0/最近一周异常/同比异常"，必须解释机制原因(口径不同、音频人工延迟报量、产品上市/退市阶段)，不许只报数或断言数据错了；'
     + '④判断类问题(值不值得/怎么回事)先给取到的数据再下结论，结论要结合产品生命周期(用 query 按月看首月放量与尾部萎缩)；'
-    + '⑤查不到就明说"数据未包含"，绝不编造。';
+    + '⑤查不到就明说"数据未包含"，绝不编造；⑥禁止声称「工具执行错误/查询失败」除非本轮确实调用过该工具且收到 error——臆测失败等同编造。';
 
   /* 溯源硬门禁：答案里的每个数字回查本轮工具返回原文，查无出处的替换为「?」并强制警示。
      设计依据（评测 2026-08-25 三轮）：提示词管不住编数的方差（C6-02 三连编、C6-03 施压 2/3 失守），
@@ -761,18 +761,23 @@
            改为至多重试 2 次；全失败(空/错/仍半途)一律置诚实兜底文案，过程句永远不出门。 */
         let fixed = false;
         for (let att = 0; att < 2 && !fixed; att++) {
-          const retry = await deps.chat({
-            system: a0 ? buildSpecialistSystem(a0.id, { full: false }) : '你是数据分析专家。',
-            messages: [{ role: 'user', content: question + (dataCtx ? '\n\n【本轮已取到的工具数据(原文摘录)】\n' + dataCtx : '') + '\n\n上一次回答停在中途过程。现在不能再取数，禁止输出「让我/正在/需要再查」这类过程句，请仅基于上面已给的工具数据直接给出最终结论；数据不足的部分明说「数据未包含」，绝不编造。同样附 claims JSON。' }],
-            tools: [], maxTokens: BUDGET.subAgentTokens,
-          });
+          /* R11 验尸:chat 网络抖动抛异常会跳出整个 try,旧代码的兜底语句因此被跳过,
+             半途句原样交卷(一轮 5 题全从这条缝漏走)。chat 单独 try,失败就下一次。 */
+          let retry = null;
+          try {
+            retry = await deps.chat({
+              system: a0 ? buildSpecialistSystem(a0.id, { full: false }) : '你是数据分析专家。',
+              messages: [{ role: 'user', content: question + (dataCtx ? '\n\n【本轮已取到的工具数据(原文摘录)】\n' + dataCtx : '') + '\n\n上一次回答停在中途过程。现在不能再取数，禁止输出「让我/正在/需要再查」这类过程句，请仅基于上面已给的工具数据直接给出最终结论；数据不足的部分明说「数据未包含」，绝不编造。同样附 claims JSON。' }],
+              tools: [], maxTokens: BUDGET.subAgentTokens,
+            });
+          } catch (e) { retry = null; }
           if (!retry || retry.error || !String(retry.content || '').trim()) continue;
           const pr = parseClaims(retry.content);
           const nn = pr.notes || splitThink(retry.content).answer;
           if (HALFWAY_RE.test(String(nn || '')) && !(pr.claims || []).length) continue;
           r0.claims = pr.claims; r0.notes = nn; fixed = true;
         }
-        if (!fixed) r0.notes = '本次分析未能完成(模型多次停在中途过程或无响应)。数据未包含最终结论;请重试提问或换个问法。';
+        if (!fixed) { r0.claims = []; r0.notes = '本次分析未能完成(模型多次停在中途过程或无响应)。数据未包含最终结论;请重试提问或换个问法。'; }
         r0.halfwayRetried = true;
       } catch (e) { }
     }

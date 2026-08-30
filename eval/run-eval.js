@@ -30,6 +30,9 @@ const has = (name) => argv.indexOf('--' + name) >= 0;
 const BASE = (arg('base', 'http://localhost:1234/v1') || '').replace(/\/$/, '');
 let KEY = arg('key', process.env.EVAL_API_KEY || '');
 /* 密钥文件：作者 自己把 key 粘进 eval/minimax.key（已 .gitignore，绝不入库/不打印），跑分器静默读取 */
+// --key-file <path> 支持任意厂商(deepseek.key 等);缺省仍回落 minimax.key。key 只读不打印。
+const KEYFILE = arg('key-file', '');
+if (!KEY && KEYFILE) { try { KEY = require('fs').readFileSync(KEYFILE, 'utf8').trim(); } catch (e) {} }
 if (!KEY) { try { KEY = require('fs').readFileSync(require('path').join(__dirname, 'minimax.key'), 'utf8').trim(); } catch (e) {} }
 const DRY = has('dry');
 const GGUF = arg('gguf', '');   // 本地 .gguf 路径：不走 HTTP，直接 node-llama-cpp（与主程序 aiChatLocal 同一条路）
@@ -290,6 +293,16 @@ function asciiJson(obj) {
   console.log((DRY ? '[干跑] ' : '[' + BASE + '] ') + (REAL ? '[真实数据] ' : '') + '共 ' + qs.length + ' 题');
   await resolveModel();
   if (!DRY) console.log('模型: ' + MODEL);
+  /* reasoning 模型(M3/deepseek-reasoner 等)的 <think> 链内嵌在 content 里烧同一份
+     max_tokens——预算不放大则正文被截成空回复(M3 首轮 5 题三连空的根)。 */
+  if (/m3|reasoner|thinking|r1/i.test(MODEL)) {
+    O.BUDGET.subAgentTokens = Math.max(O.BUDGET.subAgentTokens * 3, 6000);
+    O.BUDGET.synthTokens = Math.max(O.BUDGET.synthTokens * 3, 6000);
+    /* M3 首测验尸:7 题 harmless 全是「think 吃掉工具轮次,活没干完就交卷」——轮次同步放大 */
+    O.BUDGET.maxToolRoundsPerAgent = Math.max(O.BUDGET.maxToolRoundsPerAgent, 8);
+    O.BUDGET.maxToolCallsTotal = Math.max(O.BUDGET.maxToolCallsTotal, 24);
+    console.log('reasoning 模型:token 预算 ×3 (' + O.BUDGET.subAgentTokens + '/' + O.BUDGET.synthTokens + ') 工具轮 ' + O.BUDGET.maxToolRoundsPerAgent + '/' + O.BUDGET.maxToolCallsTotal);
+  }
   const CHAT = DRY ? dryChat : (GGUF ? makeGgufChat(GGUF) : httpChat);
 
   const toolStats = { calls: 0, errors: 0 };
@@ -320,7 +333,7 @@ function asciiJson(obj) {
     let res, emptyRuns = 0;
     /* 空回复自动重跑(用户 2026-08-28：空返回不算分数)：API 偶发空 content 是服务端方差，
        同题重跑至多 2 次；三次全空 → excluded，不进分母。 */
-    const isEmptyAns = (r) => { if (!r) return true; const t = String(r.answer || '').trim(); return !t || t.replace(/\s/g, '').length < 10 || /^\((空回复|综合失败)\)/.test(t); };   // <10字残句=API截断,同空回复
+    const isEmptyAns = (r) => { if (!r) return true; const t = String(r.answer || '').trim(); return !t || t.replace(/[\s#*|>-]/g, '').length < 30 || /^\((空回复|综合失败)\)/.test(t); };   // 去掉markdown骨架后<30字=截断残句,同空回复重跑
     for (let attempt = 0; attempt < 3; attempt++) {
       try { res = await O.orchestrate(q.question, q.board || null, deps, { mode: q.mode || 'fast' }); }
       catch (e) { res = { answer: '', error: String((e && e.message) || e), results: [], verified: null }; }

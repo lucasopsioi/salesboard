@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog, net, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Engine } = require('./engine.js');
@@ -321,6 +321,15 @@ ipcMain.handle('psiUnits', () => { try { return engine.psiUnits(); } catch (e) {
    - file : prompt 写临时 UTF-8 文件,参数模板里 {PROMPT_FILE} 替换为文件路径
    - arg  : prompt 作为最后一个参数追加
    stdout 全文即回复。shell:false 防注入;cmd 由用户在设置窗自己配(本机自己的 CLI)。 */
+/* 代理诊断(2026-08-31):net.fetch 走系统代理后,连不上时要能看清走了哪条路。
+   返回 Chromium 对该 URL 的代理决策(DIRECT / PROXY host:port / PAC 结果)。 */
+ipcMain.handle('aiProxyInfo', async (_e, url) => {
+  try {
+    const u = String(url || 'https://api.deepseek.com');
+    const r = await session.defaultSession.resolveProxy(u);
+    return { proxy: r || 'DIRECT' };
+  } catch (e) { return { proxy: '', error: String((e && e.message) || e) }; }
+});
 ipcMain.handle('aiChatCli', async (_e, payload) => {
   payload = payload || {};
   const { spawn } = require('child_process');
@@ -415,7 +424,7 @@ ipcMain.handle('aiChat', async (_e, payload) => {
     if (payload.stream && payload.id) {
       body.stream = true;
       const emit = d => { try { if (win && !win.isDestroyed()) win.webContents.send('aiStream', Object.assign({ id: payload.id }, d)); } catch (e) { } };
-      const rs = await fetch(baseUrl, { method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal });
+      const rs = await net.fetch(baseUrl, { method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal });
       if (!rs.ok) { let em = ''; try { em = (await rs.text()).slice(0, 300); } catch (e) { } return { error: 'HTTP ' + rs.status + (em ? ('：' + em) : '') }; }
       let content = '', toolCalls = null, buf = '';
       const dec = new TextDecoder();
@@ -447,7 +456,7 @@ ipcMain.handle('aiChat', async (_e, payload) => {
       return { content: content, toolCalls: (toolCalls && toolCalls.filter(Boolean).length) ? toolCalls.filter(Boolean) : undefined };
     }
 
-    const r = await fetch(baseUrl, {
+    const r = await net.fetch(baseUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -503,7 +512,7 @@ ipcMain.handle('lmStatus', async (_e, baseUrl) => {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 3000);
       try {
-        const r = await fetch(root + '/api/v0/models', { signal: ctrl.signal });
+        const r = await net.fetch(root + '/api/v0/models', { signal: ctrl.signal });
         if (r.ok) {
           const d = await r.json();
           out.models = (d && Array.isArray(d.data) ? d.data : []).map(m => ({
@@ -526,7 +535,7 @@ ipcMain.handle('aiListModels', async (_e, baseUrl, key) => {
     const u = String(baseUrl).replace(/\/+$/, '') + '/models';
     const headers = {};
     if (key) headers['Authorization'] = 'Bearer ' + key;
-    const r = await fetch(u, { headers, signal: ctrl.signal });
+    const r = await net.fetch(u, { headers, signal: ctrl.signal });
     let data = null; try { data = await r.json(); } catch (e) { data = null; }
     if (!r.ok) return { error: 'HTTP ' + r.status };
     const models = (data && Array.isArray(data.data) ? data.data : []).map(m => m && m.id).filter(Boolean);

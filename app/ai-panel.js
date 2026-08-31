@@ -764,7 +764,11 @@
         status.textContent = '测试中…'; status.className = 'ai-set-status';
         try {
           const resp = await api().aiChat({ key: c.dsKey, baseUrl: DS_BASE, model: c.dsModel, messages: [{ role: 'user', content: 'ping' }], maxTokens: 1 });
-          if (resp && resp.error) { status.textContent = '失败：' + resp.error; status.className = 'ai-set-status err'; }
+          if (resp && resp.error) {
+            let px = '';
+            try { const pi = await api().aiProxyInfo(DS_BASE); px = pi && pi.proxy ? '　当前网络路径: ' + pi.proxy : ''; } catch (e2) {}
+            status.textContent = '失败：' + resp.error + px; status.className = 'ai-set-status err';
+          }
           else { status.textContent = '连接成功 ✓ ' + c.dsModel; status.className = 'ai-set-status ok'; }
         } catch (e) { status.textContent = '失败：' + String((e && e.message) || e); status.className = 'ai-set-status err'; }
         return;

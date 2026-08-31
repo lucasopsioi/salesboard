@@ -197,6 +197,7 @@
       '<aside class="ai-panel" id="aiPanel">' +
         '<div class="ai-head">' +
           '<span class="ai-title" id="aiTitle">AI 问答</span>' +
+          '<button class="ai-btn" id="aiAgentBoard" title="Agent 架构与实时流程" style="padding:2px 8px">🕸</button>' +
           '<div class="ai-head-btns">' +
             '<button class="ai-hbtn" id="aiInspect" title="查看上次发给模型的完整内容（system/上下文/工具/问题 + token 估算）">🔍</button>' +
             '<button class="ai-hbtn" id="aiSettings" title="设置">⚙</button>' +
@@ -274,6 +275,8 @@
       cfgT.provider === 'openai' ? ('OpenAI ' + (cfgT.oaModel || '')) :
       cfgT.provider === 'lmstudio' ? ('LM Studio ' + (cfgT.lmModel || '')) :
       cfgT.provider === 'corplink' ? 'CorpLink CLI' : '本地模型';
+    const abBtn = root.querySelector('#aiAgentBoard');
+    if (abBtn && !abBtn._bound) { abBtn._bound = 1; abBtn.onclick = () => { try { window.AgentBoard && window.AgentBoard.open(); } catch (e) {} }; }
     root.querySelector('#aiTitle').textContent = (label ? ('AI · ' + label) : 'AI 问答（全局）') + '　|　' + modelTag;
     renderMessages();
     warmup();     // 打开面板即预热本地模型，把冷加载时间从第一个问题里挪走
@@ -437,6 +440,7 @@
      看板模式 → 该看板的专家（带自己的口径卡）；全局模式 → 规则路由拆成多个专家串行跑再综合。
      全部智能内置在 ai-orchestrator.js，用户机零配置；进度实时显示，避免本地 30B 让人以为卡死。 */
   async function runOrchestrated(cfg, question) {
+    try { window.AgentBoard && window.AgentBoard.feed({ type: 'ask', q: question }); } catch (e) {}
     const AD = AIData(), OR = window.AIOrch;
     const registry = AD ? AD.buildToolRegistry() : {};
     const t0 = Date.now();
@@ -495,6 +499,7 @@
         return api().aiChat(payload);
       },
       onProgress: e => {
+        try { window.AgentBoard && window.AgentBoard.feed(e); } catch (e2) {}
         /* 执行流(2026-08-31 用户:要直观看到每个 Agent/工具的工作状态)。
            详细模式逐行记录;简洁模式(设置里可切)退回单行轮播。 */
         const detail = !(window.AppSettings && !window.AppSettings.aiFlowDetail());
@@ -559,6 +564,7 @@
     }
     const used = (out.results || []).filter(r => !r.error).map(r => r.agentName);
     if (used.length > 1) ans += '\n\n*（由 ' + used.join('、') + ' 协同得出）*';
+    try { window.AgentBoard && window.AgentBoard.feed({ type: 'done' }); } catch (e) {}
     return { text: ans, flow: (prog.flow && prog.flow.length) ? prog.flow : null, secs: Math.round((Date.now() - t0) / 1000) };
   }
 

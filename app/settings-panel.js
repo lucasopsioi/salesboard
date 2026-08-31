@@ -56,6 +56,7 @@
         '<div class="ai-modal-body">' +
           '<div class="as-sec">🤖 AI 助手</div>' +
           '<div class="as-row"><span>当前模型</span><b>' + esc(aiSummary()) + '</b><button class="ai-btn" id="asAiSet">AI 设置…</button></div>' +
+          '<div class="as-row"><span>Agent 架构与协作流程</span><button class="ai-btn" id="asAgentBoard">打开 Agent 看板</button></div>' +
           '<div class="as-row"><span>执行过程显示</span><select id="asAiFlow">' +
             '<option value="detail"' + (get(KEYS.aiFlow, 'detail') !== 'simple' ? ' selected' : '') + '>详细（每个专家与工具调用实况）</option>' +
             '<option value="simple"' + (get(KEYS.aiFlow, 'detail') === 'simple' ? ' selected' : '') + '>简洁（单行进度）</option>' +
@@ -76,6 +77,7 @@
     const q = s => modal.querySelector(s);
     q('#asX').onclick = () => modal.remove();
     modal.onclick = e => { if (e.target === modal) modal.remove(); };
+    q('#asAgentBoard').onclick = () => { modal.remove(); try { window.AgentBoard && window.AgentBoard.open(); } catch (e) {} };
     q('#asAiSet').onclick = () => { modal.remove(); try { window.AIPanel && window.AIPanel.openSettings && window.AIPanel.openSettings(); } catch (e) {} };
     q('#asSrc').onclick = () => { modal.remove(); try { typeof switchView === 'function' && switchView('source'); } catch (e) {} };
     q('#asSave').onclick = () => {

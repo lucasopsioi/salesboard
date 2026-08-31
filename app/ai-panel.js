@@ -15,6 +15,12 @@
      ——超 MiniMax-M2.5 的 80.0% 且最快最便宜;deepseek-v4-pro 93.1% 最准但 p50 68s(深度分析用)。 */
   const DS_BASE = 'https://api.deepseek.com/v1/chat/completions';
   const DS_MODELS = ['deepseek-chat', 'deepseek-v4-pro'];
+  /* Claude/OpenAI(2026-08-31 用户点名):Claude=表格问答最强档(调研结论),走 anthropic 格式适配;
+     OpenAI 走现成 OpenAI 兼容通道。模型名可下拉可手输(厂商迭代快,别写死)。 */
+  const AN_BASE = 'https://api.anthropic.com/v1/messages';
+  const AN_MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'];
+  const OA_BASE = 'https://api.openai.com/v1/chat/completions';
+  const OA_MODELS = ['gpt-5.2', 'gpt-5.2-mini', 'gpt-4.1'];
   const LM_DEFAULT_BASE = 'http://127.0.0.1:1234/v1';   // LM Studio 本地服务器默认地址(0.4.x)
   const MAX_TOOL_ROUNDS = 5;                  // 工具循环上限
 
@@ -88,13 +94,17 @@
         key: o.key || '',
         baseUrl: o.baseUrl || DEFAULT_BASE,
         model: o.model || MODELS[0],
-        provider: (o.provider === 'local' || o.provider === 'lmstudio' || o.provider === 'minimax' || o.provider === 'corplink') ? o.provider : 'deepseek',
+        provider: ['local', 'lmstudio', 'minimax', 'corplink', 'anthropic', 'openai'].includes(o.provider) ? o.provider : 'deepseek',
         dsKey: o.dsKey || '',
         dsModel: DS_MODELS.includes(o.dsModel) ? o.dsModel : DS_MODELS[0],
         dsMigrated: !!o.dsMigrated,
         wlCmd: o.wlCmd || '',
         wlArgs: o.wlArgs || '',
         wlMode: ['stdin', 'file', 'arg'].includes(o.wlMode) ? o.wlMode : 'stdin',
+        anKey: o.anKey || '',
+        anModel: o.anModel || AN_MODELS[0],
+        oaKey: o.oaKey || '',
+        oaModel: o.oaModel || OA_MODELS[0],
         modelPath: o.modelPath || '',
         lmBase: o.lmBase || LM_DEFAULT_BASE,
         lmModel: o.lmModel || '',
@@ -245,6 +255,8 @@
     const cfgT = loadCfg();
     const modelTag = cfgT.provider === 'deepseek' ? ('DeepSeek ' + (cfgT.dsModel || '')) :
       cfgT.provider === 'minimax' ? ('MiniMax ' + (cfgT.model || '')) :
+      cfgT.provider === 'anthropic' ? ('Claude ' + (cfgT.anModel || '')) :
+      cfgT.provider === 'openai' ? ('OpenAI ' + (cfgT.oaModel || '')) :
       cfgT.provider === 'lmstudio' ? ('LM Studio ' + (cfgT.lmModel || '')) :
       cfgT.provider === 'corplink' ? 'CorpLink CLI' : '本地模型';
     root.querySelector('#aiTitle').textContent = (label ? ('AI · ' + label) : 'AI 问答（全局）') + '　|　' + modelTag;
@@ -338,6 +350,8 @@
     if (cfg.provider === 'minimax' && !cfg.key) { openSettings(); toastSafe('请先在设置里填写 API Key', 'err'); return; }
     if (cfg.provider === 'deepseek' && !cfg.dsKey) { openSettings(); toastSafe('请先在设置里填写 DeepSeek API Key', 'err'); return; }
     if (cfg.provider === 'corplink' && !cfg.wlCmd) { openSettings(); toastSafe('请先在设置里配置 CorpLink CLI 命令', 'err'); return; }
+    if (cfg.provider === 'anthropic' && !cfg.anKey) { openSettings(); toastSafe('请先在设置里填写 Anthropic API Key', 'err'); return; }
+    if (cfg.provider === 'openai' && !cfg.oaKey) { openSettings(); toastSafe('请先在设置里填写 OpenAI API Key', 'err'); return; }
     if (cfg.provider === 'lmstudio' && !cfg.lmModel) {
       // 没选过模型 → 自动拉一次列表用第一个(零配置);拉不到才弹设置
       try {
@@ -353,7 +367,7 @@
     try {
       if (cfg.provider === 'local') {
         await runChatLocal(cfg);            // 自行管理 assistant 流式气泡
-      } else if (window.AIOrch && (cfg.provider === 'lmstudio' || cfg.provider === 'deepseek' || cfg.provider === 'minimax' || cfg.provider === 'corplink')) {
+      } else if (window.AIOrch && ['lmstudio', 'deepseek', 'minimax', 'corplink', 'anthropic', 'openai'].includes(cfg.provider)) {
         /* 编排链(专家口径卡+类别护栏+期间拦截+数字溯源门禁+半途重试)对全部 provider 生效。
            2026-08-31 前在线 API 走的是下面的简单循环——评测 88.3% 是编排链成绩,简单循环没有
            门禁护栏,等于用户拿不到评测出的质量。现统一走编排,简单循环只留 AIOrch 缺失兜底。 */
@@ -436,9 +450,10 @@
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
       chat: async p => {
         if (cfg.provider === 'corplink') return cliChat(cfg, p);
-        const isDsO = cfg.provider === 'deepseek', isMmO = cfg.provider === 'minimax';
-        const endp = isDsO ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }
-          : isMmO ? { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model, timeoutMs: 120000 }
+        const endp = cfg.provider === 'deepseek' ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }
+          : cfg.provider === 'minimax' ? { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model, timeoutMs: 120000 }
+          : cfg.provider === 'anthropic' ? { key: cfg.anKey, baseUrl: AN_BASE, model: cfg.anModel || AN_MODELS[0], apiFormat: 'anthropic', timeoutMs: 120000 }
+          : cfg.provider === 'openai' ? { key: cfg.oaKey, baseUrl: OA_BASE, model: cfg.oaModel || OA_MODELS[0], timeoutMs: 120000 }
           : { key: '', baseUrl: lmJoin(cfg.lmBase, '/chat/completions'), model: cfg.lmModel, timeoutMs: OR.BUDGET.timeoutMs };
         const payload = Object.assign({}, endp, {
           messages: p.messages, maxTokens: p.maxTokens, temperature: 0,
@@ -520,7 +535,11 @@
       ? { key: '', baseUrl: lmJoin(cfg.lmBase, '/chat/completions'), model: cfg.lmModel, timeoutMs: 180000 }
       : isDs
         ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }
-        : { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model };
+        : cfg.provider === 'anthropic'
+          ? { key: cfg.anKey, baseUrl: AN_BASE, model: cfg.anModel || AN_MODELS[0], apiFormat: 'anthropic', timeoutMs: 120000 }
+          : cfg.provider === 'openai'
+            ? { key: cfg.oaKey, baseUrl: OA_BASE, model: cfg.oaModel || OA_MODELS[0], timeoutMs: 120000 }
+            : { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model };
     const clean = s => (isLm || isDs) ? stripThink(s) : s;   // 推理模型(<think>)只显示最终答案
 
     let rounds = 0;
@@ -606,10 +625,30 @@
           '<label class="ai-fld"><span>提供方</span><select id="aiSetProvider">' +
             '<option value="deepseek"' + (cfg.provider === 'deepseek' ? ' selected' : '') + '>DeepSeek API（在线，推荐）</option>' +
             '<option value="minimax"' + (cfg.provider === 'minimax' ? ' selected' : '') + '>MiniMax API（在线）</option>' +
+            '<option value="anthropic"' + (cfg.provider === 'anthropic' ? ' selected' : '') + '>Claude API（Anthropic）</option>' +
+            '<option value="openai"' + (cfg.provider === 'openai' ? ' selected' : '') + '>OpenAI API</option>' +
             '<option value="corplink"' + (cfg.provider === 'corplink' ? ' selected' : '') + '>CorpLink CLI（Acme内网）</option>' +
             '<option value="lmstudio"' + (isLm ? ' selected' : '') + '>LM Studio（本机服务器）</option>' +
             '<option value="local"' + (isLocal ? ' selected' : '') + '>本地模型（内置 gguf）</option>' +
           '</select></label>' +
+          // ── Claude 组 ──
+          '<div id="aiGrpAn"' + (cfg.provider === 'anthropic' ? '' : ' style="display:none"') + '>' +
+            '<label class="ai-fld"><span>API Key（console.anthropic.com）</span><input type="password" id="aiSetAnKey" placeholder="sk-ant-…" value="' + esc(cfg.anKey) + '"></label>' +
+            '<label class="ai-fld"><span>模型</span><span class="ai-path-row"><select id="aiSetAnModel" style="flex:1;min-width:0">' +
+              AN_MODELS.map(m => '<option value="' + esc(m) + '"' + (m === cfg.anModel ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+              '<option value="__custom__"' + (AN_MODELS.includes(cfg.anModel) ? '' : ' selected') + '>自定义…</option>' +
+            '</select><input type="text" id="aiSetAnCustom" style="flex:1;min-width:0;' + (AN_MODELS.includes(cfg.anModel) ? 'display:none' : '') + '" value="' + (AN_MODELS.includes(cfg.anModel) ? '' : esc(cfg.anModel)) + '" placeholder="模型名"></span></label>' +
+            '<div class="ai-set-note">Claude 是表格问答/工具调用第一梯队（2026-08 调研）。走 Anthropic Messages 格式，软件已内置适配。</div>' +
+          '</div>' +
+          // ── OpenAI 组 ──
+          '<div id="aiGrpOa"' + (cfg.provider === 'openai' ? '' : ' style="display:none"') + '>' +
+            '<label class="ai-fld"><span>API Key（platform.openai.com）</span><input type="password" id="aiSetOaKey" placeholder="sk-…" value="' + esc(cfg.oaKey) + '"></label>' +
+            '<label class="ai-fld"><span>模型</span><span class="ai-path-row"><select id="aiSetOaModel" style="flex:1;min-width:0">' +
+              OA_MODELS.map(m => '<option value="' + esc(m) + '"' + (m === cfg.oaModel ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+              '<option value="__custom__"' + (OA_MODELS.includes(cfg.oaModel) ? '' : ' selected') + '>自定义…</option>' +
+            '</select><input type="text" id="aiSetOaCustom" style="flex:1;min-width:0;' + (OA_MODELS.includes(cfg.oaModel) ? 'display:none' : '') + '" value="' + (OA_MODELS.includes(cfg.oaModel) ? '' : esc(cfg.oaModel)) + '" placeholder="模型名"></span></label>' +
+            '<div class="ai-set-note">标准 OpenAI 接口。模型名可手输（厂商迭代快，下拉仅为常用款）。</div>' +
+          '</div>' +
           // ── CorpLink CLI 组 ──
           '<div id="aiGrpWl"' + (cfg.provider === 'corplink' ? '' : ' style="display:none"') + '>' +
             '<label class="ai-fld"><span>CLI 命令（如 corplink，需在 PATH 或写全路径）</span><input type="text" id="aiSetWlCmd" value="' + esc(cfg.wlCmd) + '" placeholder="corplink"></label>' +
@@ -671,11 +710,13 @@
     const grpMini = q('#aiGrpMinimax'), grpLocal = q('#aiGrpLocal'), grpLm = q('#aiGrpLm'), testBtn = q('#aiTest');
     let lmAutoFetched = false;
     let doLmFetch = null;          // 先声明(初次 syncProvider() 早于赋值,避免 TDZ),下方赋真函数
-    const grpDs = q('#aiGrpDs'), grpWl = q('#aiGrpWl');
+    const grpDs = q('#aiGrpDs'), grpWl = q('#aiGrpWl'), grpAn = q('#aiGrpAn'), grpOa = q('#aiGrpOa');
     const syncProvider = () => {
       const v = providerSel.value;
       grpDs.style.display = v === 'deepseek' ? '' : 'none';
       grpWl.style.display = v === 'corplink' ? '' : 'none';
+      grpAn.style.display = v === 'anthropic' ? '' : 'none';
+      grpOa.style.display = v === 'openai' ? '' : 'none';
       grpMini.style.display = v === 'minimax' ? '' : 'none';
       grpLocal.style.display = v === 'local' ? '' : 'none';
       grpLm.style.display = v === 'lmstudio' ? '' : 'none';
@@ -685,6 +726,8 @@
     };
     syncProvider();
     providerSel.onchange = syncProvider;
+    const bindCustom = (selId, inpId) => { const sel = q(selId), inp = q(inpId); if (sel && inp) sel.onchange = () => { inp.style.display = sel.value === '__custom__' ? '' : 'none'; }; };
+    bindCustom('#aiSetAnModel', '#aiSetAnCustom'); bindCustom('#aiSetOaModel', '#aiSetOaCustom');
     modelSel.onchange = () => { customWrap.style.display = modelSel.value === '__custom__' ? '' : 'none'; };
     q('#aiSetX').onclick = () => modal.remove();
     modal.onclick = e => { if (e.target === modal) modal.remove(); };
@@ -699,13 +742,17 @@
         key: (q('#aiSetKey').value || '').trim(),
         baseUrl: (q('#aiSetUrl').value || '').trim() || DEFAULT_BASE,
         model: model || MODELS[0],
-        provider: ['local', 'lmstudio', 'minimax', 'deepseek', 'corplink'].includes(providerSel.value) ? providerSel.value : 'deepseek',
+        provider: ['local', 'lmstudio', 'minimax', 'deepseek', 'corplink', 'anthropic', 'openai'].includes(providerSel.value) ? providerSel.value : 'deepseek',
         dsKey: (q('#aiSetDsKey').value || '').trim(),
         dsModel: (q('#aiSetDsModel').value || DS_MODELS[0]),
         dsMigrated: true,
         wlCmd: (q('#aiSetWlCmd').value || '').trim(),
         wlArgs: (q('#aiSetWlArgs').value || '').trim(),
         wlMode: (q('#aiSetWlMode').value || 'stdin'),
+        anKey: (q('#aiSetAnKey').value || '').trim(),
+        anModel: (q('#aiSetAnModel').value === '__custom__' ? (q('#aiSetAnCustom').value || '').trim() : q('#aiSetAnModel').value) || AN_MODELS[0],
+        oaKey: (q('#aiSetOaKey').value || '').trim(),
+        oaModel: (q('#aiSetOaModel').value === '__custom__' ? (q('#aiSetOaCustom').value || '').trim() : q('#aiSetOaModel').value) || OA_MODELS[0],
         modelPath: (q('#aiSetModelPath').value || '').trim(),
         lmBase: (q('#aiSetLmBase').value || '').trim() || LM_DEFAULT_BASE,
         lmModel: lmSel ? (lmSel.value || '') : '',
@@ -741,8 +788,10 @@
       const status = q('#aiSetStatus');
       const endp = c.provider === 'deepseek' ? { key: c.dsKey, baseUrl: DS_BASE, model: c.dsModel }
         : c.provider === 'minimax' ? { key: c.key, baseUrl: c.baseUrl, model: c.model }
+        : c.provider === 'anthropic' ? { key: c.anKey, baseUrl: AN_BASE, model: c.anModel, apiFormat: 'anthropic' }
+        : c.provider === 'openai' ? { key: c.oaKey, baseUrl: OA_BASE, model: c.oaModel }
         : null;
-      if (!endp) { status.textContent = '网络体检仅适用于在线 API(DeepSeek/MiniMax)'; status.className = 'ai-set-status err'; return; }
+      if (!endp) { status.textContent = '网络体检仅适用于在线 API'; status.className = 'ai-set-status err'; return; }
       if (!endp.key) { status.textContent = '请先填 API Key'; status.className = 'ai-set-status err'; return; }
       const lines = ['体检开始(模型 ' + endp.model + ')…'];
       const paint = () => { status.innerHTML = lines.map(esc).join('<br>'); status.className = 'ai-set-status'; };
@@ -751,7 +800,7 @@
       const run = async (name, payload) => {
         const t0 = Date.now();
         try {
-          const r = await api().aiChat(Object.assign({ key: endp.key, baseUrl: endp.baseUrl, model: endp.model, timeoutMs: 90000 }, payload));
+          const r = await api().aiChat(Object.assign({ key: endp.key, baseUrl: endp.baseUrl, model: endp.model, apiFormat: endp.apiFormat, timeoutMs: 90000 }, payload));
           const dt = ((Date.now() - t0) / 1000).toFixed(1) + 's';
           if (r && r.error) { lines.push('✗ ' + name + ' [' + dt + '] ' + String(r.error).slice(0, 160)); return false; }
           const got = r && (r.content || (r.toolCalls && ('调用工具:' + r.toolCalls.map(tc => tc.function.name).join(','))));
@@ -800,6 +849,21 @@
           const resp = await api().aiChatCli({ cmd: c.wlCmd, argsTmpl: c.wlArgs, inputMode: c.wlMode, prompt: '只回复两个字:在线', timeoutMs: 120000 });
           if (resp && resp.error) { status.textContent = '失败：' + resp.error; status.className = 'ai-set-status err'; }
           else { status.textContent = '连接成功 ✓ CLI 回复：' + String(resp.content || '').slice(0, 60); status.className = 'ai-set-status ok'; }
+        } catch (e) { status.textContent = '失败：' + String((e && e.message) || e); status.className = 'ai-set-status err'; }
+        return;
+      }
+      if (c.provider === 'anthropic' || c.provider === 'openai') {
+        const isAn = c.provider === 'anthropic';
+        const k = isAn ? c.anKey : c.oaKey;
+        if (!k) { status.textContent = '请先填 API Key'; status.className = 'ai-set-status err'; return; }
+        status.textContent = '测试中…'; status.className = 'ai-set-status';
+        try {
+          const pl = isAn
+            ? { key: k, baseUrl: AN_BASE, model: c.anModel, apiFormat: 'anthropic', messages: [{ role: 'user', content: 'ping' }], maxTokens: 8 }
+            : { key: k, baseUrl: OA_BASE, model: c.oaModel, messages: [{ role: 'user', content: 'ping' }], maxTokens: 8 };
+          const resp = await api().aiChat(pl);
+          if (resp && resp.error) { status.textContent = '失败：' + resp.error; status.className = 'ai-set-status err'; }
+          else { status.textContent = '连接成功 ✓ ' + (isAn ? c.anModel : c.oaModel); status.className = 'ai-set-status ok'; }
         } catch (e) { status.textContent = '失败：' + String((e && e.message) || e); status.className = 'ai-set-status err'; }
         return;
       }

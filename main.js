@@ -417,6 +417,56 @@ ipcMain.handle('aiChat', async (_e, payload) => {
     const headers = { 'Content-Type': 'application/json' };
     if (key) headers['Authorization'] = 'Bearer ' + key;
 
+    /* ---- Anthropic(Claude) 格式适配(2026-08-31):Claude 的 Messages API 与 OpenAI 不兼容——
+       x-api-key 头、system 顶层、max_tokens 必填、工具 input_schema、响应 content blocks。
+       转换后仍返回 OpenAI 形状 {content, toolCalls},上层(编排链/面板)零改动。非流式。 ---- */
+    if (payload.apiFormat === 'anthropic') {
+      const sysMsgs = (messages || []).filter(m => m.role === 'system').map(m => String(m.content || '')).join('\n\n');
+      const rest = [];
+      (messages || []).forEach(m => {
+        if (m.role === 'system') return;
+        if (m.role === 'tool') {
+          rest.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: String(m.tool_call_id || m.name || 'tool'), content: String(m.content || '') }] });
+        } else if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+          const blocks = [];
+          if (m.content) blocks.push({ type: 'text', text: String(m.content) });
+          m.tool_calls.forEach(tc => {
+            let aj = {}; try { aj = JSON.parse(tc.function && tc.function.arguments || '{}'); } catch (e) {}
+            blocks.push({ type: 'tool_use', id: String(tc.id || tc.function.name), name: tc.function.name, input: aj });
+          });
+          rest.push({ role: 'assistant', content: blocks });
+        } else {
+          rest.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') });
+        }
+      });
+      const abody = { model: model || 'claude-sonnet-5', max_tokens: +payload.maxTokens || 2048, messages: rest };
+      if (sysMsgs) abody.system = sysMsgs;
+      if (typeof payload.temperature === 'number') abody.temperature = payload.temperature;
+      if (Array.isArray(payload.tools) && payload.tools.length) {
+        abody.tools = payload.tools.map(t => ({ name: t.function.name, description: t.function.description || '', input_schema: t.function.parameters || { type: 'object', properties: {} } }));
+      }
+      const ar = await net.fetch(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key || '', 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify(abody), signal: ctrl.signal,
+      });
+      let aj = null; try { aj = await ar.json(); } catch (e) { aj = null; }
+      if (!ar.ok) {
+        const em = aj && aj.error && (aj.error.message || aj.error.type);
+        return { error: 'HTTP ' + ar.status + (em ? ('：' + em) : '') };
+      }
+      let text = '', tcs = [];
+      (aj && aj.content || []).forEach(b => {
+        if (b.type === 'text') text += b.text || '';
+        else if (b.type === 'tool_use') tcs.push({ id: b.id, type: 'function', function: { name: b.name, arguments: JSON.stringify(b.input || {}) } });
+      });
+      if (!text.trim() && !tcs.length) {
+        let sk = ''; try { sk = JSON.stringify(aj).slice(0, 260); } catch (e) {}
+        return { error: 'API 返回空内容(HTTP ' + ar.status + ', stop_reason=' + ((aj && aj.stop_reason) || '无') + ')。响应骨架: ' + sk };
+      }
+      return { content: text, toolCalls: tcs.length ? tcs : undefined };
+    }
+
     /* ---- 流式（只在渲染层显式要求时启用；不传 stream/id 时行为与之前逐字节一致）----
        本地 30B 非流式要等整段生成完（几十秒~几分钟）用户只看到「思考中」；
        开流后首 token 通常几秒内到，感知速度差一个数量级。

@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('sb', {
   readFileB64: (p)           => ipcRenderer.invoke('readFileB64', p),
   psiUnits:    ()            => ipcRenderer.invoke('psiUnits'),
   aiChat:      (payload)     => ipcRenderer.invoke('aiChat', payload),
+  aiReadKeyFile: (name)      => ipcRenderer.invoke('aiReadKeyFile', name),
   aiListModels: (baseUrl, key) => ipcRenderer.invoke('aiListModels', baseUrl, key),
   lmStatus: (baseUrl) => ipcRenderer.invoke('lmStatus', baseUrl),
   aiChatLocal: (payload)     => ipcRenderer.invoke('aiChatLocal', payload),

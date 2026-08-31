@@ -295,7 +295,7 @@ function asciiJson(obj) {
   if (!DRY) console.log('模型: ' + MODEL);
   /* reasoning 模型(M3/deepseek-reasoner 等)的 <think> 链内嵌在 content 里烧同一份
      max_tokens——预算不放大则正文被截成空回复(M3 首轮 5 题三连空的根)。 */
-  if (/m3|reasoner|thinking|r1/i.test(MODEL)) {
+  if (/m3|reasoner|thinking|r1|v4-pro/i.test(MODEL) || arg('reasoning', '')) {
     O.BUDGET.subAgentTokens = Math.max(O.BUDGET.subAgentTokens * 3, 6000);
     O.BUDGET.synthTokens = Math.max(O.BUDGET.synthTokens * 3, 6000);
     /* M3 首测验尸:7 题 harmless 全是「think 吃掉工具轮次,活没干完就交卷」——轮次同步放大 */

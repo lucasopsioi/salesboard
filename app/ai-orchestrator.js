@@ -511,7 +511,7 @@
     }, fast ? BUDGET.snapshotFastChars : BUDGET.snapshotChars);
     // 快速模式只给 3 个工具（说明书本身就要几百 token，给多了纯拖慢）；按提问挑，别写死前三个
     const toolNames = !fast ? a.tools
-      : (deps.pickTools ? deps.pickTools(a.tools, task.subQuestion, 3) : a.tools.slice(0, 3));
+      : (deps.pickTools ? deps.pickTools(a.tools, task.subQuestion, 4) : a.tools.slice(0, 4));
     const specs = (deps.buildToolSpecs ? deps.buildToolSpecs(toolNames) : []);
     const messages = [];
     if (ctxMsg) messages.push({ role: 'user', content: ctxMsg });

@@ -11,6 +11,10 @@
   const DEFAULT_BASE = 'https://api.minimax.chat/v1/text/chatcompletion_v2';
   // M2.5 为默认(评测 2026-08-28:30题 78.3% vs Text-01 58.3%,延迟低30%,工具成功率94%);旧模型保留可选
   const MODELS = ['MiniMax-M2.5', 'MiniMax-Text-01', 'MiniMax-M1'];
+  /* DeepSeek 预设(评测 2026-08-31,同30题同判分):deepseek-chat(V4-Flash) 88.3%/红线0/p50 10.9s
+     ——超 MiniMax-M2.5 的 80.0% 且最快最便宜;deepseek-v4-pro 93.1% 最准但 p50 68s(深度分析用)。 */
+  const DS_BASE = 'https://api.deepseek.com/v1/chat/completions';
+  const DS_MODELS = ['deepseek-chat', 'deepseek-v4-pro'];
   const LM_DEFAULT_BASE = 'http://127.0.0.1:1234/v1';   // LM Studio 本地服务器默认地址(0.4.x)
   const MAX_TOOL_ROUNDS = 5;                  // 工具循环上限
 
@@ -19,6 +23,18 @@
   const stripThink = s => String(s == null ? '' : s).replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
   const AIData = () => (typeof window !== 'undefined' ? window.AIData : null);
+  // dsKey 自动带入:开发机上评测已存 eval/deepseek.key,首次打开不必重复粘贴(掩码存本机,不显示)
+  setTimeout(() => {
+    try {
+      const g = typeof window !== 'undefined' ? window.sb : null;
+      if (!g || !g.aiReadKeyFile) return;
+      const c = loadCfg();
+      if (c.dsKey) return;
+      g.aiReadKeyFile('deepseek.key').then(k => {
+        if (k) { const c2 = loadCfg(); if (!c2.dsKey) { c2.dsKey = String(k).trim(); saveCfg(c2); } }
+      }).catch(() => {});
+    } catch (e) {}
+  }, 800);
   const api = () => (typeof window !== 'undefined' ? window.sb : null);
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -27,17 +43,26 @@
     try {
       const raw = localStorage.getItem(CFG_KEY);
       const o = raw ? JSON.parse(raw) : {};
+      /* 一次性迁移(2026-08-31):评测定档 DeepSeek V4-Flash 为默认——曾配 MiniMax 的老配置
+         切到 deepseek(MiniMax key/模型原样保留,设置窗随时切回);local/lmstudio 用户不动。 */
+      if (!o.dsMigrated && o.provider !== 'local' && o.provider !== 'lmstudio') {
+        o.provider = 'deepseek'; o.dsMigrated = true;
+        try { localStorage.setItem(CFG_KEY, JSON.stringify(o)); } catch (e2) {}
+      }
       return {
         key: o.key || '',
         baseUrl: o.baseUrl || DEFAULT_BASE,
         model: o.model || MODELS[0],
-        provider: (o.provider === 'local' || o.provider === 'lmstudio') ? o.provider : 'minimax',
+        provider: (o.provider === 'local' || o.provider === 'lmstudio' || o.provider === 'minimax') ? o.provider : 'deepseek',
+        dsKey: o.dsKey || '',
+        dsModel: DS_MODELS.includes(o.dsModel) ? o.dsModel : DS_MODELS[0],
+        dsMigrated: !!o.dsMigrated,
         modelPath: o.modelPath || '',
         lmBase: o.lmBase || LM_DEFAULT_BASE,
         lmModel: o.lmModel || '',
         lmModels: Array.isArray(o.lmModels) ? o.lmModels : [],   // 上次拉取到的模型列表(缓存,便于离线打开设置窗)
       };
-    } catch (e) { return { key: '', baseUrl: DEFAULT_BASE, model: MODELS[0], provider: 'minimax', modelPath: '', lmBase: LM_DEFAULT_BASE, lmModel: '', lmModels: [] }; }
+    } catch (e) { return { key: '', baseUrl: DEFAULT_BASE, model: MODELS[0], provider: 'deepseek', dsKey: '', dsModel: DS_MODELS[0], dsMigrated: true, modelPath: '', lmBase: LM_DEFAULT_BASE, lmModel: '', lmModels: [] }; }
   }
   function saveCfg(cfg) { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg || {})); } catch (e) {} }
 
@@ -268,6 +293,7 @@
     if (!q) return;
     const cfg = loadCfg();
     if (cfg.provider === 'minimax' && !cfg.key) { openSettings(); toastSafe('请先在设置里填写 API Key', 'err'); return; }
+    if (cfg.provider === 'deepseek' && !cfg.dsKey) { openSettings(); toastSafe('请先在设置里填写 DeepSeek API Key', 'err'); return; }
     if (cfg.provider === 'lmstudio' && !cfg.lmModel) {
       // 没选过模型 → 自动拉一次列表用第一个(零配置);拉不到才弹设置
       try {
@@ -283,8 +309,10 @@
     try {
       if (cfg.provider === 'local') {
         await runChatLocal(cfg);            // 自行管理 assistant 流式气泡
-      } else if (cfg.provider === 'lmstudio' && window.AIOrch) {
-        // LM Studio：走多看板专家 Agent 编排（专家口径卡 + 串行子任务 + 数字溯源）
+      } else if (window.AIOrch && (cfg.provider === 'lmstudio' || cfg.provider === 'deepseek' || cfg.provider === 'minimax')) {
+        /* 编排链(专家口径卡+类别护栏+期间拦截+数字溯源门禁+半途重试)对全部 provider 生效。
+           2026-08-31 前在线 API 走的是下面的简单循环——评测 88.3% 是编排链成绩,简单循环没有
+           门禁护栏,等于用户拿不到评测出的质量。现统一走编排,简单循环只留 AIOrch 缺失兜底。 */
         const answer = await runOrchestrated(cfg, q);
         st.messages.push({ role: 'assistant', content: answer });
       } else {
@@ -363,10 +391,13 @@
       snapshot: async b => { try { return await AD.genericSnapshot(b); } catch (e) { return ''; } },
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
       chat: async p => {
-        const payload = {
-          key: '', baseUrl: lmJoin(cfg.lmBase, '/chat/completions'), model: cfg.lmModel,
-          messages: p.messages, maxTokens: p.maxTokens, timeoutMs: OR.BUDGET.timeoutMs, temperature: 0,
-        };
+        const isDsO = cfg.provider === 'deepseek', isMmO = cfg.provider === 'minimax';
+        const endp = isDsO ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }
+          : isMmO ? { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model, timeoutMs: 120000 }
+          : { key: '', baseUrl: lmJoin(cfg.lmBase, '/chat/completions'), model: cfg.lmModel, timeoutMs: OR.BUDGET.timeoutMs };
+        const payload = Object.assign({}, endp, {
+          messages: p.messages, maxTokens: p.maxTokens, temperature: 0,
+        });
         if (p.tools && p.tools.length) payload.tools = p.tools;
         // 记录本轮原文供「🔍 查看发给模型的内容」（只在内存，不落盘）
         const sysTok = estTok(p.system || ''), msgTok = estTok(p.messages || []), toolTok = estTok(p.tools || []);
@@ -438,10 +469,13 @@
 
     // 端点/鉴权按提供方路由:LM Studio = OpenAI 兼容 …/v1/chat/completions,无 Key,超时放宽(大模型首次加载慢)
     const isLm = cfg.provider === 'lmstudio';
+    const isDs = cfg.provider === 'deepseek';
     const reqBase = () => isLm
       ? { key: '', baseUrl: lmJoin(cfg.lmBase, '/chat/completions'), model: cfg.lmModel, timeoutMs: 180000 }
-      : { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model };
-    const clean = s => isLm ? stripThink(s) : s;   // 推理模型(<think>)只显示最终答案
+      : isDs
+        ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }
+        : { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model };
+    const clean = s => (isLm || isDs) ? stripThink(s) : s;   // 推理模型(<think>)只显示最终答案
 
     let rounds = 0;
     while (rounds <= MAX_TOOL_ROUNDS) {
@@ -524,10 +558,20 @@
         '<div class="ai-modal-h">AI 设置<button class="ai-modal-x" id="aiSetX">✕</button></div>' +
         '<div class="ai-modal-body">' +
           '<label class="ai-fld"><span>提供方</span><select id="aiSetProvider">' +
-            '<option value="minimax"' + (isLocal || isLm ? '' : ' selected') + '>MiniMax API（在线）</option>' +
+            '<option value="deepseek"' + (cfg.provider === 'deepseek' ? ' selected' : '') + '>DeepSeek API（在线，推荐）</option>' +
+            '<option value="minimax"' + (cfg.provider === 'minimax' ? ' selected' : '') + '>MiniMax API（在线）</option>' +
             '<option value="lmstudio"' + (isLm ? ' selected' : '') + '>LM Studio（本机服务器）</option>' +
             '<option value="local"' + (isLocal ? ' selected' : '') + '>本地模型（内置 gguf）</option>' +
           '</select></label>' +
+          // ── DeepSeek 组 ──
+          '<div id="aiGrpDs"' + (cfg.provider === 'deepseek' ? '' : ' style="display:none"') + '>' +
+            '<label class="ai-fld"><span>API Key（platform.deepseek.com）</span><input type="password" id="aiSetDsKey" placeholder="sk-…" value="' + esc(cfg.dsKey) + '"></label>' +
+            '<label class="ai-fld"><span>模型</span><select id="aiSetDsModel">' +
+              '<option value="deepseek-chat"' + (cfg.dsModel === 'deepseek-chat' ? ' selected' : '') + '>deepseek-chat（V4-Flash · 快 · 评测88.3%）</option>' +
+              '<option value="deepseek-v4-pro"' + (cfg.dsModel === 'deepseek-v4-pro' ? ' selected' : '') + '>deepseek-v4-pro（最准93.1% · 慢,单题可达数分钟）</option>' +
+            '</select></label>' +
+            '<div class="ai-set-note">2026-08-31 同套30题实测：V4-Flash 88.3%/0编数/10.9s，超 MiniMax-M2.5(80.0%)；日常问答用 Flash，深度分析可切 Pro。</div>' +
+          '</div>' +
           // ── LM Studio 组 ──
           '<div id="aiGrpLm"' + (isLm ? '' : ' style="display:none"') + '>' +
             '<label class="ai-fld"><span>服务器地址（LM Studio → Developer → Start Server）</span><input type="text" id="aiSetLmBase" value="' + esc(cfg.lmBase) + '" placeholder="http://127.0.0.1:1234/v1"></label>' +
@@ -568,8 +612,10 @@
     const grpMini = q('#aiGrpMinimax'), grpLocal = q('#aiGrpLocal'), grpLm = q('#aiGrpLm'), testBtn = q('#aiTest');
     let lmAutoFetched = false;
     let doLmFetch = null;          // 先声明(初次 syncProvider() 早于赋值,避免 TDZ),下方赋真函数
+    const grpDs = q('#aiGrpDs');
     const syncProvider = () => {
       const v = providerSel.value;
+      grpDs.style.display = v === 'deepseek' ? '' : 'none';
       grpMini.style.display = v === 'minimax' ? '' : 'none';
       grpLocal.style.display = v === 'local' ? '' : 'none';
       grpLm.style.display = v === 'lmstudio' ? '' : 'none';
@@ -593,7 +639,10 @@
         key: (q('#aiSetKey').value || '').trim(),
         baseUrl: (q('#aiSetUrl').value || '').trim() || DEFAULT_BASE,
         model: model || MODELS[0],
-        provider: (providerSel.value === 'local' || providerSel.value === 'lmstudio') ? providerSel.value : 'minimax',
+        provider: ['local', 'lmstudio', 'minimax', 'deepseek'].includes(providerSel.value) ? providerSel.value : 'deepseek',
+        dsKey: (q('#aiSetDsKey').value || '').trim(),
+        dsModel: (q('#aiSetDsModel').value || DS_MODELS[0]),
+        dsMigrated: true,
         modelPath: (q('#aiSetModelPath').value || '').trim(),
         lmBase: (q('#aiSetLmBase').value || '').trim() || LM_DEFAULT_BASE,
         lmModel: lmSel ? (lmSel.value || '') : '',
@@ -641,6 +690,16 @@
           const resp = await api().aiChat({ key: '', baseUrl: lmJoin(c.lmBase, '/chat/completions'), model: c.lmModel, messages: [{ role: 'user', content: '只回复两个字:在线' }], maxTokens: 200, timeoutMs: 180000 });
           if (resp && resp.error) { status.textContent = '失败：' + resp.error; status.className = 'ai-set-status err'; }
           else { status.textContent = '连接成功 ✓ ' + c.lmModel + ' 回复：' + stripThink(resp.content).slice(0, 60); status.className = 'ai-set-status ok'; }
+        } catch (e) { status.textContent = '失败：' + String((e && e.message) || e); status.className = 'ai-set-status err'; }
+        return;
+      }
+      if (c.provider === 'deepseek') {
+        if (!c.dsKey) { status.textContent = '请先填 DeepSeek API Key'; status.className = 'ai-set-status err'; return; }
+        status.textContent = '测试中…'; status.className = 'ai-set-status';
+        try {
+          const resp = await api().aiChat({ key: c.dsKey, baseUrl: DS_BASE, model: c.dsModel, messages: [{ role: 'user', content: 'ping' }], maxTokens: 1 });
+          if (resp && resp.error) { status.textContent = '失败：' + resp.error; status.className = 'ai-set-status err'; }
+          else { status.textContent = '连接成功 ✓ ' + c.dsModel; status.className = 'ai-set-status ok'; }
         } catch (e) { status.textContent = '失败：' + String((e && e.message) || e); status.className = 'ai-set-status err'; }
         return;
       }

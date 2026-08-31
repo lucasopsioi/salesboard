@@ -314,6 +314,15 @@ ipcMain.handle('psiUnits', () => { try { return engine.psiUnits(); } catch (e) {
 // MiniMax AI 问答：主进程 fetch 转发（绕 CORS），30s 超时。
 // 入参 payload={key,baseUrl,model,messages,tools?,maxTokens?}；出参 {content, toolCalls?, error?}。
 // 【不落任何日志文件】——问答可能含业务敏感数据，绝不写盘。
+// 读 eval/ 下的 key 文件(白名单文件名;仅本机进程间传递,不打印不落日志)——渲染层 dsKey 自动带入用
+ipcMain.handle('aiReadKeyFile', (_e, name) => {
+  try {
+    const safe = String(name || '').replace(/[^a-zA-Z0-9._-]/g, '');
+    if (!safe || safe.indexOf('..') >= 0) return '';
+    const p = path.join(__dirname, 'eval', safe);
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8').trim() : '';
+  } catch (e) { return ''; }
+});
 ipcMain.handle('aiChat', async (_e, payload) => {
   payload = payload || {};
   const { key, baseUrl, model, messages } = payload;

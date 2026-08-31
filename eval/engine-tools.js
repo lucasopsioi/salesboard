@@ -96,6 +96,15 @@ function buildRegistry(engine) {
       if (bad) return bad;
       const met = a.metric || 'sellOut';
       const r = engine.query({ metric: met, gran: a.gran || 'month', filters: a.filters || {}, stackDim: a.stackDim, from: a.from, to: a.to, limit: a.limit });
+      /* 各期合计随返回(2026-08-31):模型按国家矩阵自己跨国相加的合计,在溯源门禁的
+         连续段和池里对不上(各国序列不相邻)——官方合计入池,模型也不必自己算。 */
+      try {
+        if (r && !r.error && r.buckets && r.buckets.length && r.data) {
+          const tot = {};
+          r.buckets.forEach(b => { let s2 = 0; Object.keys(r.data).forEach(k => { s2 += +((r.data[k] || {})[b]) || 0; }); tot[b] = s2; });
+          r['各期合计'] = tot;
+        }
+      } catch (e) {}
       // 与 app/ai-context.js 的区间合计保持一致（改那边记得同步这里）
       try {
         if (r && r.data && (met === 'sellOut' || met === 'sellIn')) {

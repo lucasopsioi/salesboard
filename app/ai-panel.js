@@ -242,7 +242,12 @@
     st.open = true;
     root.classList.remove('hidden');
     const label = st.boardId ? (AIData() ? AIData().labelOf(st.boardId) : st.boardId) : null;
-    root.querySelector('#aiTitle').textContent = label ? ('AI · ' + label) : 'AI 问答（全局）';
+    const cfgT = loadCfg();
+    const modelTag = cfgT.provider === 'deepseek' ? ('DeepSeek ' + (cfgT.dsModel || '')) :
+      cfgT.provider === 'minimax' ? ('MiniMax ' + (cfgT.model || '')) :
+      cfgT.provider === 'lmstudio' ? ('LM Studio ' + (cfgT.lmModel || '')) :
+      cfgT.provider === 'corplink' ? 'CorpLink CLI' : '本地模型';
+    root.querySelector('#aiTitle').textContent = (label ? ('AI · ' + label) : 'AI 问答（全局）') + '　|　' + modelTag;
     renderMessages();
     warmup();     // 打开面板即预热本地模型，把冷加载时间从第一个问题里挪走
     startLmBar(); // 顶部状态条：已加载模型 + 内存占用（每 5s 刷新）
@@ -652,6 +657,7 @@
           '<div class="ai-set-foot">' +
             '<span class="ai-set-note">配置仅存本机，不进存档、不外传。</span>' +
             '<button class="ai-btn" id="aiTest">测试连接</button>' +
+            '<button class="ai-btn" id="aiNetCheck">网络体检</button>' +
             '<button class="ai-btn primary" id="aiSetSave">保存</button>' +
           '</div>' +
           '<div class="ai-set-status" id="aiSetStatus"></div>' +
@@ -727,6 +733,43 @@
     q('#aiLmFetch').onclick = doLmFetch;
     if (isLm) setTimeout(doLmFetch, 60);   // 已是 LM Studio → 打开设置即自动刷新列表
     q('#aiSetSave').onclick = () => { saveCfg(readForm()); toastSafe('已保存 AI 设置', 'ok'); modal.remove(); };
+    /* 网络体检(2026-08-31):测试连接(1 token 裸 ping)通过≠问答链路通——企业代理常
+       放小请求拦大请求/拦带工具请求。三级递进,逐级报耗时+状态+摘要,断在哪级一目了然。 */
+    q('#aiNetCheck').onclick = async () => {
+      const c = readForm();
+      const status = q('#aiSetStatus');
+      const endp = c.provider === 'deepseek' ? { key: c.dsKey, baseUrl: DS_BASE, model: c.dsModel }
+        : c.provider === 'minimax' ? { key: c.key, baseUrl: c.baseUrl, model: c.model }
+        : null;
+      if (!endp) { status.textContent = '网络体检仅适用于在线 API(DeepSeek/MiniMax)'; status.className = 'ai-set-status err'; return; }
+      if (!endp.key) { status.textContent = '请先填 API Key'; status.className = 'ai-set-status err'; return; }
+      const lines = ['体检开始(模型 ' + endp.model + ')…'];
+      const paint = () => { status.innerHTML = lines.map(esc).join('<br>'); status.className = 'ai-set-status'; };
+      paint();
+      const AD = AIData();
+      const run = async (name, payload) => {
+        const t0 = Date.now();
+        try {
+          const r = await api().aiChat(Object.assign({ key: endp.key, baseUrl: endp.baseUrl, model: endp.model, timeoutMs: 90000 }, payload));
+          const dt = ((Date.now() - t0) / 1000).toFixed(1) + 's';
+          if (r && r.error) { lines.push('✗ ' + name + ' [' + dt + '] ' + String(r.error).slice(0, 160)); return false; }
+          const got = r && (r.content || (r.toolCalls && ('调用工具:' + r.toolCalls.map(tc => tc.function.name).join(','))));
+          lines.push('✓ ' + name + ' [' + dt + '] ' + String(got || '(无内容?)').slice(0, 60));
+          return true;
+        } catch (e) { lines.push('✗ ' + name + ' 异常: ' + String((e && e.message) || e).slice(0, 120)); return false; }
+        finally { paint(); }
+      };
+      const pad = new Array(80).fill('数据行:国家,产品,周,销量,库存,金额;').join('');
+      await run('L1 裸连通(小请求)', { messages: [{ role: 'user', content: 'ping' }], maxTokens: 1 });
+      await run('L2 生成链路(约4KB请求体)', { messages: [{ role: 'system', content: '你是数据助手。以下是背景资料:' + pad }, { role: 'user', content: '只回复四个字:体检通过' }], maxTokens: 50, temperature: 0 });
+      let specs = [];
+      try { specs = AD && AD.buildToolSpecs ? AD.buildToolSpecs(AD.toolNames(AD.buildToolRegistry())).slice(0, 6) : []; } catch (e) {}
+      if (specs.length) {
+        await run('L3 工具链路(带 function-calling)', { messages: [{ role: 'user', content: '请调用 meta 工具查看数据概况' }], tools: specs, maxTokens: 300, temperature: 0 });
+      } else lines.push('· L3 跳过(工具规格不可用)');
+      lines.push('体检结束——断在哪一级,问题就在那一级的差异上(L1小请求/L2大请求体/L3工具字段)。把整段结果发给开发者即可定位。');
+      paint();
+    };
     testBtn.onclick = async () => {
       const c = readForm();
       const status = q('#aiSetStatus');

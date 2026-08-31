@@ -426,7 +426,7 @@ ipcMain.handle('aiChat', async (_e, payload) => {
       const emit = d => { try { if (win && !win.isDestroyed()) win.webContents.send('aiStream', Object.assign({ id: payload.id }, d)); } catch (e) { } };
       const rs = await net.fetch(baseUrl, { method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal });
       if (!rs.ok) { let em = ''; try { em = (await rs.text()).slice(0, 300); } catch (e) { } return { error: 'HTTP ' + rs.status + (em ? ('：' + em) : '') }; }
-      let content = '', toolCalls = null, buf = '';
+      let content = '', toolCalls = null, buf = '', sseLines = 0, lastRaw = '';
       const dec = new TextDecoder();
       for await (const chunk of rs.body) {
         buf += dec.decode(chunk, { stream: true });
@@ -435,6 +435,7 @@ ipcMain.handle('aiChat', async (_e, payload) => {
           const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
           if (!line.startsWith('data:')) continue;
           const data = line.slice(5).trim();
+          sseLines++; lastRaw = data.slice(0, 200);
           if (data === '[DONE]') continue;
           let o = null; try { o = JSON.parse(data); } catch (e) { continue; }
           const d = o && o.choices && o.choices[0] && o.choices[0].delta;
@@ -453,7 +454,12 @@ ipcMain.handle('aiChat', async (_e, payload) => {
         }
       }
       emit({ done: true });
-      return { content: content, toolCalls: (toolCalls && toolCalls.filter(Boolean).length) ? toolCalls.filter(Boolean) : undefined };
+      const tcs = (toolCalls && toolCalls.filter(Boolean).length) ? toolCalls.filter(Boolean) : undefined;
+      /* 空回复尸检(2026-08-31):流正常结束但一个字都没有——把现场带出去,别让用户对着「(空回复)」猜 */
+      if (!String(content || '').trim() && !tcs) {
+        return { error: 'API 返回空内容(流式收 ' + sseLines + ' 段,HTTP ' + rs.status + ')。最后一段原文: ' + (lastRaw || '(无)') + '。常见原因:企业代理拦截/改写了响应体、模型被内容策略拦截、max_tokens 过小。' };
+      }
+      return { content: content, toolCalls: tcs };
     }
 
     const r = await net.fetch(baseUrl, {
@@ -476,6 +482,12 @@ ipcMain.handle('aiChat', async (_e, payload) => {
     const msg = choice && (choice.message || choice.delta) || {};
     const content = (msg.content != null ? msg.content : (choice && choice.text)) || '';
     const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : undefined;
+    /* 空回复尸检(2026-08-31):HTTP 200 但没有内容也没有工具调用——把 finish_reason 与响应骨架带出去 */
+    if (!String(content || '').trim() && !toolCalls) {
+      let sk = '';
+      try { sk = JSON.stringify(data).slice(0, 260); } catch (e) { sk = '(不可序列化)'; }
+      return { error: 'API 返回空内容(HTTP ' + r.status + ', finish_reason=' + ((choice && choice.finish_reason) || '无') + ')。响应骨架: ' + sk + '。常见原因:企业代理改写响应、内容策略拦截、模型名不存在但网关静默兜底。' };
+    }
     return { content: String(content || ''), toolCalls };
   } catch (e) {
     const aborted = e && (e.name === 'AbortError');

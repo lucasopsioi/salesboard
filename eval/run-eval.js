@@ -320,6 +320,7 @@ function asciiJson(obj) {
         toolLog.push({ tool: n, args: a, error: (out && out.error) || null });
         return out;
       },
+      optionsDirect: async (field) => registry.options({ field }),
       schemas: AD.TOOL_SCHEMAS,
       buildToolSpecs: AD.buildToolSpecs,
       pickTools: AD.pickTools,

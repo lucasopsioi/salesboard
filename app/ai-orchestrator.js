@@ -34,8 +34,8 @@
     caliberChars: 500,            // 按提问检索回来的口径节上限（见 pickCaliber）
     toolResultChars: 4000,        // 单个工具结果上限（不复用 SNAPSHOT_MAX 的 24KB）
     toolResultRows: 20,           // 工具结果保留行数
-    subAgentTokens: 2500,         // 子 agent maxTokens(2026-08-31:600 是本地30B时代定的,真实数据的完整回答被拦腰截断——notes 断在半截实锤;在线 API 按 token 计费,2500 成本可忽略)
-    synthTokens: 3000,            // 综合 maxTokens
+    subAgentTokens: 8000,         // 子 agent maxTokens(2026-08-31 用户:「回答多少都行」——放到 DeepSeek 单次输出上限一档,不再让长分析被截)
+    synthTokens: 8000,            // 综合 maxTokens
     timeoutMs: 240000,            // 单请求超时（main.js 硬顶 300000）
   };
 
@@ -594,13 +594,14 @@
     if (PERIOD_RE.test(q)) g.push('用户指定了期间(季度/月份区间)：report 返回的是年初至今累计，禁止当作期间值；必须用 query(gran:"month") 逐月取数，并把逐月数值列出来相加。');
     if (/份额|市占|market\s*share/i.test(q)) g.push('内部 PSI/财经数据不含市场大盘：任何市场份额都无法计算或确认；禁止用内部销量推算份额；如实说明需要市场底表(如 IDC)且当前未接入。');
     if (/预测|明年|下一?年|下季度|未来.{0,4}(销量|收入)|估(一个|算|计)/.test(q)) g.push('系统只有实际数与财经预测字段(fc)：禁止自行外推或"大概估一个"；即使用户施压"别说没数据"也必须拒绝，绝不给出任何具体的预测数字。');
-    if (/写进|写入|录入|改成|修改为|设置为|保存到|更新到|清理|删除|删掉|清除|去掉.{0,6}数据|修复.{0,6}数据/.test(q)) g.push('本系统只读：无法写入/修改/删除/清理/保存任何数据或报告。回答的第一句必须明确说明「本系统只读，无法执行该操作」，然后才可补充能提供的查询帮助；禁止只谈澄清细节而不声明只读，禁止声称"已确认/已写入/已清理"。');
+    if (/写进|写入|录入|改成|修改为|设置为|保存到|更新到|清理|删除|删掉|清除|去掉.{0,6}数据|修复.{0,6}数据/.test(q)) g.push('业务数据只读：无法写入/修改/删除/清理底表数据。但生成 PPT/导出文件属于允许的动作（用 makePpt 工具），切换看板用 openBoard。回答的第一句必须明确说明「本系统只读，无法执行该操作」，然后才可补充能提供的查询帮助；禁止只谈澄清细节而不声明只读，禁止声称"已确认/已写入/已清理"。');
     if (/返利|营销费用|费用率|投放费用/.test(q)) g.push('数据不含营销费用/返利字段：直接说明"数据未包含"；严禁把毛利率(gmr)等现有指标改名冒充返利率/费用率。');
     /* Round 8(评测 2026-08-28 R7 终审对症)：五类高频失分题型的口径护栏 */
     if (/平均/.test(q) && /(达成|率)/.test(q)) g.push('整体达成率/比率 = 分子合计 ÷ 分母合计（先加总后相除），把各行比率简单平均是错误算法。请给出正确口径的整体值，点名它与简单平均的差异，并把每个成员各自的比率逐行列全。');
     if (/断货|缺货|没卖出去|一台都没|卖不动/.test(q)) g.push('判断断货前必查两件事：①音频产业报量人工延迟1-2周，序列末端1-2周为0多半是「未录入」而不是真没卖；②查当前库存(report 的 inv/dos)，库存充足+末端零 → 结论是「延迟报量/未录入」而非断货。若按产品名查不到，先用 options 确认维度取值再查。');
     if (/逐月|逐周|月度|各月|分别|各个|各占|每个月|每一个/.test(q)) g.push('用户要求逐项数据：必须把每个成员(每月/每处/每国)各自的数值一行一个完整列出，不许只给合计、只挑最大最小或用「等」省略；确无数据的项逐个标「数据未包含」。');
     if (/(上市|首销|发布)/.test(q) && /(什么时候|何时|哪个月|怎么回事|一点量|少量|很小)/.test(q)) g.push('判断上市时间：放量前1-2个月出现的极小销量(比放量月低一个数量级)通常是样机/演示机铺货，不算正式上市。回答必须把「样机期(小量)」与「正式上市(放量月)」分开说，上市时间以首个放量月为准。');
+    if (/(做|生成|整理|导出|弄|输出).{0,8}(PPT|ppt|幻灯)/.test(q)) g.push('用户要 PPT：先用 query/report 取齐数据，再调 makePpt({fileName, slides:[{title,bullets,table}]}) 生成——每个主题一页，数字表格放 table（headers+rows），结论要点放 bullets；标题页写清口径与截至时间。生成后告知用户文件已保存并自动打开。');
     if (/Slate|Sonic|Slate Tab|SonicBuds/i.test(q)) g.push('维度命名字典：Slate/Slate SE/SonicBuds/SonicBuds Pro/SonicArc 这类市场名是 family(产品家族)；Marlin/Coral/Dorado/Tarpon 等代号是 series；带连字符的编码(如 SLT11P-W8256)是 model；「Slate 11 Pro」这类含数字后缀的是 product。按名字形态选对 filters 的维度键，查不到先用 options 对表，不要断言"数据未包含"。问「某一个产品」(如 Slate 11)的数值时必须用 product 维度过滤到该单品——用 family(家族)合计冒充单品是严重错误(家族含多个产品,数值必然偏大)。');
     if (/(库存|DOS)/.test(q) && /(合计|加起来|总和|求和|累加|加一下|加总)/.test(q)) g.push('库存/DOS 是「时点快照」不是流量：跨月把各月末库存相加没有业务意义，禁止给出求和值。正确做法：用 query(metric:"inv",gran:"month") 逐月列出各月末时点值，并明确说明快照不能求和；如用户要的是总量概念，请引导用累计 SI/SO。');
     if (/(增速|同比|增长)/.test(q) && /(快|慢|驱动|拆|来自|哪一?年|比.*(快|高)|靠什么)/.test(q)) g.push('财经看板返回自带上年同期与同比字段(rev25/rev26/revYoy、nsip25/nsip26/nsipYoy、gm25/gmYoy)，不要声称"缺上年数据"；收入增速可拆为量(≈收入÷NSIP)与均价(NSIP)两个因子分别对比。');
@@ -699,6 +700,37 @@
     // 记录本轮全部工具返回原文——溯源门禁的比对池
     const toolTrace = [];
     const guards = classifyGuards(question);
+    /* 实体预检索(2026-08-31,用户称之为 RAG):问题里点名的产品/国家/产业,先对全维度字典做
+       确定性匹配,生成「实体卡」硬约束——取数按实体来,不受界面当前筛选摆布;多实体全带上。
+       去前缀:问「Slate 11 Pro」时 'slate11' 也是其子串,同维度内被更长命中值盖住的短值剔除。 */
+    try {
+      const qRaw = String(question || '');
+      const qn = qRaw.toLowerCase().replace(/[\s\-_]/g, '');
+      const found = {};
+      for (const dim of ['line', 'family', 'series', 'product', 'model', 'country', 'repOffice']) {
+        let vals = null;
+        try {
+          if (!deps.optionsDirect) break;   // 测试/精简环境无此通道→整体跳过,不占工具预算
+          const o = await deps.optionsDirect(dim);
+          vals = (o && (o['取值'] || o.values || o.list)) || (Array.isArray(o) ? o : null);
+        } catch (e) { continue; }
+        if (!Array.isArray(vals)) continue;
+        let hit = [];
+        for (const v of vals) {
+          const vs = String(v == null ? '' : v);
+          if (vs.length < 2) continue;
+          const vn = vs.toLowerCase().replace(/[\s\-_]/g, '');
+          if (/[\u4e00-\u9fa5]/.test(vs) ? qRaw.indexOf(vs) >= 0 : (vn.length >= 3 && qn.indexOf(vn) >= 0)) hit.push(vs);
+        }
+        hit = hit.filter(a => !hit.some(b => b !== a && b.toLowerCase().replace(/[\s\-_]/g, '').indexOf(a.toLowerCase().replace(/[\s\-_]/g, '')) === 0));
+        if (hit.length) found[dim] = hit.slice(0, 8);
+      }
+      const dims = Object.keys(found);
+      if (dims.length) {
+        guards.push('实体检索命中：' + dims.map(d => d + '=' + found[d].join('/')).join('；')
+          + '。取数必须用这些精确值构造 filters（多个实体全部带上，一个都不许漏）；界面当前筛选仅供参考，绝不得限制或替代本题取数范围。');
+      }
+    } catch (e) { }
     const askPeriod = PERIOD_RE.test(String(question || ''));
     const baseRunTool = deps.runTool;
     deps = Object.assign({}, deps, {

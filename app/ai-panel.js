@@ -448,6 +448,7 @@
       filters: b => { try { const c = AD.boardContext && AD.boardContext(b); return c ? c.filters : null; } catch (e) { return null; } },
       snapshot: async b => { try { return await AD.genericSnapshot(b); } catch (e) { return ''; } },
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
+      optionsDirect: async (field) => AD.dispatchTool(registry, { tool: 'options', args: { field } }),
       chat: async p => {
         if (cfg.provider === 'corplink') return cliChat(cfg, p);
         const endp = cfg.provider === 'deepseek' ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }

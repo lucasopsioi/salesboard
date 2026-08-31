@@ -86,6 +86,19 @@ const TOOL_SCHEMAS = {
   financeCustom: { description: '经营自定义取数：按财经维度取指定指标。', properties: { rowDim: { type: 'string', enum: ['rep', 'lv1', 'lv2', 'lv3', 'lv4', 'model'] }, metrics: { type: 'array', items: { type: 'string', enum: ['rev', 'gm', 'gmr', 'cp', 'sellIn', 'sellOut', 'nsip', 'bpAttain', 'fcAttain'] } }, fromM: { type: 'integer' }, toM: { type: 'integer' } }, required: ['rowDim'] },
   industryBoard: { description: '产业 4 个 KPI：今年 SI/SO 累计与同比、当前库存与渠道DOS、全流程库存与DOS。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
   industryTrend: { description: '产业趋势：今年 vs 去年同期逐期序列。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
+  makePpt: {
+    description: '生成 PPT 文件（Acme红模板，微软雅黑）并自动保存打开。用于「做/生成/整理/导出 PPT」类请求：先取数，再把结论与表格组织成 slides。',
+    properties: {
+      fileName: { type: 'string', description: '文件名(不含扩展名)' },
+      slides: { type: 'array', items: { type: 'object', properties: {
+        title: { type: 'string' },
+        bullets: { type: 'array', items: { type: 'string' } },
+        table: { type: 'object', properties: { headers: { type: 'array', items: { type: 'string' } }, rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+      }, required: ['title'] } },
+    }, required: ['fileName', 'slides'] },
+  openBoard: {
+    description: '切换到指定看板视图（用户说「打开/切到 XX 看板」时用）。',
+    properties: { boardId: { type: 'string', description: '看板 id(见 boardState 可用列表)' } }, required: ['boardId'] },
   boardState: { description: '读用户此刻在看板上选了什么。用户说「当前/我现在选的」时先调。', properties: { boardId: { type: 'string', description: 'psi/report/country/industry/finance/audio/inventory' } }, required: [] },
   agg: { description: '通用二维聚合（类别 × 图例 × 度量），dataset:"idc" 切市场底表。', properties: { cat: { type: 'object', properties: { field: { type: 'string' }, gran: { type: 'string' } }, additionalProperties: false }, legend: { type: 'string' }, measure: { type: 'string' }, agg: { type: 'string', enum: ['sum', 'avg', 'count', 'last', 'min', 'max'] }, filters: FILTERS_SCHEMA, dataset: { type: 'string', enum: ['psi', 'idc'] } }, required: [] },
   aggIdc: { description: 'IDC 市场数据：给 field 则列出该维度取值，否则按 cat/legend 聚合市场量额。', properties: { field: { type: 'string' }, cat: { type: 'object', properties: { field: { type: 'string' } }, additionalProperties: false }, legend: { type: 'string' }, measure: { type: 'string', enum: ['units', 'value', 'asp'] }, filters: { type: 'object', additionalProperties: true } }, required: [] },
@@ -375,7 +388,10 @@ const AIData = (function () {
     const ctx = boardId ? boardContext(boardId) : null;
     if (ctx && ctx.state) out.当前看板设置 = truncObj(ctx.state, BOARD_STATE_MAX);
     const curFilters = (ctx && ctx.filters && Object.keys(ctx.filters).length) ? ctx.filters : null;
-    if (curFilters) out.当前筛选 = curFilters;
+    if (curFilters) {
+      out.当前筛选_仅供参考 = curFilters;
+      out.筛选说明 = '上面是用户界面此刻的筛选状态。若提问点名了具体产品/国家/产业，必须按提问自行构造 filters 取数，不受此筛选限制；仅当提问未指明范围时才参考它。';
+    }
 
     // 若干通用聚合（能取则取，取不到跳过）
     if (api && meta && (meta.records || 0) > 0) {
@@ -480,6 +496,47 @@ const AIData = (function () {
       if (!api) return { error: 'API 不可用' };
       return await fn(args || {});
     };
+    /* —— Agent 的手(2026-08-31)：makePpt 直接在渲染层用 PptxGenJS（国家看板同款Acme红样式），
+       saveFile 后主进程自动打开；openBoard 调全局 switchView。业务数据仍只读。 —— */
+    async function toolMakePpt(a) {
+      try {
+        if (typeof PptxGenJS === 'undefined') return { error: 'PPT 引擎不可用' };
+        const slides = Array.isArray(a.slides) ? a.slides.slice(0, 20) : [];
+        if (!slides.length) return { error: 'slides 为空' };
+        const pptx = new PptxGenJS();
+        pptx.defineLayout({ name: 'W', width: 13.333, height: 7.5 }); pptx.layout = 'W';
+        slides.forEach(sl => {
+          const pg = pptx.addSlide();
+          pg.addText(String(sl.title || ''), { x: 0.4, y: 0.25, w: 12.5, h: 0.6, fontFace: '微软雅黑', fontSize: 20, bold: true, color: 'C7000B' });
+          let y = 1.05;
+          const bl = Array.isArray(sl.bullets) ? sl.bullets.slice(0, 12) : [];
+          if (bl.length) {
+            pg.addText(bl.map(b => ({ text: String(b), options: { bullet: { code: '2022' }, fontFace: '微软雅黑', fontSize: 13, color: '333333', breakLine: true } })), { x: 0.5, y: y, w: 12.3, h: Math.min(3, 0.32 * bl.length + 0.2) });
+            y += Math.min(3, 0.32 * bl.length + 0.3);
+          }
+          const tb = sl.table;
+          if (tb && Array.isArray(tb.headers) && tb.headers.length && Array.isArray(tb.rows)) {
+            const cell = (t, o) => ({ text: String(t == null ? '' : t), options: Object.assign({ fontFace: '微软雅黑', fontSize: 9, align: 'right', valign: 'middle' }, o || {}) });
+            const rows = [tb.headers.map((h, i) => cell(h, { bold: true, color: 'FFFFFF', fill: { color: 'C7000B' }, align: i === 0 ? 'left' : 'right' }))];
+            tb.rows.slice(0, 40).forEach(r => rows.push((r || []).map((v, i) => cell(v, i === 0 ? { align: 'left' } : null))));
+            pg.addTable(rows, { x: 0.4, y: y, w: 12.5, border: { type: 'solid', color: 'E6E8EB', pt: 0.5 }, autoPage: false });
+          }
+        });
+        const b64 = await pptx.write('base64');
+        const fn = String(a.fileName || 'AI生成').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+        const res = await api.saveFile(fn + '.pptx', b64, 'pptx');
+        if (res && res.path) return { ok: true, 已保存: res.path, 页数: slides.length, 说明: '文件已自动打开' };
+        return { error: (res && res.error) || '保存失败或用户取消' };
+      } catch (e) { return { error: 'PPT 生成失败: ' + String((e && e.message) || e) }; }
+    }
+    async function toolOpenBoard(a) {
+      try {
+        const id = String(a && a.boardId || '');
+        if (!id) return { error: 'boardId 必填' };
+        if (typeof switchView === 'function') { switchView(id); return { ok: true, 已切换: id }; }
+        return { error: '视图切换不可用' };
+      } catch (e) { return { error: String((e && e.message) || e) }; }
+    }
     /* filters 维度校验：值塞错维度（如 product 取值塞进 series）引擎会静默返回空，
        模型据此误判"没数据"（评测2026-08-25 RunB 打掉6题）。查出错放维度就点名纠正。 */
     async function checkFilterDims(filters) {
@@ -619,6 +676,8 @@ const AIData = (function () {
       industryBoard: wrap(a => api.industryBoard(a || {})),
       industryTrend: wrap(a => api.industryTrend(a || {})),
       // 当前看板界面上选了什么（用户说「这个/当前筛选」时先调它）
+      makePpt: wrap(toolMakePpt),
+      openBoard: wrap(toolOpenBoard),
       boardState: async a => {
         const c = boardContext((a && a.boardId) || null);
         return c ? { 筛选: c.filters, 分组维度: c.groupDim, 设置: truncObj(c.state, BOARD_STATE_MAX) } : { error: '该看板没有可读的界面状态' };

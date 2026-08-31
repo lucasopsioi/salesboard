@@ -97,11 +97,13 @@
     const h = String(hdrText || ''), t = String(raw == null ? '' : raw);
     if (/全流程DOS/.test(h)) {
       const v = parseFloat(t.replace(/,/g, ''));
-      return (isFinite(v) && v > 200) ? 'color:#C00000;font-weight:bold;' : '';
+      const th = (typeof window !== 'undefined' && window.AppSettings) ? window.AppSettings.dosFlowRed() : 200;
+      return (isFinite(v) && v > th) ? 'color:#C00000;font-weight:bold;' : '';
     }
     if (/DOS/.test(h)) {
       const v = parseFloat(t.replace(/,/g, ''));
-      return (isFinite(v) && v > 120) ? 'color:#C00000;font-weight:bold;' : '';
+      const th = (typeof window !== 'undefined' && window.AppSettings) ? window.AppSettings.dosRed() : 120;
+      return (isFinite(v) && v > th) ? 'color:#C00000;font-weight:bold;' : '';
     }
     if (/WoW/i.test(h)) {
       const v = parseFloat(t);
@@ -464,7 +466,8 @@
   function v3Visual(t, imgMode, opts, fit) { return '<tr>' + v3Cell(v3Unit(t, imgMode, opts, fit), { pad: '6px' }) + '</tr>'; }
 
   function buildWeeklyV3Html(model, imgMode) {
-    V3W = (+((model || {}).v3W) >= 900 && +((model || {}).v3W) <= 1600) ? +model.v3W : 1200;
+    const v3wDflt = (typeof window !== 'undefined' && window.AppSettings) ? window.AppSettings.v3wDefault() : 1200;
+    V3W = (+((model || {}).v3W) >= 900 && +((model || {}).v3W) <= 1600) ? +model.v3W : v3wDflt;
     V3I = V3W - 16;
     const m = model || {};
     let b = '';

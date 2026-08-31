@@ -227,6 +227,14 @@
     return root;
   }
 
+  // 执行流一行:plan/agent/tool/synth 各自图标;run=⏳ ok=✓ err=✗
+  function fmtFlowStep(st) {
+    const icon = st.k === 'plan' ? '🧭' : st.k === 'agent' ? '🤖' : st.k === 'synth' ? '🧩' : '🔧';
+    const state = st.state === 'run' ? '<span class="ai-fs-run">⏳</span>' : st.state === 'err' ? '<span class="ai-fs-err">✗</span>' : '<span class="ai-fs-ok">✓</span>';
+    const ms = st.ms != null ? ('<span class="ai-fs-ms">' + (st.ms >= 1000 ? (st.ms / 1000).toFixed(1) + 's' : st.ms + 'ms') + '</span>') : '';
+    const ind = st.k === 'tool' ? 'style="padding-left:18px"' : '';
+    return '<div class="ai-flow-row" ' + ind + '>' + icon + ' ' + esc(st.label) + ' ' + state + ms + '</div>';
+  }
   function renderMessages() {
     const box = root.querySelector('#aiMsgs');
     if (!st.messages.length) {
@@ -237,8 +245,15 @@
     const streaming = st.messages.some(m => m.streaming);
     box.innerHTML = st.messages.map(m => {
       if (m.role === 'user') return bubble('u', esc(m.content));
-      // 进度行：带 id 便于计时器逐秒直接改文本（不整块重渲，免得打断流式气泡）
-      if (m.progress) return '<div class="ai-bubble a ai-think" id="aiProgLine">' + esc(m.content) + '</div>';
+      // 进度行：flow=执行流列表(逐行实况)+底行计时;计时器只改 #aiProgStage,不整块重渲
+      if (m.progress) {
+        const flowHtml = (m.flow && m.flow.length) ? ('<div class="ai-flow" id="aiFlowList">' + m.flow.map(fmtFlowStep).join('') + '</div>') : '';
+        return '<div class="ai-bubble a ai-think" id="aiProgLine">' + flowHtml + '<div id="aiProgStage">' + esc(m.content) + '</div></div>';
+      }
+      if (m.flowDone && m.flowDone.length) {
+        const secs = m.flowSecs ? ('·' + m.flowSecs + 's') : '';
+        return bubble('a', '<details class="ai-flow-done"><summary>🛠 执行过程（' + m.flowDone.length + ' 步' + secs + '）</summary><div class="ai-flow">' + m.flowDone.map(fmtFlowStep).join('') + '</div></details>' + md(m.content));
+      }
       if (m.streaming && !m.content) return bubble('a ai-think', '模型加载中…');   // 本地模型冷启动/首 token 前
       return bubble('a', md(m.content) + (m.streaming ? '<span class="ai-cursor">▍</span>' : ''));
     }).join('') + ((st.busy && !streaming) ? bubble('a ai-think', '思考中…') : '');
@@ -371,8 +386,8 @@
         /* 编排链(专家口径卡+类别护栏+期间拦截+数字溯源门禁+半途重试)对全部 provider 生效。
            2026-08-31 前在线 API 走的是下面的简单循环——评测 88.3% 是编排链成绩,简单循环没有
            门禁护栏,等于用户拿不到评测出的质量。现统一走编排,简单循环只留 AIOrch 缺失兜底。 */
-        const answer = await runOrchestrated(cfg, q);
-        st.messages.push({ role: 'assistant', content: answer });
+        const r = await runOrchestrated(cfg, q);
+        st.messages.push({ role: 'assistant', content: (r && r.text) || r, flowDone: r && r.flow || null, flowSecs: r && r.secs || null });
       } else {
         const answer = await runChat(cfg, q);
         st.messages.push({ role: 'assistant', content: answer });
@@ -480,11 +495,46 @@
         return api().aiChat(payload);
       },
       onProgress: e => {
-        if (e.type === 'plan') setProg('计划：' + (e.tasks || []).join(' → '));
-        else if (e.type === 'agentStart') setProg('（' + (e.index + 1) + '/' + e.total + '）' + e.agent + ' 正在查…');
-        else if (e.type === 'tool') setProg('（' + e.agent + '）调用 ' + e.tool + ' 取数中…');
-        else if (e.type === 'agentDone') setProg('（' + (e.index + 1) + '/' + e.total + '）' + e.agent + ' 完成');
-        else if (e.type === 'synth') setProg('正在综合各专家结论…');
+        /* 执行流(2026-08-31 用户:要直观看到每个 Agent/工具的工作状态)。
+           详细模式逐行记录;简洁模式(设置里可切)退回单行轮播。 */
+        const detail = !(window.AppSettings && !window.AppSettings.aiFlowDetail());
+        const flow = prog.flow || (prog.flow = []);
+        const push = (step) => { flow.push(step); paintFlow(); return step; };
+        const paintFlow = () => {
+          const el = document.getElementById('aiFlowList');
+          if (el) el.innerHTML = flow.map(fmtFlowStep).join('');
+          else renderMessages();
+        };
+        if (e.type === 'plan') {
+          if (detail) push({ k: 'plan', label: '路由：' + (e.tasks || []).join(' → '), state: 'ok' });
+          setProg('已规划 ' + (e.tasks || []).length + ' 个专家…');
+        } else if (e.type === 'agentStart') {
+          if (detail) { e._st = push({ k: 'agent', label: e.agent, state: 'run' }); prog._curAgent = { step: e._st, t0: Date.now(), tools: 0 }; }
+          setProg('（' + (e.index + 1) + '/' + e.total + '）' + e.agent + ' 分析中…');
+        } else if (e.type === 'tool') {
+          if (detail) {
+            let a = '';
+            try { a = JSON.stringify(e.args || {}); } catch (e2) {}
+            if (a.length > 58) a = a.slice(0, 58) + '…';
+            prog._curTool = push({ k: 'tool', label: e.tool + ' ' + a, state: 'run' });
+            if (prog._curAgent) prog._curAgent.tools++;
+          }
+          setProg('（' + e.agent + '）调用 ' + e.tool + '…');
+        } else if (e.type === 'toolDone') {
+          if (detail && prog._curTool) { prog._curTool.state = e.ok ? 'ok' : 'err'; prog._curTool.ms = e.ms; prog._curTool = null; paintFlow(); }
+        } else if (e.type === 'agentDone') {
+          if (detail && prog._curAgent) {
+            const c = prog._curAgent;
+            c.step.state = (e.result && e.result.error) ? 'err' : 'ok';
+            c.step.ms = Date.now() - c.t0;
+            c.step.label = e.agent + '（' + c.tools + ' 次工具）';
+            prog._curAgent = null; paintFlow();
+          }
+          setProg('（' + (e.index + 1) + '/' + e.total + '）' + e.agent + ' 完成');
+        } else if (e.type === 'synth') {
+          if (detail) prog._synth = push({ k: 'synth', label: '综合各专家结论', state: 'run' });
+          setProg('正在综合各专家结论…');
+        }
       },
     };
 
@@ -501,6 +551,7 @@
       streamState = null;
     }
 
+    if (prog._synth) { prog._synth.state = 'ok'; prog._synth.ms = null; }
     let ans = out.answer || '(空回复)';
     // 门禁已在答案里附「⚠ 溯源门禁…」时不再追加同义第二条(2026-08-31 用户实测:两条 ⚠ 重复)
     if (out.verified && !out.verified.ok && out.verified.unsupported.length && ans.indexOf('溯源门禁') < 0) {
@@ -508,7 +559,7 @@
     }
     const used = (out.results || []).filter(r => !r.error).map(r => r.agentName);
     if (used.length > 1) ans += '\n\n*（由 ' + used.join('、') + ' 协同得出）*';
-    return ans;
+    return { text: ans, flow: (prog.flow && prog.flow.length) ? prog.flow : null, secs: Math.round((Date.now() - t0) / 1000) };
   }
 
   // 组装 messages（system 口径 + 数据快照 + 回退协议工具说明 + 历史），跑工具循环。
@@ -923,6 +974,11 @@
       '.ai-mask{position:absolute;inset:0;background:rgba(20,23,28,.35)}' +
       '.ai-panel{position:absolute;top:0;right:0;height:100%;width:min(440px,92vw);background:#fff;box-shadow:var(--shadow-l);display:flex;flex-direction:column;animation:aiSlide .18s ease-out}' +
       '@keyframes aiSlide{from{transform:translateX(100%)}to{transform:translateX(0)}}' +
+      '.ai-flow{font:11px/1.7 Consolas,monospace;color:var(--ink2,#555);margin:2px 0 6px;max-height:180px;overflow-y:auto}' +
+      '.ai-flow-row{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.ai-fs-ok{color:#1E9E57}.ai-fs-err{color:#C7000B}.ai-fs-run{opacity:.7}' +
+      '.ai-fs-ms{color:var(--ink3,#999);margin-left:6px;font-size:10px}' +
+      '.ai-flow-done{margin-bottom:8px}.ai-flow-done summary{cursor:pointer;font-size:11px;color:var(--ink3,#888)}' +
       '.ai-head{flex-shrink:0;height:50px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line)}' +
       '.ai-title{font-size:14px;font-weight:600;color:var(--ink);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.ai-head-btns{display:flex;gap:4px}' +
@@ -984,7 +1040,7 @@
   }
 
   // 暴露给 app.js / nav
-  window.AIPanel = { init, open, close, injectButtons };
+  window.AIPanel = { init, open, close, injectButtons, openSettings };
 
   // 自启：DOM 就绪即初始化（app.js 的 init 在其后运行，nav 点击处理也在此挂）
   if (typeof document !== 'undefined') {

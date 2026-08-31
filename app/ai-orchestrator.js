@@ -534,7 +534,9 @@
           const v = validateToolArgs(call.tool, call.args, deps.schemas);
           if (!v.ok) { messages.push({ role: 'user', content: '[工具 ' + call.tool + ' 参数错误] ' + v.error + '\n请修正参数后重试。' }); continue; }
           if (deps.onProgress) deps.onProgress({ type: 'tool', agent: a.name, tool: call.tool, args: v.args });
+          const tT0 = Date.now();
           let out; try { out = await deps.runTool(call.tool, v.args); } catch (e) { out = { error: String((e && e.message) || e) }; }
+          if (deps.onProgress) deps.onProgress({ type: 'toolDone', agent: a.name, tool: call.tool, ms: Date.now() - tT0, ok: !(out && out.error) });
           messages.push({ role: 'user', content: shrinkToolResult(call.tool, out) + '\n\n请据此继续回答。' });
         }
         continue;

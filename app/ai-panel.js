@@ -486,7 +486,8 @@
     }
 
     let ans = out.answer || '(空回复)';
-    if (out.verified && !out.verified.ok && out.verified.unsupported.length) {
+    // 门禁已在答案里附「⚠ 溯源门禁…」时不再追加同义第二条(2026-08-31 用户实测:两条 ⚠ 重复)
+    if (out.verified && !out.verified.ok && out.verified.unsupported.length && ans.indexOf('溯源门禁') < 0) {
       ans += '\n\n> ⚠ 以下数字未在工具返回里找到出处，请核对：' + out.verified.unsupported.join('、');
     }
     const used = (out.results || []).filter(r => !r.error).map(r => r.agentName);

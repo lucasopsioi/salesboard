@@ -22,6 +22,41 @@
   const lmJoin = (base, ep) => String(base || LM_DEFAULT_BASE).replace(/\/+$/, '') + ep;
   const stripThink = s => String(s == null ? '' : s).replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
+  /* ---------- CorpLink CLI 适配(Acme内网命令行通道) ----------
+     CLI 只有「文本进/文本出」——把 system+对话+工具文本协议拼成一份 prompt 发进去;
+     模型按回退协议回 {"tool":名,"args":{}} 时,这里伪装成原生 toolCalls 交还编排链,
+     护栏/期间拦截/溯源门禁全部零改动生效。 */
+  function cliBuildPrompt(p) {
+    const parts = [];
+    if (p.system) parts.push('【系统指令】\n' + p.system);
+    if (p.tools && p.tools.length) {
+      const lite = p.tools.map(t => ({ name: t.function.name, description: t.function.description, parameters: t.function.parameters }));
+      parts.push('【可用数据工具】需要取数时,你的回复必须只包含一行 JSON(无其他任何文字):{"tool":"工具名","args":{…}}。拿到工具结果后我会再次调用你。工具清单:\n' + JSON.stringify(lite));
+    }
+    const roleTag = { system: '系统', user: '用户', assistant: '助手', tool: '工具结果' };
+    (p.messages || []).forEach(m => {
+      let c = m.content;
+      if (m.role === 'assistant' && m.tool_calls) c = (c ? c + '\n' : '') + m.tool_calls.map(tc => JSON.stringify({ tool: tc.function.name, args: JSON.parse(tc.function.arguments || '{}') })).join('\n');
+      parts.push('【' + (roleTag[m.role] || m.role) + '】\n' + String(c == null ? '' : c));
+    });
+    parts.push('【助手】');
+    return parts.join('\n\n');
+  }
+  async function cliChat(cfg, p) {
+    const resp = await api().aiChatCli({
+      cmd: cfg.wlCmd, argsTmpl: cfg.wlArgs, inputMode: cfg.wlMode,
+      prompt: cliBuildPrompt(p), timeoutMs: 240000,
+    });
+    if (!resp || resp.error) return { error: (resp && resp.error) || 'CLI 无响应' };
+    const text = stripThink(resp.content || '');
+    const AD = AIData();
+    const call = AD && AD.parseToolCall ? AD.parseToolCall(text) : null;
+    if (call && p.tools && p.tools.length) {
+      return { content: '', toolCalls: [{ id: 'cli-' + Date.now(), function: { name: call.tool, arguments: JSON.stringify(call.args || {}) } }] };
+    }
+    return { content: text };
+  }
+
   const AIData = () => (typeof window !== 'undefined' ? window.AIData : null);
   // dsKey 自动带入:开发机上评测已存 eval/deepseek.key,首次打开不必重复粘贴(掩码存本机,不显示)
   setTimeout(() => {
@@ -53,10 +88,13 @@
         key: o.key || '',
         baseUrl: o.baseUrl || DEFAULT_BASE,
         model: o.model || MODELS[0],
-        provider: (o.provider === 'local' || o.provider === 'lmstudio' || o.provider === 'minimax') ? o.provider : 'deepseek',
+        provider: (o.provider === 'local' || o.provider === 'lmstudio' || o.provider === 'minimax' || o.provider === 'corplink') ? o.provider : 'deepseek',
         dsKey: o.dsKey || '',
         dsModel: DS_MODELS.includes(o.dsModel) ? o.dsModel : DS_MODELS[0],
         dsMigrated: !!o.dsMigrated,
+        wlCmd: o.wlCmd || '',
+        wlArgs: o.wlArgs || '',
+        wlMode: ['stdin', 'file', 'arg'].includes(o.wlMode) ? o.wlMode : 'stdin',
         modelPath: o.modelPath || '',
         lmBase: o.lmBase || LM_DEFAULT_BASE,
         lmModel: o.lmModel || '',
@@ -294,6 +332,7 @@
     const cfg = loadCfg();
     if (cfg.provider === 'minimax' && !cfg.key) { openSettings(); toastSafe('请先在设置里填写 API Key', 'err'); return; }
     if (cfg.provider === 'deepseek' && !cfg.dsKey) { openSettings(); toastSafe('请先在设置里填写 DeepSeek API Key', 'err'); return; }
+    if (cfg.provider === 'corplink' && !cfg.wlCmd) { openSettings(); toastSafe('请先在设置里配置 CorpLink CLI 命令', 'err'); return; }
     if (cfg.provider === 'lmstudio' && !cfg.lmModel) {
       // 没选过模型 → 自动拉一次列表用第一个(零配置);拉不到才弹设置
       try {
@@ -309,7 +348,7 @@
     try {
       if (cfg.provider === 'local') {
         await runChatLocal(cfg);            // 自行管理 assistant 流式气泡
-      } else if (window.AIOrch && (cfg.provider === 'lmstudio' || cfg.provider === 'deepseek' || cfg.provider === 'minimax')) {
+      } else if (window.AIOrch && (cfg.provider === 'lmstudio' || cfg.provider === 'deepseek' || cfg.provider === 'minimax' || cfg.provider === 'corplink')) {
         /* 编排链(专家口径卡+类别护栏+期间拦截+数字溯源门禁+半途重试)对全部 provider 生效。
            2026-08-31 前在线 API 走的是下面的简单循环——评测 88.3% 是编排链成绩,简单循环没有
            门禁护栏,等于用户拿不到评测出的质量。现统一走编排,简单循环只留 AIOrch 缺失兜底。 */
@@ -391,6 +430,7 @@
       snapshot: async b => { try { return await AD.genericSnapshot(b); } catch (e) { return ''; } },
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
       chat: async p => {
+        if (cfg.provider === 'corplink') return cliChat(cfg, p);
         const isDsO = cfg.provider === 'deepseek', isMmO = cfg.provider === 'minimax';
         const endp = isDsO ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }
           : isMmO ? { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model, timeoutMs: 120000 }
@@ -560,9 +600,21 @@
           '<label class="ai-fld"><span>提供方</span><select id="aiSetProvider">' +
             '<option value="deepseek"' + (cfg.provider === 'deepseek' ? ' selected' : '') + '>DeepSeek API（在线，推荐）</option>' +
             '<option value="minimax"' + (cfg.provider === 'minimax' ? ' selected' : '') + '>MiniMax API（在线）</option>' +
+            '<option value="corplink"' + (cfg.provider === 'corplink' ? ' selected' : '') + '>CorpLink CLI（Acme内网）</option>' +
             '<option value="lmstudio"' + (isLm ? ' selected' : '') + '>LM Studio（本机服务器）</option>' +
             '<option value="local"' + (isLocal ? ' selected' : '') + '>本地模型（内置 gguf）</option>' +
           '</select></label>' +
+          // ── CorpLink CLI 组 ──
+          '<div id="aiGrpWl"' + (cfg.provider === 'corplink' ? '' : ' style="display:none"') + '>' +
+            '<label class="ai-fld"><span>CLI 命令（如 corplink，需在 PATH 或写全路径）</span><input type="text" id="aiSetWlCmd" value="' + esc(cfg.wlCmd) + '" placeholder="corplink"></label>' +
+            '<label class="ai-fld"><span>参数模板（空格分隔；文件方式用 {PROMPT_FILE} 占位）</span><input type="text" id="aiSetWlArgs" value="' + esc(cfg.wlArgs) + '" placeholder="ai chat --model deepseek"></label>' +
+            '<label class="ai-fld"><span>问题怎么传给 CLI</span><select id="aiSetWlMode">' +
+              '<option value="stdin"' + (cfg.wlMode === 'stdin' ? ' selected' : '') + '>标准输入（stdin，最常见）</option>' +
+              '<option value="file"' + (cfg.wlMode === 'file' ? ' selected' : '') + '>临时文件（参数里 {PROMPT_FILE}）</option>' +
+              '<option value="arg"' + (cfg.wlMode === 'arg' ? ' selected' : '') + '>命令行参数（追加到末尾）</option>' +
+            '</select></label>' +
+            '<div class="ai-set-note">适配Acme内网「CorpLink CLI → DeepSeek」通道：CLI 需一次调用完成一问一答、回答走标准输出。数据工具调用走文本协议，护栏与数字溯源门禁全部生效。在办公电脑上跑一次 CLI 的 --help 把命令与参数填进来即可。</div>' +
+          '</div>' +
           // ── DeepSeek 组 ──
           '<div id="aiGrpDs"' + (cfg.provider === 'deepseek' ? '' : ' style="display:none"') + '>' +
             '<label class="ai-fld"><span>API Key（platform.deepseek.com）</span><input type="password" id="aiSetDsKey" placeholder="sk-…" value="' + esc(cfg.dsKey) + '"></label>' +
@@ -612,10 +664,11 @@
     const grpMini = q('#aiGrpMinimax'), grpLocal = q('#aiGrpLocal'), grpLm = q('#aiGrpLm'), testBtn = q('#aiTest');
     let lmAutoFetched = false;
     let doLmFetch = null;          // 先声明(初次 syncProvider() 早于赋值,避免 TDZ),下方赋真函数
-    const grpDs = q('#aiGrpDs');
+    const grpDs = q('#aiGrpDs'), grpWl = q('#aiGrpWl');
     const syncProvider = () => {
       const v = providerSel.value;
       grpDs.style.display = v === 'deepseek' ? '' : 'none';
+      grpWl.style.display = v === 'corplink' ? '' : 'none';
       grpMini.style.display = v === 'minimax' ? '' : 'none';
       grpLocal.style.display = v === 'local' ? '' : 'none';
       grpLm.style.display = v === 'lmstudio' ? '' : 'none';
@@ -639,10 +692,13 @@
         key: (q('#aiSetKey').value || '').trim(),
         baseUrl: (q('#aiSetUrl').value || '').trim() || DEFAULT_BASE,
         model: model || MODELS[0],
-        provider: ['local', 'lmstudio', 'minimax', 'deepseek'].includes(providerSel.value) ? providerSel.value : 'deepseek',
+        provider: ['local', 'lmstudio', 'minimax', 'deepseek', 'corplink'].includes(providerSel.value) ? providerSel.value : 'deepseek',
         dsKey: (q('#aiSetDsKey').value || '').trim(),
         dsModel: (q('#aiSetDsModel').value || DS_MODELS[0]),
         dsMigrated: true,
+        wlCmd: (q('#aiSetWlCmd').value || '').trim(),
+        wlArgs: (q('#aiSetWlArgs').value || '').trim(),
+        wlMode: (q('#aiSetWlMode').value || 'stdin'),
         modelPath: (q('#aiSetModelPath').value || '').trim(),
         lmBase: (q('#aiSetLmBase').value || '').trim() || LM_DEFAULT_BASE,
         lmModel: lmSel ? (lmSel.value || '') : '',
@@ -690,6 +746,16 @@
           const resp = await api().aiChat({ key: '', baseUrl: lmJoin(c.lmBase, '/chat/completions'), model: c.lmModel, messages: [{ role: 'user', content: '只回复两个字:在线' }], maxTokens: 200, timeoutMs: 180000 });
           if (resp && resp.error) { status.textContent = '失败：' + resp.error; status.className = 'ai-set-status err'; }
           else { status.textContent = '连接成功 ✓ ' + c.lmModel + ' 回复：' + stripThink(resp.content).slice(0, 60); status.className = 'ai-set-status ok'; }
+        } catch (e) { status.textContent = '失败：' + String((e && e.message) || e); status.className = 'ai-set-status err'; }
+        return;
+      }
+      if (c.provider === 'corplink') {
+        if (!c.wlCmd) { status.textContent = '请先填 CLI 命令'; status.className = 'ai-set-status err'; return; }
+        status.textContent = '测试中…（跑一次 CLI）'; status.className = 'ai-set-status';
+        try {
+          const resp = await api().aiChatCli({ cmd: c.wlCmd, argsTmpl: c.wlArgs, inputMode: c.wlMode, prompt: '只回复两个字:在线', timeoutMs: 120000 });
+          if (resp && resp.error) { status.textContent = '失败：' + resp.error; status.className = 'ai-set-status err'; }
+          else { status.textContent = '连接成功 ✓ CLI 回复：' + String(resp.content || '').slice(0, 60); status.className = 'ai-set-status ok'; }
         } catch (e) { status.textContent = '失败：' + String((e && e.message) || e); status.className = 'ai-set-status err'; }
         return;
       }

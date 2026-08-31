@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('sb', {
   psiUnits:    ()            => ipcRenderer.invoke('psiUnits'),
   aiChat:      (payload)     => ipcRenderer.invoke('aiChat', payload),
   aiReadKeyFile: (name)      => ipcRenderer.invoke('aiReadKeyFile', name),
+  aiChatCli:   (payload)     => ipcRenderer.invoke('aiChatCli', payload),
   aiListModels: (baseUrl, key) => ipcRenderer.invoke('aiListModels', baseUrl, key),
   lmStatus: (baseUrl) => ipcRenderer.invoke('lmStatus', baseUrl),
   aiChatLocal: (payload)     => ipcRenderer.invoke('aiChatLocal', payload),

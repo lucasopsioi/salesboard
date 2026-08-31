@@ -315,6 +315,71 @@ ipcMain.handle('psiUnits', () => { try { return engine.psiUnits(); } catch (e) {
 // 入参 payload={key,baseUrl,model,messages,tools?,maxTokens?}；出参 {content, toolCalls?, error?}。
 // 【不落任何日志文件】——问答可能含业务敏感数据，绝不写盘。
 // 读 eval/ 下的 key 文件(白名单文件名;仅本机进程间传递,不打印不落日志)——渲染层 dsKey 自动带入用
+/* 命令行模型桥(2026-08-31,Acme内网 CorpLink CLI 场景):跑一条本机 CLI 完成一问一答。
+   入参 {cmd, argsTmpl, inputMode:'stdin'|'file'|'arg', prompt, timeoutMs}
+   - stdin: prompt 写入子进程 stdin
+   - file : prompt 写临时 UTF-8 文件,参数模板里 {PROMPT_FILE} 替换为文件路径
+   - arg  : prompt 作为最后一个参数追加
+   stdout 全文即回复。shell:false 防注入;cmd 由用户在设置窗自己配(本机自己的 CLI)。 */
+ipcMain.handle('aiChatCli', async (_e, payload) => {
+  payload = payload || {};
+  const { spawn } = require('child_process');
+  const os = require('os');
+  const cmd = String(payload.cmd || '').trim();
+  if (!cmd) return { error: '未配置 CLI 命令' };
+  const mode = ['stdin', 'file', 'arg'].includes(payload.inputMode) ? payload.inputMode : 'stdin';
+  const prompt = String(payload.prompt || '');
+  const timeoutMs = Math.min(600000, Math.max(10000, +payload.timeoutMs || 180000));
+  let args = String(payload.argsTmpl || '').split(/\s+/).filter(Boolean);
+  let tmpFile = null;
+  try {
+    if (mode === 'file') {
+      tmpFile = path.join(os.tmpdir(), 'sb-cli-prompt-' + Date.now() + '.txt');
+      fs.writeFileSync(tmpFile, prompt, 'utf8');
+      let replaced = false;
+      args = args.map(a => { if (a.indexOf('{PROMPT_FILE}') >= 0) { replaced = true; return a.replace('{PROMPT_FILE}', tmpFile); } return a; });
+      if (!replaced) args.push(tmpFile);
+    } else if (mode === 'arg') {
+      args.push(prompt);
+    }
+    /* npm 包 CLI(corplink-cli 等)在 Windows 的实体是 .cmd 垫片——Node 的 spawn 禁止
+       shell:false 跑批处理(EINVAL,npx.cmd 老坑)。先 shell:false 直跑(exe 场景最安全),
+       EINVAL/ENOENT 自动换 shell:true 重试;shell 路径下参数逐个双引号转义,
+       且 prompt 永不进 shell 命令行(arg 模式已在上面落成临时文件或此处强制 stdin)。 */
+    const runOnce = (viaCmdExe) => new Promise((resolve) => {
+      let out = '', err = '', done = false;
+      /* 批处理垫片路径:直接 spawn cmd.exe(是 exe,shell:false 合法),/c 后跟目标与参数走数组——
+         Node 做标准引用,没有 shell:true 字符串拼接的引号地狱(PowerShell 实测 code 0)。 */
+      const c = viaCmdExe ? (process.env.ComSpec || 'cmd.exe') : cmd;
+      const a = viaCmdExe ? ['/d', '/c', cmd].concat(args) : args;
+      let child;
+      try {
+        child = spawn(c, a, { windowsHide: true, shell: false, env: process.env });
+      } catch (e) { return resolve({ error: 'SPAWN:' + (e.code || '') + ':' + e.message }); }   // .cmd 的 EINVAL 是同步 throw,不走 error 事件
+      const finish = (r) => { if (!done) { done = true; resolve(r); } };
+      const t = setTimeout(() => { try { child.kill(); } catch (e) {} finish({ error: 'CLI 超时(' + Math.round(timeoutMs / 1000) + 's)' }); }, timeoutMs);
+      child.stdout.on('data', d => { out += d; });
+      child.stderr.on('data', d => { err += d; if (err.length > 20000) err = err.slice(-20000); });
+      child.on('error', e => { clearTimeout(t); finish({ error: 'SPAWN:' + (e.code || '') + ':' + e.message }); });
+      child.on('close', code => {
+        clearTimeout(t);
+        const text = String(out || '').trim();
+        if (!text && code !== 0) return finish({ error: 'CLI 退出码 ' + code + (err ? ': ' + err.slice(0, 400) : '') });
+        finish({ content: text });
+      });
+      if (mode === 'stdin') { try { child.stdin.write(prompt, 'utf8'); child.stdin.end(); } catch (e) {} }
+      else { try { child.stdin.end(); } catch (e) {} }
+    });
+    let r = await runOnce(false);
+    if (r && r.error && /^SPAWN:(EINVAL|ENOENT|UNKNOWN)/.test(r.error)) r = await runOnce(true);
+    try { if (tmpFile) fs.unlinkSync(tmpFile); } catch (e) {}
+    if (r && r.error && r.error.indexOf('SPAWN:') === 0) r = { error: 'CLI 启动失败: ' + r.error.slice(6) + '(检查命令名/PATH;npm 包 CLI 请直接填命令名如 corplink-cli)' };
+    return r;
+  } catch (e) {
+    try { if (tmpFile) fs.unlinkSync(tmpFile); } catch (e2) {}
+    return { error: String((e && e.message) || e) };
+  }
+});
 ipcMain.handle('aiReadKeyFile', (_e, name) => {
   try {
     const safe = String(name || '').replace(/[^a-zA-Z0-9._-]/g, '');

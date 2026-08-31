@@ -34,8 +34,8 @@
     caliberChars: 500,            // 按提问检索回来的口径节上限（见 pickCaliber）
     toolResultChars: 4000,        // 单个工具结果上限（不复用 SNAPSHOT_MAX 的 24KB）
     toolResultRows: 20,           // 工具结果保留行数
-    subAgentTokens: 600,          // 子 agent maxTokens
-    synthTokens: 1200,            // 综合 maxTokens
+    subAgentTokens: 2500,         // 子 agent maxTokens(2026-08-31:600 是本地30B时代定的,真实数据的完整回答被拦腰截断——notes 断在半截实锤;在线 API 按 token 计费,2500 成本可忽略)
+    synthTokens: 3000,            // 综合 maxTokens
     timeoutMs: 240000,            // 单请求超时（main.js 硬顶 300000）
   };
 

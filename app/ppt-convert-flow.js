@@ -141,24 +141,23 @@
     return Array.isArray(arr) ? arr : [];
   }
 
-  // 维度取值现查验证：filters 每个值都要在 options 里真实存在，不存在→降 low
+  // 维度取值现查验证+纠偏：值在指定维度查无 → 跨七维定位唯一归属并迁移键（与图表路径同一套纠偏）；
+  // 迁移后仍有值在全维度都查无 → false（口径存疑，进待确认）
   async function verifyBinding(deps, b) {
     if (!b || !b.filters) return true;
+    await normalizeChartBinding(deps, b, null);
+    const norm = (s) => String(s).toLowerCase().replace(/[\s_\-/()（）·]/g, '');
     for (const k of Object.keys(b.filters)) {
       const vals = [].concat(b.filters[k] || []);
       if (!vals.length) continue;
       let opts = [];
       try { const r = await deps.optionsDirect(k); opts = (r && (r.values || r['取值'] || r.options)) || (Array.isArray(r) ? r : []) || []; } catch (e) {}
       if (!opts.length) continue;
-      const norm = (s) => String(s).toLowerCase().replace(/[\s_\-/()（）·]/g, '');
-      for (let i = 0; i < vals.length; i++) {
-        const v = vals[i];
+      for (const v of vals) {
         if (opts.indexOf(v) >= 0) continue;
-        const hit = opts.filter(o => norm(o) === norm(v) || norm(o).indexOf(norm(v)) >= 0);
-        if (hit.length === 1) { vals[i] = hit[0]; continue; }   // 宽松归一唯一命中→自动纠写法
+        if (opts.some(o => norm(o) === norm(v))) continue;
         return false;
       }
-      b.filters[k] = vals;
     }
     return true;
   }
@@ -186,7 +185,7 @@
   /* 绑定确定性纠偏：filters 值规整为数组；值在指定维度查无 → 跨七维定位唯一命中后迁移键
      （模型常把 line 成员放进 series——引擎报错都指了路，代码直接照办），legend 同步跟随。 */
   const DIM_KEYS = ['line', 'family', 'series', 'product', 'country', 'rep', 'channel'];
-  async function normalizeChartBinding(deps, b) {
+  async function normalizeChartBinding(deps, b, chartSeriesNames) {
     if (!b) return b;
     b.filters = b.filters || {};
     const norm = (s) => String(s).toLowerCase().replace(/[\s_\-/()（）·]/g, '');
@@ -206,6 +205,19 @@
         if (opts.indexOf(v) >= 0) { fixed.push(v); continue; }
         const hit = opts.filter(o => norm(o) === norm(v) || norm(o).indexOf(norm(v)) >= 0 || norm(v).indexOf(norm(o)) >= 0);
         if (hit.length === 1) { fixed.push(hit[0]); continue; }
+        // 本维度查无但取值清单不大 → 让模型在清单里重选正确写法（中英文地名「墨西哥」→「Mexico」这类别名）
+        if (deps.chat && opts.length && opts.length <= 80) {
+          try {
+            const resp = await deps.chat({
+              system: '给你一个维度的全部合法取值清单和一个用户写法，找出用户写法对应的那个取值（含中英文别名、简称、大小写差异）。只输出该取值原文；对应不上就只输出 NONE。',
+              messages: [{ role: 'user', content: '【维度 ' + k + ' 合法取值】\n' + opts.join(' | ') + '\n\n【用户写法】' + v }],
+              tools: [], maxTokens: 60,
+            });
+            const pick = String((resp && resp.content) || '').trim().replace(/^["'「『]|["'」』]$/g, '');
+            const hitM = opts.find(o => o === pick) || opts.find(o => norm(o) === norm(pick));
+            if (hitM && pick !== 'NONE') { fixed.push(hitM); continue; }
+          } catch (e) {}
+        }
         // 本维度查无 → 跨维度找唯一归属并迁移
         let moved = false;
         for (const k2 of DIM_KEYS) {
@@ -222,8 +234,20 @@
       }
       if (fixed.length) b.filters[k] = fixed; else delete b.filters[k];
     }
+    // legend 纠偏：按图表系列名跨七维定位——系列名全部/多数落在哪个维度的取值里，legend 就是那个维度
+    // （模型把 line 成员「平板/音频与智能配件」标成 family 是常态；filters 为空时上面的迁移碰不到它）
+    if (chartSeriesNames && chartSeriesNames.length) {
+      let best = null, bestHit = 0;
+      for (const k2 of DIM_KEYS) {
+        const o2 = await getOpts(k2);
+        if (!o2.length) continue;
+        const hit = chartSeriesNames.filter(n => o2.some(o => norm(o) === norm(n))).length;
+        if (hit > bestHit) { bestHit = hit; best = k2; }
+      }
+      if (best && bestHit >= Math.ceil(chartSeriesNames.length / 2)) b.legend = best;
+    }
     // legend 维度上没有过滤值且系列只有一个成员时，legend 对齐 filters 里唯一的维度键
-    if (b.legend && !b.filters[b.legend]) {
+    if (b.legend && !b.filters[b.legend] && !(chartSeriesNames && chartSeriesNames.length > 1)) {
       const ks = Object.keys(b.filters);
       if (ks.length === 1) b.legend = ks[0];
     }
@@ -246,6 +270,7 @@
     const srcCats = (chart.cats || []).map(normCat);
     let hit = 0, total = 0;
     const diffs = [];
+    const matchedBuckets = [];   // 命中的引擎桶——决定绑定的 timeFrom/timeTo（忠实还原原图期间）
     chart.series.forEach(se => {
       // 系列名宽松对齐引擎系列
       const norm = (x) => String(x).toLowerCase().replace(/[\s_\-/()（）·]/g, '');
@@ -262,12 +287,14 @@
         }
         const rawKey = ei >= 0 ? engRaw[ei] : null;
         const evv = (row && rawKey != null && row[rawKey] != null) ? +row[rawKey] : null;
-        if (evv != null && isFinite(evv) && Math.abs(evv - v) / Math.max(Math.abs(v), 1) <= 0.05) hit++;
+        if (evv != null && isFinite(evv) && Math.abs(evv - v) / Math.max(Math.abs(v), 1) <= 0.05) { hit++; if (rawKey != null) matchedBuckets.push(String(rawKey)); }
         else diffs.push(se.name + '@' + (chart.cats[i] || i) + ': 图=' + v + ' 系统=' + (evv == null ? '无' : evv));
       });
     });
     const rate = total ? hit / total : 0;
-    return { ok: rate >= 0.7, rate: +(rate * 100).toFixed(0), diffs: diffs.slice(0, 6), reason: rate >= 0.7 ? '' : ('数值对不上（命中率 ' + (rate * 100).toFixed(0) + '%）') };
+    const sorted = matchedBuckets.slice().sort();
+    const range = sorted.length ? { from: sorted[0], to: sorted[sorted.length - 1] } : null;
+    return { ok: rate >= 0.7, rate: +(rate * 100).toFixed(0), diffs: diffs.slice(0, 6), range, reason: rate >= 0.7 ? '' : ('数值对不上（命中率 ' + (rate * 100).toFixed(0) + '%）') };
   }
   async function chartBindAgent(deps, chart, catalogBrief) {
     const sample = '类目: ' + chart.cats.join('/') + '\n' +
@@ -344,12 +371,15 @@
           onFlow('📊 图表绑定 Agent（第' + (si + 1) + '页）：提议数据接口…');
           let bind = await chartBindAgent(deps, pe.sh.chart, catalogBrief);
           if (!bind || bind.kind === 'static') { onFlow('　→ 判定为静态图表（目标值/手工推演类），保持原数据'); continue; }
-          bind = await normalizeChartBinding(deps, bind);
+          bind = await normalizeChartBinding(deps, bind, pe.sh.chart.series.map(se => se.name));
           const ver = await verifyChartBinding(deps, bind, pe.sh.chart);
           if (ver.ok) {
+            // 期间忠实还原：原图画的是哪段就切哪段（设计器 F5 时间切片 timeFrom/timeTo），
+            // 不然活接口会把全期间 20 个桶都画出来；用户可在设计器改成滚动期间
+            if (ver.range) { bind.timeFrom = ver.range.from; bind.timeTo = ver.range.to; }
             chartEl.binding = bind;               // 有 binding 设计器即走活数据渲染，el.data 保留兜底
             dataN++;
-            onFlow('　✅ 核数通过（命中率 ' + ver.rate + '%）→ 图表已接 ' + bind.dataset + '/' + bind.measure + ' 实时接口');
+            onFlow('　✅ 核数通过（命中率 ' + ver.rate + '%）→ 图表已接 ' + bind.dataset + '/' + bind.measure + ' 实时接口' + (ver.range ? ('，期间 ' + ver.range.from + '~' + ver.range.to) : ''));
           } else {
             questions.push({ page: si + 1, text: '图表', question: '第' + (si + 1) + '页图表提议绑定 ' + JSON.stringify(bind) + ' 但' + ver.reason + (ver.diffs && ver.diffs.length ? ('；差异样本：' + ver.diffs.join('；')) : '') + '。图表暂保持静态原数据——请确认口径后再绑，或就保持静态。', binding: bind });
             onFlow('　⚠ 核数不过（' + ver.reason + '）→ 保持静态，已列入待确认');
@@ -383,10 +413,12 @@
           const stl = textEl.style || {};
           if (p.split && p.split.label) {
             const ratio = Math.min(0.7, Math.max(0.25, p.split.label.length / Math.max(4, String(cand.text).length)));
-            const lw = +(textEl.w * ratio).toFixed(2);
+            const fullW = textEl.w;                       // 先记原宽——updateElement 会就地改 textEl.w
+            const lw = +(fullW * ratio).toFixed(2);
+            const dataW = +(fullW - lw).toFixed(2);
             PptDoc.updateElement(doc, si, textEl.id, { text: p.split.label, w: lw });
             PptDoc.addElement(doc, si, PptDoc.newElement('data', {
-              x: +(textEl.x + lw).toFixed(2), y: textEl.y, w: +(textEl.w - lw).toFixed(2), h: textEl.h,
+              x: +(textEl.x + lw).toFixed(2), y: textEl.y, w: dataW, h: textEl.h,
               style: { fontSize: stl.fontSize || 18, bold: !!stl.bold, color: stl.color || '1A1A1A', align: 'left', unit: 'auto' },
               binding: p.binding,
             }));
@@ -424,7 +456,11 @@
     L.push('· 活数据框 ' + s.dataBindings + ' 个（接引擎接口，打开即最新数据）');
     if (s.tables) L.push('· 表格 ' + s.tables + ' 个（静态落位，可在设计器改绑数据源）');
     if (s.images) L.push('· 图片 ' + s.images + ' 张（原图嵌入）');
-    if (s.chartPlaceholders) L.push('· 原生图表 ' + s.chartPlaceholders + ' 个（PPT 图表无法直接还原，已放占位框——在设计器里用图表元素重建并绑数据）');
+    const charts = res.doc.slides.reduce((a, x) => a.concat(x.elements.filter(e => e.type === 'chart')), []);
+    if (charts.length) {
+      const live = charts.filter(e => e.binding && e.binding.measure).length;
+      L.push('· 图表 ' + charts.length + ' 个（类型/数据/系列色原样还原；其中 ' + live + ' 个核数通过已接实时接口，' + (charts.length - live) + ' 个保持静态原数据）');
+    }
     if (res.doc.meta && res.doc.meta.storyline) L.push('· 页间逻辑：' + res.doc.meta.storyline);
     if (res.questions.length) {
       L.push('');

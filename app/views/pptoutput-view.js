@@ -2128,6 +2128,12 @@ PD.gen = 0;   // 全局解析代号；每次发起解析自增，回调时比对
 
 // 解析单元素并渲染预览。token 可由 refreshAll 传入统一代号；否则用单元素自增。
 async function pdResolveAndRender(el, token){
+  // 静态表格(2026-09-01 PPT转换)：el.rows 直接渲染，无需数据绑定——承接用户 PPT 里的手工表
+  if(el.type==='table' && Array.isArray(el.rows) && el.rows.length && !pdHasBinding(el)){
+    const cur0 = pdElNode(el.id);
+    if(cur0) pdRenderTablePreview(cur0, { kind:'grid', header: el.rows[0]||[], rows: el.rows.slice(1) });
+    return;
+  }
   if(!pdHasBinding(el)) return;
   const node = pdElNode(el.id); if(!node) return;
   const myGen = (token!=null) ? token : (PD.gen = PD.gen + 1);

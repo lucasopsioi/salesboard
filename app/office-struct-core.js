@@ -90,49 +90,122 @@ function textsIn(xml) {
   while ((m = re.exec(xml))) out.push(unesc(m[1]));
   return out;
 }
+const EMU = 914400; // 1 inch
 function posOf(xml) {
   const off = xml.match(/<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"/);
   const ext = xml.match(/<a:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
-  const EMU = 914400; // 1 inch
   return {
     x: off ? +(+off[1] / EMU).toFixed(2) : null, y: off ? +(+off[2] / EMU).toFixed(2) : null,
     w: ext ? +(+ext[1] / EMU).toFixed(2) : null, h: ext ? +(+ext[2] / EMU).toFixed(2) : null,
   };
 }
-// 每页把 <p:sp>(文本框/占位符) 与 <p:graphicFrame>(表格/图表) 按出现顺序编号——
-// shapeIdx 是「本页第几个可写形状」，替换端用同一扫描顺序，天然对齐。
-const SHAPE_RE = /<p:sp\b[\s\S]*?<\/p:sp>|<p:graphicFrame\b[\s\S]*?<\/p:graphicFrame>/g;
+/* 深度样式解析（2026-09-01 用户「要每个元素的框色/字号/字体/文字颜色这种具体信息」）：
+   形状填充/边框/阴影、逐 run 的字号/粗斜/颜色/字体、段落对齐——XML 里有精确值，确定性抽取。 */
+function colorIn(xml) { const m = String(xml || '').match(/<a:srgbClr\s+val="([0-9A-Fa-f]{6})"/); return m ? m[1].toUpperCase() : null; }
+function shapeStyleOf(xml) {
+  const spPr = (xml.match(/<p:spPr\b[^>]*>[\s\S]*?<\/p:spPr>/) || [''])[0];
+  const st = {};
+  if (/<a:noFill\/>/.test(spPr)) st.fill = null;
+  else { const fillM = spPr.match(/<a:solidFill>[\s\S]*?<\/a:solidFill>/); if (fillM) st.fill = colorIn(fillM[0]); }
+  const lnM = spPr.match(/<a:ln\b[^>]*>[\s\S]*?<\/a:ln>/);
+  if (lnM && !/<a:noFill\/>/.test(lnM[0])) {
+    st.line = colorIn(lnM[0]);
+    const wM = lnM[0].match(/<a:ln\b[^>]*w="(\d+)"/); if (wM) st.lineW = +(+wM[1] / 12700).toFixed(1); // pt
+  }
+  if (/<a:outerShdw/.test(spPr)) st.shadow = true;
+  const prstM = spPr.match(/<a:prstGeom\s+prst="([^"]+)"/); if (prstM) st.geom = prstM[1];
+  return st;
+}
+function runsOf(xml) { // 逐文本 run：text + 字号/粗/斜/色/字体
+  const runs = [];
+  const rre = /<a:r>([\s\S]*?)<\/a:r>/g; let rm;
+  while ((rm = rre.exec(xml))) {
+    const seg = rm[1];
+    const tM = seg.match(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/);
+    if (!tM) continue;
+    const pr = (seg.match(/<a:rPr\b[^>]*(?:\/>|>[\s\S]*?<\/a:rPr>)/) || [''])[0];
+    const r = { text: unesc(tM[1]) };
+    const szM = pr.match(/\bsz="(\d+)"/); if (szM) r.fontSize = +(+szM[1] / 100).toFixed(1);
+    if (/\bb="1"/.test(pr)) r.bold = true;
+    if (/\bi="1"/.test(pr)) r.italic = true;
+    const c = colorIn(pr); if (c) r.color = c;
+    const fM = pr.match(/<a:(?:latin|ea)\s+typeface="([^"]+)"/); if (fM) r.font = unesc(fM[1]);
+    runs.push(r);
+  }
+  return runs;
+}
+function alignOf(xml) { const m = xml.match(/<a:pPr\b[^>]*algn="(l|ctr|r|just)"/); return m ? ({ l: 'left', ctr: 'center', r: 'right', just: 'left' })[m[1]] : null; }
+// 每页把 <p:sp>(文本框/占位符)、<p:pic>(图片) 与 <p:graphicFrame>(表格/图表) 按出现顺序编号——
+// shapeIdx 是「本页第几个形状」，替换端用同一扫描顺序，天然对齐。
+const SHAPE_RE = /<p:sp\b[\s\S]*?<\/p:sp>|<p:graphicFrame\b[\s\S]*?<\/p:graphicFrame>|<p:pic\b[\s\S]*?<\/p:pic>/g;
 function parseShape(xml) {
   const nameM = xml.match(/<p:cNvPr\s[^>]*name="([^"]*)"/);
-  const base = { name: nameM ? unesc(nameM[1]) : '', pos: posOf(xml) };
+  const base = { name: nameM ? unesc(nameM[1]) : '', pos: posOf(xml), style: shapeStyleOf(xml) };
+  if (/^<p:pic/.test(xml)) {
+    const embM = xml.match(/<a:blip\s[^>]*r:embed="([^"]+)"/);
+    return Object.assign(base, { type: 'image', rel: embM ? embM[1] : null });
+  }
   if (/^<p:graphicFrame/.test(xml)) {
     const tblM = xml.match(/<a:tbl>[\s\S]*?<\/a:tbl>/);
     if (tblM) {
-      const rows = [];
+      const rows = []; const rowRuns = [];
       const rre = /<a:tr\b[\s\S]*?<\/a:tr>/g; let rm;
       while ((rm = rre.exec(tblM[0]))) {
-        const cells = [];
+        const cells = []; const cellRuns = [];
         const cre = /<a:tc\b[\s\S]*?<\/a:tc>/g; let cm;
-        while ((cm = cre.exec(rm[0]))) cells.push(textsIn(cm[0]).join(''));
-        rows.push(cells);
+        while ((cm = cre.exec(rm[0]))) { cells.push(textsIn(cm[0]).join('')); cellRuns.push(runsOf(cm[0])); }
+        rows.push(cells); rowRuns.push(cellRuns);
       }
-      return Object.assign(base, { type: 'table', rows });
+      return Object.assign(base, { type: 'table', rows, rowRuns });
     }
     return Object.assign(base, { type: 'graphic', text: textsIn(xml).join('') });
   }
-  return Object.assign(base, { type: 'text', text: textsIn(xml).join('\n').replace(/\n+/g, '\n').trim() });
+  const runs = runsOf(xml);
+  return Object.assign(base, {
+    type: 'text',
+    text: textsIn(xml).join('\n').replace(/\n+/g, '\n').trim(),
+    runs,
+    align: alignOf(xml),
+  });
 }
-function extractPptStructure(buf) {
+function extractPptStructure(buf, opt) {
+  opt = opt || {};
   const entries = readZipEntries(buf);
+  const byName = {}; entries.forEach(e => { byName[e.name] = e; });
+  // 页面尺寸（presentation.xml sldSz）
+  let page = null;
+  const presE = byName['ppt/presentation.xml'];
+  if (presE) {
+    const m = presE.data.toString('utf8').match(/<p:sldSz\s+cx="(\d+)"\s+cy="(\d+)"/);
+    if (m) page = { w: +(+m[1] / EMU).toFixed(3), h: +(+m[2] / EMU).toFixed(3) };
+  }
   const slides = entries
     .filter(e => /^ppt\/slides\/slide\d+\.xml$/.test(e.name))
     .sort((a, b) => (+a.name.match(/(\d+)/)[1]) - (+b.name.match(/(\d+)/)[1]));
   return {
+    page,
     slides: slides.map(e => {
       const xml = e.data.toString('utf8');
+      // rels：图片 rel id → media 路径（withImages 时顺带抽 dataUrl）
+      const relE = byName[e.name.replace(/^ppt\/slides\//, 'ppt/slides/_rels/') + '.rels'];
+      const rels = {};
+      if (relE) {
+        const rre2 = /<Relationship\s[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g; let m2;
+        const rxml = relE.data.toString('utf8');
+        while ((m2 = rre2.exec(rxml))) rels[m2[1]] = m2[2].replace(/^\.\.\//, 'ppt/');
+      }
       const shapes = [];
       let m; SHAPE_RE.lastIndex = 0;
       while ((m = SHAPE_RE.exec(xml))) shapes.push(parseShape(m[0]));
+      shapes.forEach(sh => {
+        if (sh.type !== 'image' || !sh.rel) return;
+        sh.media = rels[sh.rel] || null;
+        if (opt.withImages && sh.media && byName[sh.media]) {
+          const ext = (sh.media.match(/\.(\w+)$/) || [0, 'png'])[1].toLowerCase();
+          const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }[ext] || 'image/png';
+          sh.dataUrl = 'data:' + mime + ';base64,' + byName[sh.media].data.toString('base64');
+        }
+      });
       return { file: e.name, shapes };
     }),
   };

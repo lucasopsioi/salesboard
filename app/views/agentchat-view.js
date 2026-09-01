@@ -36,7 +36,7 @@
           files: s.files.map(f => f.kind === 'image'
             ? { name: f.name, kind: 'image', content: '', dataUrl: '' }   // 图片重启后需重传
             : { name: f.name, content: f.content, srcPath: f.srcPath || '' }),
-          pendingTpl: s.pendingTpl || null,
+          pendingTpl: null,   // 转换半成品含整个 doc(可能内嵌图片 dataUrl),不落盘——重启后重新转换即可
         }));
         let json = JSON.stringify({ seq: AC.seq, cur: AC.cur, sessions });
         while (json.length > 2500000 && sessions.length > 1) {   // 总量治理：超 2.5MB 丢最旧会话
@@ -161,69 +161,77 @@
     const done = () => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.busy = false; ss.flowLive = []; } renderAll(); persist(); };
     const deps = () => window.AIPanel.makeOrchDeps(cfg(), () => {});
 
-    // —— 会话里有待答疑的模板：本条消息按「答疑/保存/取消」处理 ——
-    if (s.pendingTpl) {
+    // —— 会话里有待收尾的转换：本条消息按「保存/答疑/取消」处理 ——
+    if (s.pendingTpl && s.pendingTpl.conv) {
       try {
         const save = q.match(/(?:保存|存成?|确认)(?:为|成)?模板[：:，,\s]*([^\s，。,]{0,30})/);
         if (save || /^(保存|确认|就这样|可以|OK|ok)$/.test(q.trim())) {
+          const conv = s.pendingTpl.conv;
           const name = (save && save[1]) || s.pendingTpl.srcName.replace(/\.pptx$/i, '');
-          const r = await window.sb.pptTplSave(name, s.pendingTpl.srcPath, s.pendingTpl.bindings);
-          if (r && r.ok) { sys('💾 模板「' + r.name + '」已保存（' + s.pendingTpl.bindings.filter(b => b.kind === 'data').length + ' 个数据字段）。以后说「用模板 ' + r.name + ' 刷新」即可一键出最新数据的 PPT。'); s.pendingTpl = null; }
-          else sys('⚠ 保存失败：' + ((r && r.error) || '未知错误'));
+          conv.doc.name = name;
+          window.PptStore.saveTemplate(window.localStorage, conv.doc);
+          sys('💾 模板「' + name + '」已存入 PPT output 看板（' + conv.stats.dataBindings + ' 个活数据框）。去 PPT output 点「打开」即可见——数据自动最新，可视编辑，导出 PPTX。' + (conv.questions.length ? '（' + conv.questions.length + ' 处待确认口径未绑定，可在设计器里选中元素手动绑数据源）' : ''));
+          s.pendingTpl = null;
           return done(), true;
         }
-        if (/^(取消|算了|不要了|不弄了)/.test(q.trim())) { s.pendingTpl = null; sys('已取消模板制作。'); return done(), true; }
-        // 其余一律当答疑 → 精修绑定
-        flow('🔧 合并你的口径说明…');
-        const r2 = await window.PptTpl.refine(deps(), s.pendingTpl.bindings, q, flow);
-        if (r2.error) { sys('⚠ ' + r2.error); return done(), true; }
-        s.pendingTpl.bindings = r2.bindings;
-        s.pendingTpl.questions = r2.bindings.filter(b => b.kind === 'data' && b.confidence === 'low' && b.question);
-        sys(window.PptTpl.report(s.pendingTpl.bindings, s.pendingTpl.questions));
+        if (/^(取消|算了|不要了|不弄了)/.test(q.trim())) { s.pendingTpl = null; sys('已取消。'); return done(), true; }
+        // 其余当答疑：把回答交回数据识别 Agent 修正绑定
+        flow('🔧 按你的口径说明修正绑定…');
+        const conv = s.pendingTpl.conv;
+        const resp = await deps().chat({
+          system: '你是数据绑定分析师。下面是转换时拿不准的问题清单（含当时的候选绑定）与用户的解答。按解答给出每个问题的最终处理，只输出 JSON 数组：[{"idx":0,"apply":true,"binding":{"dataset":"psi","measure":"sellOut","filters":{...}}} 或 {"idx":1,"apply":false}]（apply:false=保持静态文字）。',
+          messages: [{ role: 'user', content: '【问题清单】\n' + conv.questions.map((x, i) => i + '. 第' + x.page + '页「' + x.text + '」：' + x.question + (x.binding ? ('（候选：' + JSON.stringify(x.binding) + '）') : '')).join('\n') + '\n\n【用户解答】\n' + q }],
+          tools: [], maxTokens: 2000,
+        });
+        const arr = (window.PptConvert.pickJson((resp && resp.content) || '') || []);
+        let applied = 0;
+        for (const a of (Array.isArray(arr) ? arr : [])) {
+          const qi = conv.questions[a.idx];
+          if (!qi || !a.apply || !a.binding) continue;
+          const okB = await window.PptConvert.verifyBinding(deps(), a.binding);
+          if (!okB) continue;
+          // 按 page+文本前缀找回元素转 data
+          const sl = conv.doc.slides[qi.page - 1];
+          const tEl = sl && sl.elements.find(e => e.type === 'text' && String(e.text || '').indexOf(qi.text.slice(0, 10)) === 0);
+          if (!tEl) continue;
+          const stl = tEl.style || {};
+          window.PptDoc.removeElement(conv.doc, qi.page - 1, tEl.id);
+          window.PptDoc.addElement(conv.doc, qi.page - 1, window.PptDoc.newElement('data', {
+            x: tEl.x, y: tEl.y, w: tEl.w, h: tEl.h,
+            style: { fontSize: stl.fontSize || 18, bold: !!stl.bold, color: stl.color || '1A1A1A', align: stl.align || 'center' },
+            binding: a.binding,
+          }));
+          conv.stats.dataBindings++; applied++;
+        }
+        conv.questions = conv.questions.filter((x, i) => !(arr.find(a => a.idx === i && (a.apply === false || (a.apply && a.binding)))));
+        sys('已按解答处理 ' + applied + ' 处绑定。\n\n' + window.PptConvert.report(conv));
         return done(), true;
       } catch (e) { sys('⚠ 出错：' + String((e && e.message) || e)); return done(), true; }
     }
 
-    // —— 学习：把上传的 PPT 做成模板 ——
-    if (/(做成|变成|学成|生成|建)[个一]?.{0,3}模板|学习?这个PPT|按(照)?这个PPT.{0,8}(格式|模板)/i.test(q)) {
+    // —— 转换：把上传的 PPT 转成设计器工程（模板化+数据化） ——
+    if (/(做成|变成|学成|生成|建|转成?)[个一]?.{0,3}(模板|看板)|学习?这个PPT|按(照)?这个PPT.{0,8}(格式|模板)/i.test(q)) {
       const f = [...s.files].reverse().find(x => /\.pptx$/i.test(x.name) && x.srcPath);
-      if (!f) { sys('要先 📎 上传（或拖入）一个 .pptx 文件我才能学它。'); return done(), true; }
+      if (!f) { sys('要先 📎 上传（或拖入）一个 .pptx 文件。'); return done(), true; }
       try {
         flow('📂 读取 ' + f.name + ' …');
         const st = await window.sb.pptStructure(f.srcPath);
         if (!st || st.error) { sys('⚠ 解析失败：' + ((st && st.error) || '未知') + '（若文件已移动请重新上传）'); return done(), true; }
-        const r = await window.PptTpl.learn(deps(), st, flow);
-        if (r.error) { sys('⚠ ' + r.error); return done(), true; }
-        s.pendingTpl = { srcPath: f.srcPath, srcName: f.name, bindings: r.bindings, questions: r.questions };
-        sys(window.PptTpl.report(r.bindings, r.questions));
+        const conv = await window.PptConvert.convert(deps(), st, { name: f.name.replace(/\.pptx$/i, ''), onFlow: flow });
+        s.pendingTpl = { conv, srcName: f.name };
+        sys(window.PptConvert.report(conv));
       } catch (e) { sys('⚠ 出错：' + String((e && e.message) || e)); }
       return done(), true;
     }
 
-    // —— 刷新：用模板出最新数据 PPT ——
-    if (/(用|套).{0,10}模板|模板.{0,4}(刷新|更新|出|生成)|刷新.{0,6}模板/.test(q)) {
+    // —— 列表 / 刷新指路（模板已入设计器：数据天生自动最新，无需对话式刷新） ——
+    if (/(有哪些|列出|查看|看看).{0,4}模板|模板列表|(用|套).{0,10}模板|模板.{0,4}(刷新|更新|出|生成)|刷新.{0,6}模板/.test(q)) {
       try {
-        const list = await window.sb.pptTplList();
-        if (!list || !list.length) { sys('还没有保存过模板。先上传一个 PPT 说「把这个PPT做成模板」。'); return done(), true; }
-        let tpl = list.find(t => q.indexOf(t.name) >= 0);
-        if (!tpl && list.length === 1) tpl = list[0];
-        if (!tpl) { sys('有多个模板，请指名用哪个：\n' + list.map(t => '· ' + t.name + '（' + t.fields + ' 个字段，' + t.createdAt + '）').join('\n')); return done(), true; }
-        const meta = await window.sb.pptTplGet(tpl.id);
-        if (!meta || meta.error) { sys('⚠ ' + ((meta && meta.error) || '模板读取失败')); return done(), true; }
-        const rr = await window.PptTpl.refresh(deps, meta, flow);
-        if (rr.error) { sys('⚠ ' + rr.error); return done(), true; }
-        flow('📝 原位替换文本并重打包（版式不动）…');
-        const out = await window.sb.pptTplApply(tpl.id, rr.repls, tpl.name + '_' + new Date().toISOString().slice(0, 10));
-        if (out && out.ok) { sys('✅ 模板「' + tpl.name + '」已按最新数据刷新（' + rr.repls.length + ' 处更新）。'); fileCard(out.path); }
-        else sys('⚠ 生成失败：' + ((out && out.error) || '未知'));
-      } catch (e) { sys('⚠ 出错：' + String((e && e.message) || e)); }
-      return done(), true;
-    }
-
-    // —— 列表 ——
-    if (/(有哪些|列出|查看|看看).{0,4}模板|模板列表/.test(q)) {
-      const list = await window.sb.pptTplList();
-      sys(list && list.length ? ('📋 已保存的模板：\n' + list.map(t => '· ' + t.name + '（' + t.fields + ' 个数据字段，' + t.createdAt + '，源：' + t.srcName + '）').join('\n') + '\n说「用模板 名字 刷新」即可出最新 PPT。') : '还没有模板。上传一个 PPT 说「把这个PPT做成模板」即可创建。');
+        const list = (window.PptStore && window.PptStore.listTemplates(window.localStorage)) || [];
+        sys(list.length
+          ? ('📋 PPT output 看板里的模板：\n' + list.map(t => '· ' + t.name).join('\n') + '\n模板里的数据框接的是实时接口——去 PPT output 看板「打开」即是最新数据，直接「导出 PPTX」就是刷新后的成品，不需要单独的刷新操作。')
+          : '还没有模板。上传一个 PPT 说「把这个PPT做成模板」即可转换进 PPT output 看板。');
+      } catch (e) { sys('⚠ ' + String((e && e.message) || e)); }
       return done(), true;
     }
     return false;

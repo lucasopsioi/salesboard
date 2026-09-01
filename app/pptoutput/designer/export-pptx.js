@@ -46,6 +46,10 @@
     s.addText(txt, { x: el.x, y: el.y, w: el.w, h: el.h, inset: 0, wrap: !st.nowrap, fontFace: st.fontFace || '微软雅黑', fontSize: st.fontSize || 28, bold: st.bold !== false, color: st.color || '1A1A1A', align: st.align || 'center', valign: 'middle' });
   }
   function addTable(s, el, r) {
+    // 静态表格(2026-09-01)：无绑定但带 el.rows —— 转成 grid 形状走同一渲染
+    if ((!r || !r.kind) && Array.isArray(el.rows) && el.rows.length) {
+      r = { kind: 'grid', header: el.rows[0] || [], rows: el.rows.slice(1) };
+    }
     // WK6: grid 数据源(report/siso/roadmap)——单元格已是预格式化字符串。header 灰底加粗,body 纯文本。
     if (r && r.kind === 'grid') {
       const header = (r.header || []).map(h => ({ text: String(h == null ? '' : h), options: { bold: true, fill: { color: 'F2F3F5' } } }));

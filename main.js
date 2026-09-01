@@ -534,6 +534,10 @@ ipcMain.handle('aiChat', async (_e, payload) => {
     const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : undefined;
     /* 空回复尸检(2026-08-31):HTTP 200 但没有内容也没有工具调用——把 finish_reason 与响应骨架带出去 */
     if (!String(content || '').trim() && !toolCalls) {
+      // 思考模型专用尸检:reasoning_content 有内容而 content 空 = 思考吃光 max_tokens
+      if (msg.reasoning_content != null && (choice && choice.finish_reason) === 'length') {
+        return { error: '思考模型的思考链吃光了 token 预算,最终答案没写出来(finish_reason=length)。已在新版做预算自适应;若仍出现,建议日常问答改用 deepseek-chat(快),深度分析再用 v4-pro。' };
+      }
       let sk = '';
       try { sk = JSON.stringify(data).slice(0, 260); } catch (e) { sk = '(不可序列化)'; }
       return { error: 'API 返回空内容(HTTP ' + r.status + ', finish_reason=' + ((choice && choice.finish_reason) || '无') + ')。响应骨架: ' + sk + '。常见原因:企业代理改写响应、内容策略拦截、模型名不存在但网关静默兜底。' };

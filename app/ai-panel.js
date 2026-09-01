@@ -470,6 +470,10 @@
       optionsDirect: async (field) => AD.dispatchTool(registry, { tool: 'options', args: { field } }),
       chat: async p => {
         if (cfg.provider === 'corplink') return cliChat(cfg, p);
+        /* reasoning 模型(v4-pro/reasoner/思考版)的思考链与答案共用 max_tokens——
+           预算不放大则思考吃光配额,content 恒空(工作电脑实锤:reasoning_content:"We" 即断)。 */
+        const mdlName = cfg.provider === 'deepseek' ? (cfg.dsModel || '') : cfg.provider === 'minimax' ? (cfg.model || '') : cfg.provider === 'anthropic' ? (cfg.anModel || '') : cfg.provider === 'openai' ? (cfg.oaModel || '') : '';
+        if (/pro|reasoner|thinking|r1|m3/i.test(mdlName) && (!p.maxTokens || p.maxTokens < 16000)) p = Object.assign({}, p, { maxTokens: 16000 });
         const endp = cfg.provider === 'deepseek' ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }
           : cfg.provider === 'minimax' ? { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model, timeoutMs: 120000 }
           : cfg.provider === 'anthropic' ? { key: cfg.anKey, baseUrl: AN_BASE, model: cfg.anModel || AN_MODELS[0], apiFormat: 'anthropic', timeoutMs: 120000 }
@@ -858,6 +862,7 @@
       const run = async (name, payload) => {
         const t0 = Date.now();
         try {
+          if (/pro|reasoner|thinking|r1|m3/i.test(endp.model || '') && (!payload.maxTokens || payload.maxTokens < 2048)) payload = Object.assign({}, payload, { maxTokens: 4096 });
           const r = await api().aiChat(Object.assign({ key: endp.key, baseUrl: endp.baseUrl, model: endp.model, apiFormat: endp.apiFormat, timeoutMs: 90000 }, payload));
           const dt = ((Date.now() - t0) / 1000).toFixed(1) + 's';
           if (r && r.error) { lines.push('✗ ' + name + ' [' + dt + '] ' + String(r.error).slice(0, 160)); return false; }
@@ -929,7 +934,8 @@
         if (!c.dsKey) { status.textContent = '请先填 DeepSeek API Key'; status.className = 'ai-set-status err'; return; }
         status.textContent = '测试中…'; status.className = 'ai-set-status';
         try {
-          const resp = await api().aiChat({ key: c.dsKey, baseUrl: DS_BASE, model: c.dsModel, messages: [{ role: 'user', content: 'ping' }], maxTokens: 1 });
+          const tk = /pro|reasoner|thinking|r1/i.test(c.dsModel || '') ? 2048 : 8;
+          const resp = await api().aiChat({ key: c.dsKey, baseUrl: DS_BASE, model: c.dsModel, messages: [{ role: 'user', content: 'ping' }], maxTokens: tk });
           if (resp && resp.error) {
             let px = '';
             try { const pi = await api().aiProxyInfo(DS_BASE); px = pi && pi.proxy ? '　当前网络路径: ' + pi.proxy : ''; } catch (e2) {}

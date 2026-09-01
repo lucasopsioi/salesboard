@@ -164,6 +164,12 @@
     s = s.replace(/`([^`\n]+)`/g, '<code class="ai-ic">$1</code>');
     // 粗体 **x**
     s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+    // 标题 #/##/### → 加粗行(2026-09-01:模型爱用标题,原样管道符/井号很难看)
+    s = s.replace(/^#{1,4}\s*(.+)$/gm, '<div style="font-weight:700;font-size:13px;margin:6px 0 2px">$1</div>');
+    // 列表 - x / * x → 圆点缩进
+    s = s.replace(/^\s*[-*]\s+(.+)$/gm, '<div style="padding-left:14px;text-indent:-10px">• $1</div>');
+    // 分隔线
+    s = s.replace(/^-{3,}$/gm, '<hr style="border:none;border-top:1px solid var(--line);margin:6px 0">');
     // 剩余换行（表格/代码块已消费其内部换行）
     s = s.replace(/\n/g, '<br>');
     return s;
@@ -1084,7 +1090,7 @@
       },
     };
   }
-  window.AIPanel = { init, open, close, injectButtons, openSettings, makeOrchDeps, loadCfg, saveCfg };
+  window.AIPanel = { init, open, close, injectButtons, openSettings, makeOrchDeps, loadCfg, saveCfg, md };
 
   // 自启：DOM 就绪即初始化（app.js 的 init 在其后运行，nav 点击处理也在此挂）
   if (typeof document !== 'undefined') {

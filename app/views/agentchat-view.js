@@ -130,7 +130,9 @@
 
   // ---------- 渲染 ----------
   function md(t) {
-    try { if (window.AIPanel && typeof marked !== 'undefined') return marked.parse(t); } catch (e) {}
+    /* 2026-09-01 用户:表格是管道符原文——旧实现依赖不存在的 marked 恒回退纯文本。
+       改用 AIPanel 内置真渲染器(表格/标题/列表/粗体/代码块)。 */
+    try { if (window.AIPanel && window.AIPanel.md) return window.AIPanel.md(t); } catch (e) {}
     return '<div style="white-space:pre-wrap">' + esc(t) + '</div>';
   }
   function renderSessions() {

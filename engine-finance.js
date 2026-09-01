@@ -731,7 +731,10 @@ C.Engine.prototype.financeOverview = function(p){
     if(!F || !fm) return {curYear:0,prevYear:0,fromM:1,toM:12,metrics:{}};
     const ay=fm.actualYears||fm.years; const curYear=p.year||ay[ay.length-1]||0; const prevYear=curYear-1;
     const fromM=Math.max(1,Math.min(12,normM(p.fromM)||1));
-    let toM=p.toM?Math.max(1,Math.min(12,p.toM)):12; if(toM<fromM) toM=fromM;
+    /* 2026-08-31 评测 F 系列：缺省全年区间让「2025 全年 vs 2026 半年」同比失真，四题被误导。
+       缺省改同区间(至最新实际月，与 productBoard 同源)；要全年区间显式传 toM:12。 */
+    let _lact=0; try { const _s=F.src, _ym=F.ym; if(_s&&_ym){ for(let i=0;i<F.n;i++){ if(_s[i]===0 && Math.floor(_ym[i]/100)===curYear){ const mm=_ym[i]%100; if(mm>_lact)_lact=mm; } } } } catch(e){}
+    let toM=normM(p.toM)?Math.max(1,Math.min(12,normM(p.toM))):(_lact||12); if(toM<fromM) toM=fromM;
     const inRange=mm=>mm>=fromM&&mm<=toM;
     // 版本：预测=选定版本(src1)，BP=国家办工作底稿(src2)，沿用 financeAchieve/financeBP 口径
     const version=p.version||(fm.versions[0]||'默认');

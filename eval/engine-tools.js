@@ -58,7 +58,7 @@ function buildRegistry(engine) {
   }
   /* 与 app/ai-context.js 的 finNote 保持一致 */
   const finNote = (r) => {
-    try { if (r && !r.error) r.字段说明 = 'bpAttain/fcAttain/revYoy/gmYoy/gmr 等均为小数比率（0.3545 = 35.45%）；nsip 为 USD/台。'; } catch (e) {}
+    try { if (r && !r.error) r.字段说明 = 'bpAttain/fcAttain/revYoy/gmYoy/gmr 均为小数比率(0.3545=35.45%)；nsip 为 USD/台。同比口径：默认同区间(1~最新实际月)才是标准同比，不要主动传 toM:12 拿全年区间去比——那会拿 2025 全年对 2026 部分年，同比失真。时间进度基准=财经实际截至月(本返回的 toM)÷12，不要用 PSI 数据截至日的月份当财经进度（两源截至月可能不同）。'; } catch (e) {}
     return r;
   };
   return {

@@ -375,6 +375,15 @@
   const RULES = [
     /* 具体规则必须排在宽松规则之前（数组按序命中即返回） */
     /* ===== batch4 动态规则 ===== */
+    [/^(?:>s*)?⚠ 经重新核查，以下数字仍无法从本轮数据中取得，已标注\(未取到\)：(.+)。可能原因：数据范围未覆盖该期间\/对象，或问法与数据口径不匹配——请换个问法，或确认相应底表已导入。$/, '⚠ Re-checked: the following numbers still cannot be traced to this round’s data and are marked (not found): $1. Likely cause: the data does not cover that period/entity, or the phrasing does not match the data caliber — rephrase, or confirm the source tables are loaded.'],
+    [/^🛠 执行过程（(\d+) 步·(\d+(?:\.\d+)?s)）$/, '🛠 Execution trace ($1 steps · $2)'],
+    [/\(未取到\)/g, '(not found)'],
+    [/^(.+?)　（已用 (.+?)）$/, (m, a, t) => trText(a, true) + '　(elapsed ' + t.replace('分', 'm ').replace('秒', 's') + ')'],
+    [/^（(\d+)\/(\d+)）(.+?) 分析中…$/, (m, i, n, a) => '(' + i + '/' + n + ') ' + (DICT[a] || a) + ' analyzing…'],
+    [/^（(\d+)\/(\d+)）(.+?) 完成$/, (m, i, n, a) => '(' + i + '/' + n + ') ' + (DICT[a] || a) + ' done'],
+    [/^（(.+?)）调用 (.+?)…$/, (m, a, t) => '(' + (DICT[a] || a) + ') calling ' + t + '…'],
+    [/^AI 问答（全局）　\|　(.+)$/, 'AI Q&A (global)　|　$1'],
+    [/^AI · (.+?)　\|　(.+)$/, (m, a, b) => 'AI · ' + (DICT[a] || a) + '　|　' + b],
     [/^分管专家 × (\d+)（各带口径卡 \+ 专属工具集）$/, 'Experts × $1 (each with a metric card + dedicated tools)'],
     [/^看板: (.*) · 工具 (\d+) 件$/, 'Boards: $1 · $2 tools'],
     [/^🧭 路由器：读问题与所在看板，从 (\d+) 个专家里挑 1~N 个（问题跨域时多专家串行）。每个专家拿到：子问题 \+ 类别护栏 \+ 实体卡 \+ 回答体检清单。$/, '🧭 Router: reads the question and current board, picks 1–N of the $1 experts (serial when cross-domain). Each expert receives: sub-question + category guardrails + entity card + answer checklist.'],
@@ -387,7 +396,8 @@
     [/^🛠 执行过程（(\d+) 步）$/, '🛠 Execution trace ($1 steps)'],
     [/^\*（由 (.+) 协同得出）\*$/, (m, a) => '*(jointly derived by ' + a.split(/[、,，]\s*/).map(x => DICT[x] || x).join(', ') + ')*'],
     [/^（由 (.+) 协同得出）$/, (m, a) => '(jointly derived by ' + a.split(/[、,，]\s*/).map(x => DICT[x] || x).join(', ') + ')'],
-    [/^路由：(.+)$/, 'Routing: $1'],
+    [/^路由：(.+)$/, (m, a) => 'Routing: ' + a.split(/[、,，]\s*/).map(x => DICT[x] || x).join(', ')],
+    [/^(.+?)（(\d+) 次工具）$/, (m, a, n) => (DICT[a] || a) + ' (' + n + ' tool calls)'],
     [/^调用工具:\s*(.*)$/, 'Tool call: $1'],
     [/^\[工具 (.+)\]$/, '[tool $1]'],
     [/^已找到模型：(.+)$/, 'Model found: $1'],

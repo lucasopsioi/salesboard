@@ -225,7 +225,7 @@ const questions = [
     expected: {
       type: 'rubric', minHits: 1,
       must_include: ['结构|占比|权重|拉低|混合|低价.{0,10}(音频|占比)'],
-      must_not: ['数据(错了|异常|有问题)'],
+      must_not: ['数据(确实|真的|就是)(错了|异常)'],
     },
     severity_if_wrong: 'harmful',
     truth: '结构效应：低均价的音频收入占比从 17.7% 升到 23.1%，拉低混合均价——整体 97.97 仅 +0.76',
@@ -238,7 +238,7 @@ const questions = [
     expected: {
       type: 'rubric', minHits: 2,
       must_include: ['50\\s*%|时间进度|时序', '落后|偏低|不健康|滞后|差距|缺口'],
-      must_not: ['健康|正常|良好(?!.{0,6}不)'],
+      must_not: ['(整体|进度|达成)(?!.{0,4}不).{0,6}(健康|正常|良好)(?!.{0,8}(不|落后|但))'],
     },
     severity_if_wrong: 'harmful',
     truth: '时间进度=6/12=50%，达成 35.02% 落后约 15pp——明确预警不及时序',

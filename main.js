@@ -39,8 +39,11 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'app', 'index.html'));
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) { shell.openExternal(url); return { action: 'deny' }; }
-    return { action: 'allow' };
+    // 其余（含 file://）一律不开新窗——拖入 xlsx/pptx 曾经从这里弹出空白窗口（2026-09-01 实锤）
+    return { action: 'deny' };
   });
+  // 拖拽文件的浏览器默认行为是「导航到 file://该文件」——把一切离开本页的导航拦死
+  win.webContents.on('will-navigate', (e) => { e.preventDefault(); });
 }
 
 
@@ -339,6 +342,31 @@ ipcMain.handle('aiProxyInfo', async (_e, url) => {
 /* Office 文本抽取(2026-09-01)：pptx/docx 都是 zip，手写 central directory 解析 +
    zlib.inflateRawSync 解压 slide/document XML，抽 <a:t>/<w:t> 文本——零依赖。 */
 const { extractOfficeText } = require(require('path').join(__dirname, 'app', 'office-text-core.js'));
+/* 单文件解析（📎 对话框与拖拽共用）：图片→dataUrl；office→抽文本；其余按 utf8 文本 */
+const DOC_EXT_RE = /\.(txt|md|csv|json|log|pptx|docx|xlsx|png|jpg|jpeg|webp)$/i;
+function parseDocFile(p2) {
+  try {
+    if (!DOC_EXT_RE.test(p2)) return { error: '不支持的文件类型（支持 txt/md/csv/json/log/pptx/docx/xlsx/png/jpg/webp）: ' + path.basename(p2) };
+    const st = fs.statSync(p2);
+    if (st.size > 8 * 1024 * 1024) return { error: '文件超过 8MB，请精简后再传: ' + path.basename(p2) };
+    // 图片：返回 dataUrl，由渲染层先经多模态模型转述成文本再进编排链（主链保持纯文本）
+    const imgExt = (p2.match(/\.(png|jpg|jpeg|webp)$/i) || [])[1];
+    if (imgExt) {
+      const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' }[imgExt.toLowerCase()];
+      return { name: path.basename(p2), kind: 'image', dataUrl: 'data:' + mime + ';base64,' + fs.readFileSync(p2).toString('base64') };
+    }
+    let content;
+    if (/\.(pptx|docx|xlsx)$/i.test(p2)) {
+      content = extractOfficeText(fs.readFileSync(p2));
+      if (!content) return { error: '未能从该 Office 文件抽出文本(可能加密、xls 老格式或内容为空): ' + path.basename(p2) };
+    } else {
+      content = fs.readFileSync(p2, 'utf8');
+    }
+    const truncated = content.length > 60000;
+    if (truncated) content = content.slice(0, 60000);
+    return { name: path.basename(p2), content, truncated };
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+}
 ipcMain.handle('readLocalDoc', async () => {
   try {
     const r = await dialog.showOpenDialog(win, {
@@ -350,25 +378,15 @@ ipcMain.handle('readLocalDoc', async () => {
       properties: ['openFile'],
     });
     if (!r || r.canceled || !r.filePaths || !r.filePaths.length) return { canceled: true };
-    const p2 = r.filePaths[0];
-    const st = fs.statSync(p2);
-    if (st.size > 8 * 1024 * 1024) return { error: '文件超过 8MB，请精简后再传' };
-    // 图片：返回 dataUrl，由渲染层先经多模态模型转述成文本再进编排链（主链保持纯文本）
-    const imgExt = (p2.match(/\.(png|jpg|jpeg|webp)$/i) || [])[1];
-    if (imgExt) {
-      const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' }[imgExt.toLowerCase()];
-      return { name: path.basename(p2), kind: 'image', dataUrl: 'data:' + mime + ';base64,' + fs.readFileSync(p2).toString('base64') };
-    }
-    let content;
-    if (/\.(pptx|docx|xlsx)$/i.test(p2)) {
-      content = extractOfficeText(fs.readFileSync(p2));
-      if (!content) return { error: '未能从该 Office 文件抽出文本(可能加密或格式异常)' };
-    } else {
-      content = fs.readFileSync(p2, 'utf8');
-    }
-    const truncated = content.length > 60000;
-    if (truncated) content = content.slice(0, 60000);
-    return { name: path.basename(p2), content, truncated };
+    return parseDocFile(r.filePaths[0]);
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+});
+/* 拖拽上传：渲染层经 webUtils 拿到真实路径后走这里；仅接受白名单扩展名的既存文件 */
+ipcMain.handle('readDocByPath', async (_e, p2) => {
+  try {
+    p2 = String(p2 || '');
+    if (!p2 || !fs.existsSync(p2) || !fs.statSync(p2).isFile()) return { error: '文件不存在或不可读' };
+    return parseDocFile(p2);
   } catch (e) { return { error: String((e && e.message) || e) }; }
 });
 ipcMain.handle('aiChatCli', async (_e, payload) => {

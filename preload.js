@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('sb', {
   // 仅视觉：主题切换时同步主窗底色，避免深色下启动/缩放闪白。不涉及任何业务数据。
@@ -62,6 +62,9 @@ contextBridge.exposeInMainWorld('sb', {
   aiReadKeyFile: (name)      => ipcRenderer.invoke('aiReadKeyFile', name),
   aiChatCli:   (payload)     => ipcRenderer.invoke('aiChatCli', payload),
   readLocalDoc: ()           => ipcRenderer.invoke('readLocalDoc'),
+  // 拖拽上传：Electron 33 移除了 File.path，取真实路径只能靠 preload 里的 webUtils
+  pathForFile: (file)        => { try { return webUtils.getPathForFile(file); } catch (e) { return ''; } },
+  readDocByPath: (p)         => ipcRenderer.invoke('readDocByPath', p),
   aiProxyInfo: (url)         => ipcRenderer.invoke('aiProxyInfo', url),
   aiListModels: (baseUrl, key) => ipcRenderer.invoke('aiListModels', baseUrl, key),
   lmStatus: (baseUrl) => ipcRenderer.invoke('lmStatus', baseUrl),

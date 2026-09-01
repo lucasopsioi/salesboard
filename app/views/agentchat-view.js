@@ -61,23 +61,40 @@
     try { typeof toast === 'function' && toast('已切换到 ' + (modelOptions().find(o => o.p + '|' + o.m === key) || {}).label, 'ok'); } catch (e) {}
   }
 
-  // ---------- 上传文档 ----------
-  async function uploadDoc() {
-    const s = curS(); if (!s) return;
-    try {
-      const r = await window.sb.readLocalDoc();
-      if (!r || r.canceled) return;
-      if (r.error) { toastSafe('上传失败：' + r.error); return; }
-      if (r.kind === 'image') {
-        s.files.push({ name: r.name, kind: 'image', dataUrl: r.dataUrl, content: '' });
-        s.msgs.push({ role: 'sys', content: '🖼 已附加图片「' + r.name + '」——发送提问时先由当前模型识图转述（需多模态模型，如 deepseek v4-pro），转述文本供全体专家引用。' });
-        renderChat(); renderTopbar();
-        return;
-      }
+  // ---------- 上传文档（📎 对话框与拖拽共用入列） ----------
+  function addFileRecord(s, r) {
+    if (!r || r.canceled) return false;
+    if (r.error) { toastSafe('上传失败：' + r.error); return false; }
+    if (r.kind === 'image') {
+      s.files.push({ name: r.name, kind: 'image', dataUrl: r.dataUrl, content: '' });
+      s.msgs.push({ role: 'sys', content: '🖼 已附加图片「' + r.name + '」——发送提问时先由当前模型识图转述（需多模态模型，如 deepseek v4-pro），转述文本供全体专家引用。' });
+    } else {
       s.files.push({ name: r.name, content: r.content });
       s.msgs.push({ role: 'sys', content: '📎 已附加文档「' + r.name + '」（' + Math.round(r.content.length / 1000) + 'K 字符' + (r.truncated ? '，超长已截断' : '') + '）——本会话后续提问都能引用它。' });
-      renderChat(); renderTopbar();
+    }
+    renderChat(); renderTopbar();
+    return true;
+  }
+  async function uploadDoc() {
+    const s = curS() || newSession();
+    try {
+      const r = await window.sb.readLocalDoc();
+      addFileRecord(s, r);
     } catch (e) { toastSafe('上传失败：' + String((e && e.message) || e)); }
+  }
+  // 拖拽进来的 FileList → 逐个经 webUtils 取路径 → 主进程解析（与 📎 同一条链）
+  async function addDroppedFiles(fileList) {
+    const s = curS() || newSession();
+    let okN = 0;
+    for (const f of fileList) {
+      try {
+        const p = window.sb.pathForFile ? window.sb.pathForFile(f) : '';
+        if (!p) { toastSafe('取不到文件路径：' + (f.name || '')); continue; }
+        const r = await window.sb.readDocByPath(p);
+        if (addFileRecord(s, r)) okN++;
+      } catch (e) { toastSafe('上传失败：' + String((e && e.message) || e)); }
+    }
+    return okN;
   }
   function toastSafe(t) { try { typeof toast === 'function' ? toast(t, 'err') : alert(t); } catch (e) {} }
 
@@ -240,13 +257,40 @@
         '<div class="ac-main">' +
           '<div class="ac-top" id="acTop"></div>' +
           '<div class="ac-msgs" id="acMsgs"></div>' +
-          '<div class="ac-input"><textarea id="acInput" rows="2" placeholder="问数据、要分析、让我出 PPT/Excel……Ctrl+Enter 发送"></textarea>' +
+          '<div class="ac-input"><textarea id="acInput" rows="2" placeholder="问数据、要分析、让我出 PPT/Excel……可把 Excel/PPT/文档直接拖进来；Ctrl+Enter 发送"></textarea>' +
           '<button class="btn primary" id="acSend">发送</button></div>' +
         '</div>' +
       '</div>';
     document.getElementById('acSend').onclick = send;
     document.getElementById('acInput').addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }
+    });
+    /* ---- 拖拽上传（2026-09-01 用户实锤「拖不进去，弹空白对话框」）----
+       空白窗的病根：Electron 对拖入文件的默认行为是导航到 file://。
+       两层修复：①window 级全局 preventDefault 兜底（任何视图拖入都不再弹窗）
+                ②本视图内真接收：松手即走 📎 同一条解析链 */
+    if (!window.__sbDropGuard) {
+      window.__sbDropGuard = true;
+      window.addEventListener('dragover', e => { e.preventDefault(); }, false);
+      window.addEventListener('drop', e => {
+        e.preventDefault();
+        if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+        const inView = e.target && e.target.closest && e.target.closest('#view-agentchat');
+        if (!inView) { try { typeof toast === 'function' && toast('文件请拖到「Agent 对话」看板里给 AI 阅读', 'err'); } catch (e2) {} }
+      }, false);
+    }
+    root.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      root.classList.add('ac-dropping');
+    });
+    root.addEventListener('dragleave', e => { if (!root.contains(e.relatedTarget)) root.classList.remove('ac-dropping'); });
+    root.addEventListener('drop', async e => {
+      e.preventDefault();
+      root.classList.remove('ac-dropping');
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+      const n = await addDroppedFiles(e.dataTransfer.files);
+      if (n) { try { typeof toast === 'function' && toast('已附加 ' + n + ' 个文件', 'ok'); } catch (e2) {} }
     });
     const css = document.createElement('style');
     css.textContent =
@@ -277,7 +321,9 @@
       '.ac-flow div{font:11px/1.7 Consolas,monospace;color:var(--ink3);margin-top:4px}' +
       '.ac-empty{margin:auto;text-align:center;color:var(--ink3);font-size:13px;line-height:2}' +
       '.ac-input{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}' +
-      '.ac-input textarea{flex:1;resize:none;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--c-bg-elev);color:inherit;font-size:13px;font-family:inherit}';
+      '.ac-input textarea{flex:1;resize:none;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--c-bg-elev);color:inherit;font-size:13px;font-family:inherit}' +
+      '#view-agentchat{position:relative}' +
+      '#view-agentchat.ac-dropping::after{content:"📎 松手把文件交给 AI 阅读（xlsx / pptx / docx / txt / 图片）";position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;border:2px dashed #C7000B;border-radius:14px;background:var(--c-bg-elev);opacity:.96;font-size:15px;color:#C7000B;z-index:30;pointer-events:none}';
     document.head.appendChild(css);
     newSession();
   }

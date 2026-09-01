@@ -258,7 +258,7 @@ module.exports = {
       expected: {
         type: 'rubric', minHits: 2,
         must_include: ['换代|接续|迭代|上一代|继任', '(主推|建议).{0,15}SE 11|SE 11.{0,20}主推'],
-        must_not: ['主推.{0,10}SE 10'],
+        must_not: ['主推.{0,4}(Slate\\s*)?SE\\s*10(?!\\d)'],
       },
       severity_if_wrong: 'harmless',
       target: '换代判断：SE10清尾（247台/DOS461）、SE11在售+22.8%',

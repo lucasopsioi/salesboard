@@ -883,7 +883,8 @@
       const only = results[0];
       // claims 和 notes 都要进答案：模型守规矩把数字放进 claims JSON 时，notes 往往只是补充说明——
       // 旧写法 notes||claims 会把装着数字的 claims 整个丢掉（评测 2026-08-25 云端首题逮住的真 bug）
-      const claimsTxt = (only.claims || []).map(c => c.metric + '：' + c.value + (c.unit ? ' ' + c.unit : '')).join('\n');
+      // value 为空/undefined 的 claim 不进正文（2026-09-01：解析异常时曾整屏「sellOut：undefined」）
+      const claimsTxt = (only.claims || []).filter(c => c && c.value != null && String(c.value) !== 'undefined').map(c => c.metric + '：' + c.value + (c.unit ? ' ' + c.unit : '')).join('\n');
       let text = [claimsTxt, only.notes].filter(Boolean).join('\n');
       let det = enforceProvenance(text, toolTrace, question, { detectOnly: true });
       if (det.blocked.length && deps.provRetry) {

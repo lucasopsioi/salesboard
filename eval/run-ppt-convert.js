@@ -94,6 +94,9 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok('读回工程完整', !!back && back.slides.length === 3 && JSON.stringify(back.slides[0].elements.length) === JSON.stringify(doc.slides[0].elements.length));
 
   console.log('   报告预览:\n' + CONV.report(conv).split('\n').map(l => '   | ' + l).join('\n'));
+  // --dump <path>：把转换出的工程 JSON 落盘（供 UI 实测注入）
+  const di = process.argv.indexOf('--dump');
+  if (di >= 0 && process.argv[di + 1]) { fs.writeFileSync(process.argv[di + 1], JSON.stringify(doc)); console.log('DUMP=' + process.argv[di + 1]); }
   try { fs.unlinkSync(tmp); } catch (e) {}
   console.log(fails ? ('FAILURES: ' + fails) : '\n===== PPT→设计器工程 转换 ALL PASS =====');
   process.exit(fails ? 1 : 0);

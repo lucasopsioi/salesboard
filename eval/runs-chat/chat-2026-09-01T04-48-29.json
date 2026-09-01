@@ -1,0 +1,17 @@
+{
+ "model": "deepseek-chat",
+ "base": "https://api.deepseek.com/v1",
+ "results": [
+  {
+   "scen": "D",
+   "turn": 1,
+   "q": "\u628a\u97f3\u9891\u7ebf2026\u5e74\u5404\u7cfb\u5217\u7684SO\u6574\u7406\u6210\u4e00\u4e2aExcel\u6587\u4ef6\u7ed9\u6211",
+   "ok": true,
+   "fails": [],
+   "softMiss": [],
+   "latencyS": 13.7,
+   "answer": "\u97f3\u9891\u7ebf\u7d2f\u8ba1SO\uff1a116104 \u53f0\n\u97f3\u9891\u7ebf\u7d2f\u8ba1SO\u540c\u6bd4\uff1a+81.6% %\nPuffin\u7d2f\u8ba1SO\uff1a45727 \u53f0\nNarwhal\u7d2f\u8ba1SO\uff1a27696 \u53f0\nOtter\u7d2f\u8ba1SO\uff1a23105 \u53f0\nManta\u7d2f\u8ba1SO\uff1a12800 \u53f0\nKelp\u7d2f\u8ba1SO\uff1a6776 \u53f0\n\u97f3\u9891\u7ebf\u542bSonicArc/SonicBuds/SonicBuds Pro\u4e09\u4e2afamily\u51715\u4e2a\u7cfb\u5217\uff1bKelp\u4e3a\u65b0\u54c1\u53bb\u5e74\u65e0SO\u6545\u540c\u6bd4\u663e\u2014\uff1bNarwhal\u4e3a\u65b0\u54c1\u653e\u91cf\u671f\u540c\u6bd4+892%\u3002Excel\u5df2\u751f\u6210\u5e76\u81ea\u52a8\u6253\u5f00\u3002",
+   "ctxPct": 2
+  }
+ ]
+}

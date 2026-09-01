@@ -613,12 +613,22 @@ function hasFilterVal(filters,k){ return asArr(filters&&filters[k]).length>0; }
 // returns {fl:[[codeArray,Set<code>]...], invalid} ; invalid=true if a selected value is absent (=> empty result)
 function buildFilters(s, filters, skipDim){
   const fl=[]; let invalid=false;
+  const norm=(x)=>String(x==null?'':x).toLowerCase().replace(/[\s_\-/()（）·]/g,'');
   for(const k of Object.keys(filters||{})){
     if(k===skipDim) continue;
     if(k==='channel' && skipDim==='channel') continue;
     const vals=asArr(filters[k]); if(!vals.length) continue;
     const idx=s.dimIndex[k]; if(!idx){ continue; }
-    const codes=new Set(); vals.forEach(v=>{ const c=idx.get(v); if(c!==undefined) codes.add(c); });
+    const codes=new Set(); vals.forEach(v=>{
+      const c=idx.get(v);
+      if(c!==undefined){ codes.add(c); return; }
+      // 宽松归一回退(2026-09-01)：精确无命中时按 归一互含 扫本维度取值——「音频」命中
+      // 「音频与智能配件」。仅唯一命中才用(多命中不猜,保持 invalid 让上层指路 searchDim)
+      const nv=norm(v); if(!nv) return;
+      const hits=[];
+      idx.forEach((code,key)=>{ const nk=norm(key); if(nk===nv||nk.indexOf(nv)>=0||nv.indexOf(nk)>=0) hits.push(code); });
+      if(hits.length===1) codes.add(hits[0]);
+    });
     if(!codes.size){ invalid=true; }
     fl.push([s.dimCode[k], codes]);
   }

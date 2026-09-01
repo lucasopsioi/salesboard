@@ -158,6 +158,9 @@ function pickTools(names, question, max) {
   // query 常驻(2026-08-31 评测五轮冤案):期间类护栏强制要求 query 逐月取数,
   // 而关键词打分常把 query 挤出前3(report 的描述更贴题面词)——工具被指路却不在清单,模型死局
   if (list.indexOf('query') >= 0) keep.push('query');
+  // UI 落地工具常驻:makePpt/makeExcel 只在编排器判定意图命中时才进 names(见 orchestrate 的
+  // uiExtra),进了名单就是本题的交付通道,绝不许被关键词打分挤掉(2026-09-01 D-轮1)
+  ['makePpt', 'makeExcel'].forEach(n => { if (list.indexOf(n) >= 0 && keep.indexOf(n) < 0) keep.push(n); });
   scored.filter(x => x.sc > 0 && keep.indexOf(x.n) < 0)
     .sort((a, b) => b.sc - a.sc || a.i - b.i)
     .forEach(x => { if (keep.length < lim) keep.push(x.n); });

@@ -519,8 +519,14 @@
       caliber: hit && hit.picked.length ? hit.picked.map(s => s.text).join('\n') : '',
     }, fast ? BUDGET.snapshotFastChars : BUDGET.snapshotChars);
     // 快速模式只给 3 个工具（说明书本身就要几百 token，给多了纯拖慢）；按提问挑，别写死前三个
-    const toolNames = !fast ? a.tools
-      : (deps.pickTools ? deps.pickTools(a.tools, task.subQuestion, 4) : a.tools.slice(0, 4));
+    /* UI 落地工具按意图附加(2026-09-01 会话连通性测试 D-轮1)：makePpt/makeExcel 原先不在任何
+       专家白名单里——规格从未渲染给模型，「整理成Excel」永远落不了地。命中意图才附加，配额同步+1 */
+    const uiExtra = [];
+    if (/(做|生成|整理|导出|弄|输出|给我|帮我).{0,12}(PPT|ppt|幻灯)/.test(task.subQuestion)) uiExtra.push('makePpt');
+    if (/(做|生成|整理|导出|弄|输出|给我|帮我).{0,12}(excel|xlsx|表格文件)/i.test(task.subQuestion)) uiExtra.push('makeExcel');
+    const baseTools = uiExtra.length ? a.tools.concat(uiExtra.filter(t => a.tools.indexOf(t) < 0)) : a.tools;
+    const toolNames = !fast ? baseTools
+      : (deps.pickTools ? deps.pickTools(baseTools, task.subQuestion, 4 + uiExtra.length) : baseTools.slice(0, 4));
     const specs = (deps.buildToolSpecs ? deps.buildToolSpecs(toolNames) : []);
     const messages = [];
     if (ctxMsg) messages.push({ role: 'user', content: ctxMsg });
@@ -534,7 +540,7 @@
       const wantStream = (rounds > 1 && task.streamInto) ? task.streamInto : null;
       const resp = await deps.chat({ system: sys, messages: trimmed.messages, tools: specs, maxTokens: BUDGET.subAgentTokens, streamInto: wantStream });
       if (!resp || resp.error) { lastErr = (resp && resp.error) || '无响应'; break; }
-      const calls = normalizeCalls(resp, a.tools, deps);
+      const calls = normalizeCalls(resp, baseTools, deps);   // baseTools 含意图附加的 makePpt/makeExcel——用 a.tools 过滤会把模型真发出的落地调用吃掉
       if (calls.length && budget.left > 0) {
         messages.push({ role: 'assistant', content: resp.content || '' });
         for (const call of calls) {
@@ -614,6 +620,8 @@
     if (/逐月|逐周|月度|各月|分别|各占|每个月|每一个/.test(q)) g.push('用户要求逐项数据：必须把每个成员(每月/每处/每国)各自的数值一行一个完整列出，不许只给合计、只挑最大最小或用「等」省略；确无数据的项逐个标「数据未包含」。');
     if (/(上市|首销|发布)/.test(q) && /(什么时候|何时|哪个月|怎么回事|一点量|少量|很小)/.test(q)) g.push('判断上市时间：放量前1-2个月出现的极小销量(比放量月低一个数量级)通常是样机/演示机铺货，不算正式上市。回答必须把「样机期(小量)」与「正式上市(放量月)」分开说，上市时间以首个放量月为准。');
     if (/(做|生成|整理|导出|弄|输出).{0,8}(PPT|ppt|幻灯)/.test(q)) g.push('用户要 PPT：先用 query/report 取齐数据，再调 makePpt({fileName, slides:[{title,bullets,table}]}) 生成——每个主题一页，数字表格放 table（headers+rows），结论要点放 bullets；标题页写清口径与截至时间。生成后告知用户文件已保存并自动打开。');
+    if (/(做|生成|整理|导出|弄|输出|给我|帮我).{0,12}(excel|xlsx|表格文件)/i.test(q)) g.push('用户要 Excel 文件：先用 query/report 取齐数据，再调 makeExcel({fileName, sheets:[{name, rows}]}) 生成——rows 是二维数组且首行为表头；生成后告知用户文件已保存并自动打开。只在正文贴数字不调 makeExcel 视为任务未完成。');
+    if (/(整理|做|输出|列|汇总)[成个张出]{0,2}(一[个张])?表格?(?!文件)/.test(q) && !/excel|xlsx|ppt/i.test(q)) g.push('用户要表格呈现：最终回答的主体必须是 markdown 表格（|表头|…| 语法，行=成员，列=指标），表格外只保留一句结论与口径说明，不许用分点叙述替代表格。');
     if (/(加到|录入|记到|写进|放进|更新到).{0,6}路标|路标.{0,8}(添加|录入|补充)|编码是|上市时间是/.test(q)) g.push('用户在口述产品信息要录入路标：从原文抽取 产品名/上市月/价格/编码/SKU/卖点/EOM 等，调 roadmapUpsert({name, fields, skus, sellingPoints, extras}) 写入——白名单外信息(VN编码等)放 extras 绝不丢弃；写完把「新建/更新了什么字段」列给用户确认。');
     if (/Slate|Sonic|Slate Tab|SonicBuds/i.test(q)) g.push('维度命名字典：Slate/Slate SE/SonicBuds/SonicBuds Pro/SonicArc 这类市场名是 family(产品家族)；Marlin/Coral/Dorado/Tarpon 等代号是 series；带连字符的编码(如 SLT11P-W8256)是 model；「Slate 11 Pro」这类含数字后缀的是 product。按名字形态选对 filters 的维度键，查不到先用 options 对表，不要断言"数据未包含"。问「某一个产品」(如 Slate 11)的数值时必须用 product 维度过滤到该单品——用 family(家族)合计冒充单品是严重错误(家族含多个产品,数值必然偏大)。');
     if (/(库存|DOS)/.test(q) && /(合计|加起来|总和|求和|累加|加一下|加总)/.test(q)) g.push('库存/DOS 是「时点快照」不是流量：跨月把各月末库存相加没有业务意义，禁止给出求和值。正确做法：用 query(metric:"inv",gran:"month") 逐月列出各月末时点值，并明确说明快照不能求和；如用户要的是总量概念，请引导用累计 SI/SO。');
@@ -925,7 +933,9 @@
     const resp = await deps.chat({
       // 综合器不取数、只重组 claims，不需要整张口径卡（那 600 token 白花）
       system: '你是综合分析师。只能使用下面已给出的数字，不得引入新数字、不得自己换算。'
-            + '缺数是 null 不是 0。先给结论，再按看板分点，每个数字标明口径与截至时间。',
+            + '缺数是 null 不是 0。先给结论，再按看板分点，每个数字标明口径与截至时间。'
+            + '用户明确要求某种输出格式时按格式交付：要「表格」就输出 markdown 表格(|表头|…)，'
+            + '要清单就用列表——格式要求优先于默认的分点叙述。',
       messages: [{ role: 'user', content: sp }], tools: [], maxTokens: BUDGET.synthTokens,
     });
     if (!resp || resp.error) {

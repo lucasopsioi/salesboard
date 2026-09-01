@@ -21,7 +21,7 @@
 
   // ---------- 会话管理 ----------
   function newSession() {
-    const s = { id: 'S' + (AC.seq++), title: '对话 ' + (AC.seq - 1), msgs: [], busy: false, agents: new Set(), files: [], flowLive: [] };
+    const s = { id: 'S' + (AC.seq++), title: '对话 ' + (AC.seq - 1), msgs: [], busy: false, agents: new Set(), files: [], flowLive: [], histNote: '' };
     AC.sessions.unshift(s);
     AC.cur = s.id;
     renderAll();
@@ -68,6 +68,12 @@
       const r = await window.sb.readLocalDoc();
       if (!r || r.canceled) return;
       if (r.error) { toastSafe('上传失败：' + r.error); return; }
+      if (r.kind === 'image') {
+        s.files.push({ name: r.name, kind: 'image', dataUrl: r.dataUrl, content: '' });
+        s.msgs.push({ role: 'sys', content: '🖼 已附加图片「' + r.name + '」——发送提问时先由当前模型识图转述（需多模态模型，如 deepseek v4-pro），转述文本供全体专家引用。' });
+        renderChat(); renderTopbar();
+        return;
+      }
       s.files.push({ name: r.name, content: r.content });
       s.msgs.push({ role: 'sys', content: '📎 已附加文档「' + r.name + '」（' + Math.round(r.content.length / 1000) + 'K 字符' + (r.truncated ? '，超长已截断' : '') + '）——本会话后续提问都能引用它。' });
       renderChat(); renderTopbar();
@@ -87,15 +93,17 @@
     if (needKey && !c[needKey]) { toastSafe('当前模型未配置 API Key——右上角切模型或去 AI 设置'); return; }
     ta.value = '';
     if (s.msgs.filter(m => m.role === 'user').length === 0) s.title = q.slice(0, 16) + (q.length > 16 ? '…' : '');
+    // 会话记忆：在当前问题入列前构建历史（近轮全文+旧轮自动压缩，见 chat-context-core.js）
+    const hist = window.ChatCtx ? window.ChatCtx.buildHistory(s) : '';
     s.msgs.push({ role: 'user', content: q });
     s.busy = true; s.flowLive = [];
     renderAll();
 
-    // 文档注入：作为问题前缀（专家与综合器都可见；实体检索照常工作）
-    let fullQ = q;
+    // 组装完整问题：文档前缀 + 会话历史 + 当前问题（专家与综合器都可见；实体检索照常工作）
+    let fullQ = hist ? hist + '【当前问题】' + q : q;
     if (s.files.length) {
       const docs = s.files.map(f => '【用户上传文档：' + f.name + '】\n' + f.content).join('\n\n');
-      fullQ = docs.slice(0, 80000) + '\n\n【用户问题】' + q;
+      fullQ = docs.slice(0, 80000) + '\n\n' + hist + '【当前问题】' + q;
     }
     const force = s.agents.size ? [...s.agents] : null;
     const sid = s.id;
@@ -113,6 +121,27 @@
     };
     try {
       const deps = window.AIPanel.makeOrchDeps(c, onProg);
+      // 图片附件：先经当前模型识图转述成文本（缓存进 f.content，同图不重复转述），主链保持纯文本
+      for (const f of s.files) {
+        if (f.kind !== 'image' || f.content) continue;
+        const ss0 = AC.sessions.find(x => x.id === sid);
+        if (ss0) { ss0.flowLive.push('🖼 识图转述「' + f.name + '」…'); if (AC.cur === sid) renderChat(); }
+        const vr = await deps.chat({
+          system: '你是图片转述员：把图片里的全部信息如实转成文本供数据分析——表格逐格转写(markdown表格)，数字精确抄录，文字全文抄录，图表说明坐标轴/系列/数量级与趋势。不要评论，不要遗漏数字。',
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: '请完整转述这张图片的内容：' },
+            { type: 'image_url', image_url: { url: f.dataUrl } },
+          ] }],
+          maxTokens: 2000,
+        });
+        if (vr && !vr.error && String(vr.content || '').trim()) f.content = '（以下为图片「' + f.name + '」的AI转述）\n' + vr.content;
+        else f.content = '（图片「' + f.name + '」转述失败：' + ((vr && vr.error) || '当前模型可能不支持图片输入，请切换多模态模型后重传') + '）';
+      }
+      // 文档重组装（图片转述后 content 才就位）
+      if (s.files.length) {
+        const docs2 = s.files.map(f => '【用户上传文档：' + f.name + '】\n' + f.content).join('\n\n');
+        fullQ = docs2.slice(0, 80000) + '\n\n' + hist + '【当前问题】' + q;
+      }
       try { window.AgentBoard && window.AgentBoard.feed({ type: 'ask', q }); } catch (e) {}
       const out = await window.AIOrch.orchestrate(fullQ, null, deps, { mode: force && force.length > 1 ? 'deep' : 'fast', forceAgents: force });
       try { window.AgentBoard && window.AgentBoard.feed({ type: 'done' }); } catch (e) {}
@@ -161,7 +190,13 @@
         Object.keys(A).map(k => '<span class="ac-chip' + (s && s.agents.has(k) ? ' on' : '') + '" data-ag="' + k + '" title="' + esc(A[k].name) + '">' + esc(A[k].name.replace(/专家|顾问/g, '')) + '</span>').join('') +
       '</span>' +
       '<span style="flex:1"></span>' +
-      '<button class="btn ghost" id="acDoc" title="上传本地文档(txt/md/csv/json)">📎 文档</button>' +
+      (s && window.ChatCtx ? (function () {
+        const p = window.ChatCtx.ctxPct(s);
+        const col = p > 80 ? '#C7000B' : p > 50 ? '#E0A400' : '#1E9E57';
+        return '<span class="ac-ctx" title="会话上下文用量：满后旧对话自动压缩成摘要，不会失忆">' +
+          '<i style="width:' + p + '%;background:' + col + '"></i><b>' + p + '%</b></span>';
+      })() : '') +
+      '<button class="btn ghost" id="acDoc" title="上传本地文档(txt/md/csv/json/xlsx/pptx/docx，也可传 png/jpg 图片)">📎 附件</button>' +
       '<button class="btn ghost" id="acBoard" title="Agent 架构">🕸</button>';
     el.querySelector('#acModel').onchange = e => switchModel(e.target.value);
     el.querySelectorAll('.ac-chip').forEach(n => {
@@ -225,6 +260,9 @@
       '.ac-main{flex:1;display:flex;flex-direction:column;min-width:0}' +
       '.ac-top{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}' +
       '.ac-top select{padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--c-bg-elev);color:inherit;font-size:12px;max-width:230px}' +
+      '.ac-ctx{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:74px;height:18px;border:1px solid var(--line);border-radius:9px;overflow:hidden;font-size:10px}' +
+      '.ac-ctx i{position:absolute;left:0;top:0;bottom:0;opacity:.22}' +
+      '.ac-ctx b{position:relative;font-weight:600;color:var(--ink2);padding:0 6px}' +
       '.ac-chips{display:flex;gap:5px;flex-wrap:wrap}' +
       '.ac-chip{font-size:11px;padding:3px 9px;border:1px solid var(--line);border-radius:999px;cursor:pointer;user-select:none}' +
       '.ac-chip.on{border-color:#C7000B;color:#C7000B;background:#C7000B11}' +

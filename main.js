@@ -403,14 +403,23 @@ function extractOfficeText(buf) {
 ipcMain.handle('readLocalDoc', async () => {
   try {
     const r = await dialog.showOpenDialog(win, {
-      title: '选择要让 AI 阅读的文档',
-      filters: [{ name: '文档', extensions: ['txt', 'md', 'csv', 'json', 'log', 'pptx', 'docx', 'xlsx'] }],
+      title: '选择要让 AI 阅读的文档或图片',
+      filters: [
+        { name: '文档与图片', extensions: ['txt', 'md', 'csv', 'json', 'log', 'pptx', 'docx', 'xlsx', 'png', 'jpg', 'jpeg', 'webp'] },
+        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] },
+      ],
       properties: ['openFile'],
     });
     if (!r || r.canceled || !r.filePaths || !r.filePaths.length) return { canceled: true };
     const p2 = r.filePaths[0];
     const st = fs.statSync(p2);
     if (st.size > 8 * 1024 * 1024) return { error: '文件超过 8MB，请精简后再传' };
+    // 图片：返回 dataUrl，由渲染层先经多模态模型转述成文本再进编排链（主链保持纯文本）
+    const imgExt = (p2.match(/\.(png|jpg|jpeg|webp)$/i) || [])[1];
+    if (imgExt) {
+      const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' }[imgExt.toLowerCase()];
+      return { name: path.basename(p2), kind: 'image', dataUrl: 'data:' + mime + ';base64,' + fs.readFileSync(p2).toString('base64') };
+    }
     let content;
     if (/\.(pptx|docx|xlsx)$/i.test(p2)) {
       content = extractOfficeText(fs.readFileSync(p2));
@@ -528,6 +537,17 @@ ipcMain.handle('aiChat', async (_e, payload) => {
             blocks.push({ type: 'tool_use', id: String(tc.id || tc.function.name), name: tc.function.name, input: aj });
           });
           rest.push({ role: 'assistant', content: blocks });
+        } else if (Array.isArray(m.content)) {
+          // OpenAI 多模态 content 数组 → Anthropic blocks（图片 data URL → base64 source）
+          const blocks = m.content.map(part => {
+            if (part && part.type === 'image_url' && part.image_url && part.image_url.url) {
+              const mm = String(part.image_url.url).match(/^data:([^;]+);base64,(.*)$/);
+              if (mm) return { type: 'image', source: { type: 'base64', media_type: mm[1], data: mm[2] } };
+              return { type: 'text', text: '(不支持的图片URL形式)' };
+            }
+            return { type: 'text', text: String((part && part.text) || '') };
+          });
+          rest.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: blocks });
         } else {
           rest.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') });
         }

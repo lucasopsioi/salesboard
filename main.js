@@ -17,6 +17,7 @@ let engine = null;
 
 function createWindow() {
   win = new BrowserWindow({
+    icon: path.join(__dirname, 'app', 'icon.png'),
     width: 1480, height: 940, minWidth: 1100, minHeight: 720,
     title: 'Salesboard',
     backgroundColor: '#F4F5F7',

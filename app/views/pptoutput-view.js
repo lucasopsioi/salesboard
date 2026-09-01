@@ -374,7 +374,7 @@ function pdRenderCanvas(){
   // 节点已入 DOM（有尺寸）→ 触发已绑定元素的实时预览（异步取数、画 echarts）。
   // 统一代号：本轮所有元素共用一个 gen，确保多绑定元素都能通过竞态守卫（否则各自自增 → 仅最后一个存活）。
   const token = (PD.gen = PD.gen + 1);
-  els.forEach(el=>{ if(pdHasBinding(el) || pdStaticTable(el)) pdResolveAndRender(el, token); });
+  els.forEach(el=>{ if(pdHasBinding(el) || pdStaticTable(el) || pdStaticChart(el)) pdResolveAndRender(el, token); });
 }
 
 // 渲染单个元素为绝对定位 div。text/unit → 文字；data/table/chart → 占位框 + 类型/vtype。选中加 .sel。
@@ -613,7 +613,7 @@ function pdReRenderEl(elId){
   const old = pdElNode(elId); if(!old){ pdRenderCanvas(); return; }
   pdDisposeChart(elId);     // 旧节点将被替换 → 先销毁它承载的 echarts 实例
   old.replaceWith(pdRenderElement(el));
-  if(pdHasBinding(el) || pdStaticTable(el)) pdResolveAndRender(el);   // 新节点已入 DOM → 重新预览
+  if(pdHasBinding(el) || pdStaticTable(el) || pdStaticChart(el)) pdResolveAndRender(el);   // 新节点已入 DOM → 重新预览
 }
 
 // 行容器小工具：标签 + 控件。
@@ -2128,8 +2128,15 @@ PD.gen = 0;   // 全局解析代号；每次发起解析自增，回调时比对
 
 // 解析单元素并渲染预览。token 可由 refreshAll 传入统一代号；否则用单元素自增。
 function pdStaticTable(el){ return el && el.type==='table' && Array.isArray(el.rows) && el.rows.length>0; }
+function pdStaticChart(el){ return el && el.type==='chart' && el.data && Array.isArray(el.data.cats) && Array.isArray(el.data.series); }
 async function pdResolveAndRender(el, token){
   // 静态表格(2026-09-01 PPT转换)：el.rows 直接渲染，无需数据绑定——承接用户 PPT 里的手工表
+  // 静态图表(2026-09-01 PPT转换)：el.data={cats,series[{name,values}]} 直接喂图表渲染器，颜色走 fmt.colors
+  if(el.type==='chart' && pdStaticChart(el) && !pdHasBinding(el)){
+    const cur0 = pdElNode(el.id);
+    if(cur0){ PD.lastSeriesNames[el.id]=(el.data.series||[]).map(x=>String(x.name)); pdRenderChartPreview(el, cur0, el.data); }
+    return;
+  }
   if(el.type==='table' && Array.isArray(el.rows) && el.rows.length && !pdHasBinding(el)){
     const cur0 = pdElNode(el.id);
     if(cur0) pdRenderTablePreview(cur0, { kind:'grid', header: el.rows[0]||[], rows: el.rows.slice(1) });
@@ -2268,7 +2275,7 @@ async function refreshAll(){
   // pdResolveAndRender 内会因找不到节点而跳过（切到该页时 pdRenderCanvas 会重新预览）。
   const tasks = [];
   (PD.doc.slides||[]).forEach(sl=>{
-    (sl.elements||[]).forEach(el=>{ if(pdHasBinding(el) || pdStaticTable(el)) tasks.push(pdResolveAndRender(el, token)); });
+    (sl.elements||[]).forEach(el=>{ if(pdHasBinding(el) || pdStaticTable(el) || pdStaticChart(el)) tasks.push(pdResolveAndRender(el, token)); });
   });
   await Promise.all(tasks);
 }

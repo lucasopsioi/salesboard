@@ -146,7 +146,7 @@
         else if (el.type === 'chart') {
           const vt = el.chart && el.chart.vtype;
           if (vt === 'slicer') { /* 设计期控件,不导出 */ }
-          else if (isNativeChart(vt)) addNativeChart(pptx, s, el, r);
+          else if (isNativeChart(vt)) addNativeChart(pptx, s, el, r || el.data);   // el.data=静态图表(PPT转换)
           else if (el.chart && el.chart.image) s.addImage({ data: el.chart.image, x: el.x, y: el.y, w: el.w, h: el.h });
           else { s.addShape(pptx.ShapeType.rect, { x: el.x, y: el.y, w: el.w, h: el.h, fill: { color: 'FFFFFF' }, line: { color: 'E6E8EB', width: 0.5 } });
                  s.addText(((el.chart && el.chart.fmt && el.chart.fmt.title) || vt || '图表') + '\n(图表预览)', { x: el.x, y: el.y, w: el.w, h: el.h, fontFace: '微软雅黑', fontSize: 10, align: 'center', valign: 'middle', color: '8A9099' }); }

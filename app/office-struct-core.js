@@ -116,8 +116,11 @@ function shapeStyleOf(xml) {
   const prstM = spPr.match(/<a:prstGeom\s+prst="([^"]+)"/); if (prstM) st.geom = prstM[1];
   return st;
 }
-function runsOf(xml) { // 逐文本 run：text + 字号/粗/斜/色/字体
+function runsOf(xml) { // 逐文本 run：text + 字号/粗/斜/色/字体；段落 defRPr 作为该段回退
   const runs = [];
+  // 段落级默认（<a:pPr><a:defRPr sz=…>）：手拉小标签常只在 defRPr 带字号
+  const dM = xml.match(/<a:defRPr\b[^>]*sz="(\d+)"/);
+  const defSz = dM ? +(+dM[1] / 100).toFixed(1) : null;
   const rre = /<a:r>([\s\S]*?)<\/a:r>/g; let rm;
   while ((rm = rre.exec(xml))) {
     const seg = rm[1];
@@ -125,7 +128,9 @@ function runsOf(xml) { // 逐文本 run：text + 字号/粗/斜/色/字体
     if (!tM) continue;
     const pr = (seg.match(/<a:rPr\b[^>]*(?:\/>|>[\s\S]*?<\/a:rPr>)/) || [''])[0];
     const r = { text: unesc(tM[1]) };
-    const szM = pr.match(/\bsz="(\d+)"/); if (szM) r.fontSize = +(+szM[1] / 100).toFixed(1);
+    const szM = pr.match(/\bsz="(\d+)"/);
+    if (szM) r.fontSize = +(+szM[1] / 100).toFixed(1);
+    else if (defSz) r.fontSize = defSz;
     if (/\bb="1"/.test(pr)) r.bold = true;
     if (/\bi="1"/.test(pr)) r.italic = true;
     const c = colorIn(pr); if (c) r.color = c;
@@ -133,6 +138,97 @@ function runsOf(xml) { // 逐文本 run：text + 字号/粗/斜/色/字体
     runs.push(r);
   }
   return runs;
+}
+
+/* ---------------- 主题色（theme1.xml clrScheme）与 schemeClr 解析 ---------------- */
+function parseTheme(entries) {
+  const th = entries.find(e => /^ppt\/theme\/theme\d+\.xml$/.test(e.name));
+  const map = {};
+  if (!th) return map;
+  const xml = th.data.toString('utf8');
+  const cs = (xml.match(/<a:clrScheme[\s\S]*?<\/a:clrScheme>/) || [''])[0];
+  const re = /<a:(dk1|lt1|dk2|lt2|accent1|accent2|accent3|accent4|accent5|accent6|hlink|folHlink)>([\s\S]*?)<\/a:\1>/g;
+  let m;
+  while ((m = re.exec(cs))) {
+    const inner = m[2];
+    const srgb = inner.match(/<a:srgbClr\s+val="([0-9A-Fa-f]{6})"/);
+    const sys = inner.match(/<a:sysClr\s[^>]*lastClr="([0-9A-Fa-f]{6})"/);
+    map[m[1]] = (srgb ? srgb[1] : sys ? sys[1] : '000000').toUpperCase();
+  }
+  // tx1/bg1 是 dk1/lt1 的别名
+  map.tx1 = map.dk1; map.bg1 = map.lt1; map.tx2 = map.dk2; map.bg2 = map.lt2;
+  return map;
+}
+function resolveColor(xmlFrag, theme) {
+  const s = String(xmlFrag || '');
+  const srgb = s.match(/<a:srgbClr\s+val="([0-9A-Fa-f]{6})"/);
+  if (srgb) return srgb[1].toUpperCase();
+  const sch = s.match(/<a:schemeClr\s+val="(\w+)"/);
+  if (sch && theme && theme[sch[1]]) {
+    let hex = theme[sch[1]];
+    // lumMod/lumOff 近似（PowerPoint 的主题色变体）：只做亮度线性近似，够视觉还原
+    const lm = s.match(/<a:lumMod\s+val="(\d+)"/), lo = s.match(/<a:lumOff\s+val="(\d+)"/);
+    if (lm || lo) {
+      const mod = lm ? +lm[1] / 100000 : 1, off = lo ? +lo[1] / 100000 : 0;
+      const c = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+      hex = c.map(v => Math.max(0, Math.min(255, Math.round(v * mod + 255 * off)))).map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+    return hex;
+  }
+  return null;
+}
+
+/* ---------------- 图表解析（chartN.xml → 类型/类目/系列(名+值+色)/图例） ----------------
+   2026-09-01 用户点名：图表要还原类型/数据/颜色，不是占位。数据用 numCache/strCache（文件内缓存）。 */
+const CHART_TYPES = [
+  ['barChart', null], ['lineChart', 'line'], ['pieChart', 'pie'], ['doughnutChart', 'doughnut'],
+  ['areaChart', 'area'], ['scatterChart', 'line'],
+];
+function ptsOf(xml) {
+  const out = [];
+  const re = /<c:pt\s+idx="(\d+)"[^>]*>\s*<c:v>([\s\S]*?)<\/c:v>/g; let m;
+  while ((m = re.exec(xml))) out[+m[1]] = unesc(m[2]);
+  return out;
+}
+function parseChartXml(xml, theme) {
+  let vtype = null;
+  for (const [tag, vt] of CHART_TYPES) {
+    if (xml.indexOf('<c:' + tag + '>') >= 0) {
+      if (tag === 'barChart') {
+        const dir = (xml.match(/<c:barDir\s+val="(\w+)"/) || [0, 'col'])[1];
+        const grp = (xml.match(/<c:grouping\s+val="(\w+)"/) || [0, 'clustered'])[1];
+        vtype = dir === 'bar'
+          ? (grp === 'stacked' ? 'stackBar' : grp === 'percentStacked' ? 'stackBar100' : 'bar')
+          : (grp === 'stacked' ? 'stackColumn' : grp === 'percentStacked' ? 'stack100' : 'column');
+      } else vtype = vt;
+      break;
+    }
+  }
+  if (!vtype) return null;
+  const series = [];
+  let cats = null;
+  const sre = /<c:ser>([\s\S]*?)<\/c:ser>/g; let sm;
+  while ((sm = sre.exec(xml))) {
+    const seg = sm[1];
+    const nameM = seg.match(/<c:tx>[\s\S]*?<c:v>([\s\S]*?)<\/c:v>/);
+    const name = nameM ? unesc(nameM[1]) : ('系列' + (series.length + 1));
+    const catSeg = (seg.match(/<c:cat>[\s\S]*?<\/c:cat>/) || [''])[0];
+    if (!cats) { const c = ptsOf(catSeg); if (c.length) cats = c; }
+    const valSeg = (seg.match(/<c:val>[\s\S]*?<\/c:val>/) || [''])[0];
+    const values = ptsOf(valSeg).map(v => +v || 0);
+    // 系列色：ser 级 spPr 的 solidFill（srgb 或主题色）
+    const spSeg = (seg.match(/<c:spPr>[\s\S]*?<\/c:spPr>/) || [''])[0];
+    const fillSeg = (spSeg.match(/<a:solidFill>[\s\S]*?<\/a:solidFill>/) || [''])[0];
+    const color = resolveColor(fillSeg, theme);
+    series.push({ name, values, color });
+  }
+  const legM = xml.match(/<c:legendPos\s+val="(\w+)"/);
+  const titleM = xml.match(/<c:title>[\s\S]*?<a:t>([\s\S]*?)<\/a:t>/);
+  return {
+    vtype, cats: cats || [], series,
+    legendPos: legM ? ({ b: 'bottom', t: 'top', l: 'left', r: 'right' })[legM[1]] || 'bottom' : 'bottom',
+    title: titleM ? unesc(titleM[1]) : '',
+  };
 }
 function alignOf(xml) { const m = xml.match(/<a:pPr\b[^>]*algn="(l|ctr|r|just)"/); return m ? ({ l: 'left', ctr: 'center', r: 'right', just: 'left' })[m[1]] : null; }
 // 每页把 <p:sp>(文本框/占位符)、<p:pic>(图片) 与 <p:graphicFrame>(表格/图表) 按出现顺序编号——
@@ -158,7 +254,8 @@ function parseShape(xml) {
       }
       return Object.assign(base, { type: 'table', rows, rowRuns });
     }
-    return Object.assign(base, { type: 'graphic', text: textsIn(xml).join('') });
+    const chM = xml.match(/<c:chart\s[^>]*r:id="([^"]+)"/);
+    return Object.assign(base, { type: 'graphic', text: textsIn(xml).join(''), chartRel: chM ? chM[1] : null });
   }
   const runs = runsOf(xml);
   return Object.assign(base, {
@@ -172,6 +269,7 @@ function extractPptStructure(buf, opt) {
   opt = opt || {};
   const entries = readZipEntries(buf);
   const byName = {}; entries.forEach(e => { byName[e.name] = e; });
+  const theme = parseTheme(entries);
   // 页面尺寸（presentation.xml sldSz）
   let page = null;
   const presE = byName['ppt/presentation.xml'];
@@ -192,18 +290,23 @@ function extractPptStructure(buf, opt) {
       if (relE) {
         const rre2 = /<Relationship\s[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g; let m2;
         const rxml = relE.data.toString('utf8');
-        while ((m2 = rre2.exec(rxml))) rels[m2[1]] = m2[2].replace(/^\.\.\//, 'ppt/');
+        while ((m2 = rre2.exec(rxml))) rels[m2[1]] = m2[2].replace(/^\.\.\//, 'ppt/').replace(/^\//, '');
       }
       const shapes = [];
       let m; SHAPE_RE.lastIndex = 0;
       while ((m = SHAPE_RE.exec(xml))) shapes.push(parseShape(m[0]));
       shapes.forEach(sh => {
-        if (sh.type !== 'image' || !sh.rel) return;
-        sh.media = rels[sh.rel] || null;
-        if (opt.withImages && sh.media && byName[sh.media]) {
-          const ext = (sh.media.match(/\.(\w+)$/) || [0, 'png'])[1].toLowerCase();
-          const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }[ext] || 'image/png';
-          sh.dataUrl = 'data:' + mime + ';base64,' + byName[sh.media].data.toString('base64');
+        if (sh.type === 'image' && sh.rel) {
+          sh.media = rels[sh.rel] || null;
+          if (opt.withImages && sh.media && byName[sh.media]) {
+            const ext = (sh.media.match(/\.(\w+)$/) || [0, 'png'])[1].toLowerCase();
+            const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }[ext] || 'image/png';
+            sh.dataUrl = 'data:' + mime + ';base64,' + byName[sh.media].data.toString('base64');
+          }
+        }
+        // 图表：graphicFrame 的 chart rel → charts/chartN.xml 解析出类型/类目/系列(名值色)/图例
+        if (sh.type === 'graphic' && sh.chartRel && rels[sh.chartRel] && byName[rels[sh.chartRel]]) {
+          try { sh.chart = parseChartXml(byName[rels[sh.chartRel]].data.toString('utf8'), theme); } catch (e2) { sh.chart = null; }
         }
       });
       return { file: e.name, shapes };
@@ -262,4 +365,4 @@ function replacePptTexts(buf, repls) {
   return writeZip(entries);
 }
 
-module.exports = { readZipEntries, writeZip, extractPptStructure, replacePptTexts, crc32 };
+module.exports = { readZipEntries, writeZip, extractPptStructure, replacePptTexts, crc32, parseChartXml, parseTheme, resolveColor };

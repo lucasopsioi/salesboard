@@ -60,9 +60,32 @@
       return els;
     }
     if (sh.type === 'graphic') {
-      // 图表抽不出位图与数据——落占位 shape + 说明，报告里列为待办（在设计器里用图表元素重建并绑接口）
+      // 图表真还原(2026-09-01 用户点名)：chart part 解析出 类型/类目/系列(名+值+色)/图例
+      // → 设计器 chart 元素(静态数据 el.data + 系列色 fmt.colors)，颜色格式原样
+      if (sh.chart && sh.chart.series && sh.chart.series.length) {
+        const c = sh.chart;
+        const VT = { bar: 'bar', stackBar: 'stackBar', stackBar100: 'stackBar', column: 'column', stackColumn: 'stackColumn', stack100: 'stack100', line: 'line', pie: 'pie', doughnut: 'doughnut', area: 'area' };
+        const colors = {};
+        c.series.forEach(se => { if (se.color) colors[se.name] = se.color; });
+        els.push(PptDoc.newElement('chart', {
+          x, y, w, h,
+          chart: { vtype: VT[c.vtype] || 'column', fmt: { showLegend: true, legendPos: c.legendPos || 'bottom', title: c.title || '', showLabels: false, colors } },
+          data: { cats: c.cats, series: c.series.map(se => ({ name: se.name, values: se.values })) },
+          style: {},
+        }));
+        return els;
+      }
+      // 无 chart part 的 graphic（SmartArt 等）——占位框
       els.push(PptDoc.newElement('shape', { x, y, w, h, style: { fill: 'F7F8FA', line: 'CBD2DA' } }));
-      els.push(PptDoc.newElement('text', { x: x + 0.1, y: y + h / 2 - 0.25, w: Math.max(1, w - 0.2), h: 0.5, text: '【原PPT图表】请用图表元素重建并绑定数据接口', style: { fontSize: 10, color: '8A9099', align: 'center' } }));
+      els.push(PptDoc.newElement('text', { x: x + 0.1, y: y + h / 2 - 0.25, w: Math.max(1, w - 0.2), h: 0.5, text: '【原PPT图形无法还原】请在设计器重建', style: { fontSize: 10, color: '8A9099', align: 'center' } }));
+      return els;
+    }
+    // 线条/箭头：落成细色条（设计器无线元素，用高/宽收薄的 shape 近似）
+    if (st.geom === 'line' || st.geom === 'straightConnector1' || /Connector/.test(st.geom || '')) {
+      const lc = okHex(st.line, '999999');
+      const thin = 0.03;
+      if (w >= h) els.push(PptDoc.newElement('shape', { x, y: +(y + h / 2).toFixed(2), w, h: thin, style: { fill: lc, line: lc } }));
+      else els.push(PptDoc.newElement('shape', { x: +(x + w / 2).toFixed(2), y, w: thin, h, style: { fill: lc, line: lc } }));
       return els;
     }
     // 文本/形状：有填充或边框 → 底 shape；有文字 → 上 text
@@ -72,11 +95,13 @@
       els.push(PptDoc.newElement('shape', { x, y, w, h, style: { fill: okHex(st.fill, 'FFFFFF'), line: okHex(st.line, 'E6E8EB') } }));
     }
     if (txt) {
-      const r0 = (sh.runs && sh.runs[0]) || {};
+      const r0 = (sh.runs && sh.runs.find(r => r.fontSize)) || (sh.runs && sh.runs[0]) || {};
+      // 无任何字号信息时按框高估算（h英寸×72pt×0.5 行占比），夹在 8-20——密集小标签图用固定 14 会全体偏大
+      const estSz = Math.max(8, Math.min(20, Math.round(h * 72 * 0.5)));
       els.push(PptDoc.newElement('text', {
         x, y, w, h, text: txt,
         style: {
-          fontSize: r0.fontSize || 14,
+          fontSize: r0.fontSize || estSz,
           bold: !!r0.bold,
           color: okHex(r0.color, '1A1A1A'),
           align: sh.align || 'left',

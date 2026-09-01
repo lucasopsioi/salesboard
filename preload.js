@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('sb', {
   industryBoard:(params)     => ipcRenderer.invoke('industryBoard', params),
   lifecycleCompare:(params)  => ipcRenderer.invoke('lifecycleCompare', params),
   launchScan:  (params)      => ipcRenderer.invoke('launchScan', params),
+  psiCatalog:  ()            => ipcRenderer.invoke('psiCatalog'),
   searchDim:   (params)      => ipcRenderer.invoke('searchDim', params),
   rawRows:     (params)      => ipcRenderer.invoke('rawRows', params),
   sample:      ()            => ipcRenderer.invoke('sample'),

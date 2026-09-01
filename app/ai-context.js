@@ -86,6 +86,9 @@ const TOOL_SCHEMAS = {
   financeCustom: { description: '经营自定义取数：按财经维度取指定指标。', properties: { rowDim: { type: 'string', enum: ['rep', 'lv1', 'lv2', 'lv3', 'lv4', 'model'] }, metrics: { type: 'array', items: { type: 'string', enum: ['rev', 'gm', 'gmr', 'cp', 'sellIn', 'sellOut', 'nsip', 'bpAttain', 'fcAttain'] } }, fromM: { type: 'integer' }, toM: { type: 'integer' } }, required: ['rowDim'] },
   industryBoard: { description: '产业 4 个 KPI：今年 SI/SO 累计与同比、当前库存与渠道DOS、全流程库存与DOS。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
   industryTrend: { description: '产业趋势：今年 vs 去年同期逐期序列。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
+  dataCatalog: {
+    description: '全域数据目录(RAG索引)：一次拿到本系统全部数据域的「有什么、什么范围、层级树、用哪个工具查」——PSI 层级全树(line→family→series→product)、财经(年份/版本/指标)、定价库、路标产品。开工前、迷路时、取不到数时先查它。',
+    properties: {}, required: [] },
   searchDim: {
     description: '跨全维度定位一个名称属于哪个维度、精确写法是什么。取不到数/拿不准维度时第一时间用（常见病：把系列名当产品名）。',
     properties: { q: { type: 'string', description: '要定位的名称(如「低成本TWS耳机」)' } }, required: ['q'] },
@@ -718,6 +721,43 @@ const AIData = (function () {
       industryBoard: wrap(a => api.industryBoard(a || {})),
       industryTrend: wrap(a => api.industryTrend(a || {})),
       // 当前看板界面上选了什么（用户说「这个/当前筛选」时先调它）
+      dataCatalog: wrap(async () => {
+        const out = { 生成时间: new Date().toISOString().slice(0, 10) };
+        try {
+          const c = await api.psiCatalog();
+          if (c && !c.error) {
+            out.PSI = { 日期范围: c.from + '~' + c.to, 记录数: c.records,
+              国家: c.countries, 国家办: c.repOffices, 渠道: c.channels,
+              层级树: (c.tree || []).map(t => t.line + ' > ' + t.family + ' > ' + t.series + ' > ' + t.product + ' (' + t.skuCount + ' SKU)'),
+              查法: 'query(趋势/期间)、report(年累计+同比+库存DOS)、rawRows(原始行)、searchDim(名称定位)' };
+          }
+        } catch (e) {}
+        try {
+          const f = await api.financeOverview({});
+          if (f && f.metrics) {
+            out.财经 = { 年份: f.curYear + '(同比' + f.prevYear + ')', 实际截至月: f.toM,
+              预测版本: f.version, BP版本: f.bpVersion,
+              指标: Object.keys(f.metrics || {}), 维度: f.dims,
+              查法: 'financeOverview(全盘)/financeProductBoard(分产业系列)/financeRepBoard(分国家办)/financeCustom(自由维度)' };
+          }
+        } catch (e) {}
+        try {
+          const px = (typeof window !== 'undefined' && window.PXLIB) || null;
+          if (px && px.records) {
+            const n = px.records.size != null ? px.records.size : (Array.isArray(px.records) ? px.records.length : 0);
+            out.定价库 = { 记录数: n, 查法: 'pricingLibRecords(概要);明细在定价库看板' };
+          } else out.定价库 = { 状态: '未导入或未打开过定价库看板' };
+        } catch (e) {}
+        try {
+          const names = (typeof window !== 'undefined' && window.RoadmapAPI) ? window.RoadmapAPI.listNames() : [];
+          out.路标 = { 产品数: names.length, 产品: names.slice(0, 40), 查法: '读用 boardState({boardId:"roadmap"});写用 roadmapUpsert' };
+        } catch (e) {}
+        try {
+          const fob = (typeof window !== 'undefined' && window.FOB_STORE) || null;
+          out['Floor FOB'] = fob ? { 状态: '已导入', 查法: 'Floor FOB看板;路标图上≈$标注' } : { 状态: '未检测到导入' };
+        } catch (e) {}
+        return out;
+      }),
       searchDim: wrap(async (a) => api.searchDim(a || {})),
       rawRows: wrap(async (a) => api.rawRows(a || {})),
       roadmapUpsert: wrap(async (a) => {

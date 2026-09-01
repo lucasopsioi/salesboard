@@ -64,7 +64,7 @@
   const AGENTS = {
     psi: {
       id: 'psi', name: 'PSI 分析专家', boards: ['psi'],
-      tools: ['meta', 'options', 'query', 'report', 'boardState', 'searchDim', 'rawRows'],
+      tools: ['meta', 'options', 'query', 'report', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
       prompt: [
         '你是 PSI 数据分析专家，负责 Sell-in / Sell-out / 库存 / DOS 的时间序列（全是台数，无金额）。',
         '【底表与录入】长表：同一「9维×期间」拆成 Sell In / Sell Out / Inventory / DOS 四行；解析只认全称（sellin/sellout/inventory|inv/dos），SI/SO 缩写整行丢弃。同键行 sellIn/sellOut 累加、inv/dos 后写覆盖；多文件按 mtime 新文件整行覆盖，不相加。底表自带的 DOS 列一律不用，DOS 永远重算。音频 SO 是人工延迟录入（一般晚 1–2 周），不是激活回传：缺周＝没录，不是卖了 0。真实底表没有汇总行，别用「小计重复计数」解释对不上。',
@@ -79,7 +79,7 @@
     },
     report: {
       id: 'report', name: '汇总/国家/产业专家', boards: ['report', 'country', 'industry'],
-      tools: ['meta', 'options', 'report', 'industryBoard', 'industryTrend', 'boardState', 'searchDim', 'rawRows'],
+      tools: ['meta', 'options', 'report', 'industryBoard', 'industryTrend', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
       prompt: [
         '你是汇总表 / 国家看板 / 产业看板专家，负责「卖了多少、同比多少、库存多少、周转多少天」。三者取数同源于 report()，数字应当一致。',
         '【公式】累计SO/SI＝自然年 1/1 起至全局最新日 maxYmd；去年同期＝去年同一日历 MMDD 截取；同比＝(今年−去年)/去年，去年≤0 记 null 显「—」。年度锚点固定用全量数据的 maxYmd，不随下钻漂移（下钻到当年无SO的停产品也要显示「当年0 / 去年真实值 / −100%」）。周列走 ISO 周，默认近 9 周；WoW＝周列最后两周之比（周列只统计当前 ISO 年，年初时去年 W52/W53 恒 0）。DOS 的近4周窗口按**真实日期**回看 28 天、以 maxYmd 那周收尾，**跨年正确**（2026-08-11 起；此前按 ISO 周号取且只认当年，1 月 DOS 曾虚高至 4 倍）：改 fromW/toW 只改周列与 WoW，不改 DOS。显示库存 inv＝maxYmd 当天所有行求和；DOS 分子在音频走该原子单元 W_last 那周的库存（显示/计算分离）。dos=null 只在「含音频且日均=0」时出现，纯平板日均=0 给 0。全流程库存＝渠道库存 + 库龄表最新运行日的 CDC+FDC；全流程列忽略 channel 筛选，groupDim=channel 时不出该列。DOS 红绿灯：渠道 <90/90–120/>120，全流程 <120/120–150/>150。',
@@ -93,7 +93,7 @@
     },
     finance: {
       id: 'finance', name: '经营分析专家', boards: ['finance'],
-      tools: ['meta', 'financeOverview', 'financeProductBoard', 'financeRepBoard', 'financeCustom', 'boardState'],
+      tools: ['meta', 'financeOverview', 'financeProductBoard', 'financeRepBoard', 'financeCustom', 'boardState', 'dataCatalog'],
       prompt: [
         '你是经营分析（财经）专家：收入 / 销毛额 / 销毛率 / NSIP / 贡献利润 与 BP、预测达成。财经全部是月粒度。',
         '【公式】销毛率＝Σ销毛额 ÷ Σ净销售收入（先各自求和再相除，绝不对各行的率取平均），对比用 pp 差。NSIP＝净销售收入 ÷ 收入量（实际表叫「收入量_终端」，预测/BP 叫「收入量」，两名都要吃进；≠Sell in量），单位 USD/台，恒按 USD 显示不随 MUSD 缩放，同比是绝对美元差（±$）不是百分比；对 BP/预测比时目标 NSIP＝目标收入 ÷ 目标 Sell in量。收入量＝能进收入的 sell-in，DOS>90 天的部分递延不进当期。实际与同比取同一 [fromM,toM] 区间；预测/BP 是全年 12 月求和，所以 BP达成率＝区间实际收入 ÷ 全年BP，必须同时给出时间进度＝(toM−fromM+1)/12。Sell-in/out 的实际值来自 PSI 底表（财经实际表没有这两个指标），财经的 Sell in/out 量只是目标。销毛额指标名精确取「销售毛利」，别误命中「销售毛利率」「销售毛利(不含中期激励)」。产品维度用户要看年内 BP/预测完成率，不看同比。',
@@ -107,7 +107,7 @@
     },
     inventory: {
       id: 'inventory', name: '库存与销毛专家', boards: ['inventory'],
-      tools: ['meta', 'sosimSummary', 'report', 'options', 'boardState', 'searchDim', 'rawRows'],
+      tools: ['meta', 'sosimSummary', 'report', 'options', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
       prompt: [
         '你是库存管理 / SO 模拟专家（销毛推演已迁出到 siso-lab，本仓只修不加）。',
         '【计算域】库存、成本、约束都是累计量，必须从生命周期起点算到区间末，range 只做显示切片——库存绝不能随所选月份变。cutoff＝PSI 与发货行里的最大 ymd，≤cutoff 是历史只读，>cutoff 是未来可编辑。',
@@ -121,7 +121,7 @@
     },
     pricing: {
       id: 'pricing', name: '定价专家', boards: ['pricing', 'pricinglib'],
-      tools: ['meta', 'pricingLibRecords', 'options'],
+      tools: ['meta', 'pricingLibRecords', 'options', 'dataCatalog'],
       prompt: [
         '你是定价测算 / 产品定价库专家。回答前先确认用户问的是哪张表——两套链并存且都对。',
         '【官方 iPrice 链（概算表/定价库）】含税RRP÷(1+VAT)=不含税RRP → −不含税RRP×零售前向率=STP → −STP×渠道前向率=SIP（减成法）→ NSIP＝SIP−零售返利(基数STP)−渠道返利/价保/临时激励/联合营销(基数SIP)−超标服务−其他抵减 → 销售毛利＝NSIP−设备成本−期间成本−服务成本−其他成本（不减 TUP）→ 销毛率＝销毛÷NSIP → FOB净价＝NSIP−商务因子汇总（外汇风险加成的基数是 SIP，其余商务因子吃 NSIP；运保/哑机/定制成本按额直填）→ 贡献毛利＝销毛−产品营销−资金占用−坏账 → 区域贡献利润＝贡献毛利−研发吃水线−平台间接销管（区域公共分摊率是平台间接销管的组成项，不能再减一次）。',
@@ -136,7 +136,7 @@
     },
     roadmap: {
       id: 'roadmap', name: '路标与上市专家', boards: ['roadmap'],
-      tools: ['meta', 'options', 'report', 'roadmapUpsert'],
+      tools: ['meta', 'options', 'report', 'roadmapUpsert', 'dataCatalog'],
       prompt: [
         '你是产品路标 / 上市节奏专家。路标数据全部是手填在本地存档里，不在 PSI 底表；只有实际销量走引擎。',
         '【生命周期】上市时间＝shipLate（最晚发货时间，必填，没有就不进甘特）；销售结束为空＝仍在售；EOM 非必填（发公告后才知道）且必须晚于上市；EOM+180 天＝EOM+180×86400000，是激励投放截止线，过后不可再投、不能顺延。EOM 为空就答「未公告/未知」，不要推算。同跑产品并列多行，不依赖 predecessorId。',
@@ -166,7 +166,7 @@
     },
     source: {
       id: 'source', name: '数据源与口径专家', boards: ['source'],
-      tools: ['meta', 'options', 'boardState', 'searchDim', 'rawRows'],
+      tools: ['meta', 'options', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
       prompt: [
         '你是数据源 / 录入口径专家，回答「这个数从哪来、什么时候更新、为什么缺、为什么解析不出来」。',
         '【六个源】PSI、库龄(全流程CDC+FDC)、财经(实际/预测/BP)、IDC、发货、成本，各锚一个文件夹。识别只认表头，不认文件名、不认列序、不认 Sheet 名；判定顺序 财经快路→PSI→财经→IDC→库龄，先命中即停（同一文件被判成 PSI，里面的财经就不再解析）。PSI 必须同时认出 PSIType 与数量列，缺一整个 Sheet 跳过；PSI_MAP 只认 Sell In/Sell Out/Inventory|INV/DOS 全称，SI/SO 缩写整行丢弃。财经只读第 1 个 Sheet（Sheet2 是 PQ 源底表，扫了会爆内存），表头可在前 60 行内任意一行，三张表要分成三个文件放。成本表认不出表头时按固定列序读（1系列/2型号/3日期/4数值），日期支持文本形态的 5 位 Excel 序列号，Value 空＝缺成本 null 不是 0。发货表只有国家，大区/国家办靠 PSI 反推，名字对不上就成孤儿单元。',
@@ -180,7 +180,7 @@
     },
     weekly: {
       id: 'weekly', name: '产业周报专家', boards: ['audio'],
-      tools: ['meta', 'options', 'report', 'query', 'financeProductBoard', 'boardState', 'searchDim', 'rawRows'],
+      tools: ['meta', 'options', 'report', 'query', 'financeProductBoard', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
       prompt: [
         '你是产业周报（音频/平板可切换）专家。六块：M1 遗留问题（人工录入）、M2 产业经营进展（财经分系列/分国家办）、M3 SI 达成进展、M4 周度销售进展（4 个 KPI + 趋势）、M5 产品维度（按国家逐块）、M6 新品进展。',
         '【M3 口径】累计SI＝Sell-in（渠道全加不去重）；时间进度＝年内第几天 ÷ 全年天数（自然日，闰年366）——注意这与财经 BP/预测的时间进度 (toM−fromM+1)/12 不是同一个算法，不要混用；达成率＝累计SI ÷ SI目标，目标≤0 记 null；「拉美其他」＝范围总量 − 已列名国家之和，不为负（clamp 0）。大盘年空间、目标份额、SI目标都是人工维护的目标值，底表里没有。',
@@ -624,7 +624,7 @@
   const ANSWER_CHECKLIST = '回答体检(缺一不可)：①结论数字带单位；②一句话口径(期间/范围/计算方法)；'
     + '③若涉及"两个看板对不上/某值为0/最近一周异常/同比异常"，必须解释机制原因(口径不同、音频人工延迟报量、产品上市/退市阶段)，不许只报数或断言数据错了；'
     + '④判断类问题(值不值得/怎么回事)先给取到的数据再下结论，结论要结合产品生命周期(用 query 按月看首月放量与尾部萎缩)；'
-    + '⑤查不到就明说"数据未包含"，绝不编造；⑥禁止声称「工具执行错误/查询失败」除非本轮确实调用过该工具且收到 error——臆测失败等同编造。';
+    + '⑤查不到就明说"数据未包含"，绝不编造；⑥禁止声称「工具执行错误/查询失败」除非本轮确实调用过该工具且收到 error；⑦迷路/取不到数时先 dataCatalog 看全域目录(有什么数据、层级树、用什么查)，再 searchDim 定位名称，最后 rawRows 下钻——按目录找，不当无头苍蝇。';
 
   /* 溯源硬门禁：答案里的每个数字回查本轮工具返回原文，查无出处的替换为「?」并强制警示。
      设计依据（评测 2026-08-25 三轮）：提示词管不住编数的方差（C6-02 三连编、C6-03 施压 2/3 失守），
@@ -787,9 +787,26 @@
         if (hit.length) found[dim] = hit.slice(0, 8);
       }
       const dims = Object.keys(found);
+      /* 层级链(2026-09-01 RAG)：命中的 family/series/product 附完整归属链——
+         「Slate SE 11(product) ⊂ Dorado(series) ⊂ Slate SE(family) ⊂ 平板(line)」，层级错位绝症根治。 */
+      let chainTxt = '';
+      try {
+        if (dims.length && deps.catalogDirect) {
+          const cat = await deps.catalogDirect();
+          const tr = (cat && cat.tree) || [];
+          const chains = new Set();
+          ['family', 'series', 'product'].forEach(d => {
+            (found[d] || []).forEach(v => {
+              const row = tr.find(t => t[d] === v);
+              if (row) chains.add(row.product + '(product) ⊂ ' + row.series + '(series) ⊂ ' + row.family + '(family) ⊂ ' + row.line + '(line)');
+            });
+          });
+          if (chains.size) chainTxt = '层级归属：' + [...chains].slice(0, 6).join('；') + '。按括号里的维度名作 filters 键。';
+        }
+      } catch (e) {}
       if (dims.length) {
         guards.push('实体检索命中：' + dims.map(d => d + '=' + found[d].join('/')).join('；')
-          + '。取数必须用这些精确值构造 filters（多个实体全部带上，一个都不许漏）；界面当前筛选仅供参考，绝不得限制或替代本题取数范围。');
+          + '。' + chainTxt + '取数必须用这些精确值构造 filters（多个实体全部带上，一个都不许漏）；界面当前筛选仅供参考，绝不得限制或替代本题取数范围。');
       }
     } catch (e) { }
     const askPeriod = PERIOD_RE.test(String(question || ''));

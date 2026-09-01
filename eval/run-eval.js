@@ -327,6 +327,7 @@ function asciiJson(obj) {
         return out;
       },
       optionsDirect: async (field) => registry.options({ field }),
+      catalogDirect: async () => { try { const c = engine.catalog(); return c; } catch (e) { return null; } },
       provRetry: true,
       schemas: AD.TOOL_SCHEMAS,
       buildToolSpecs: AD.buildToolSpecs,

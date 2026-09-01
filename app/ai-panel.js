@@ -1072,6 +1072,8 @@
       snapshot: async b => { try { return await AD.genericSnapshot(b); } catch (e) { return ''; } },
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
       optionsDirect: async (field) => AD.dispatchTool(registry, { tool: 'options', args: { field } }),
+      catalogDirect: async () => { try { return await api().psiCatalog(); } catch (e) { return null; } },
+      catalogDirect: async () => { try { return await api().psiCatalog(); } catch (e) { return null; } },
       provRetry: true,
       onProgress: onProgress || (() => {}),
       chat: async p => {

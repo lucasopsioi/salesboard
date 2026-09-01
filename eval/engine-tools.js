@@ -63,6 +63,13 @@ function buildRegistry(engine) {
   };
   return {
     meta: async () => engine.meta(),
+    dataCatalog: async () => {
+      const c = engine.catalog();
+      const f = engine.financeOverview({});
+      return { PSI: { 日期范围: c.from + '~' + c.to, 记录数: c.records, 国家: c.countries,
+          层级树: (c.tree || []).map(t => t.line + ' > ' + t.family + ' > ' + t.series + ' > ' + t.product + ' (' + t.skuCount + ' SKU)') },
+        财经: f && f.metrics ? { 年份: f.curYear, 实际截至月: f.toM, 指标: Object.keys(f.metrics), 维度: f.dims } : null };
+    },
     searchDim: async (a) => engine.searchDim(a || {}),
     rawRows: async (a) => engine.rawRows(a || {}),
     options: async (a) => {

@@ -152,6 +152,41 @@ C.Engine.prototype.agg = function(p){
    ============================================================ */
 /* 底数据直查(2026-09-01)：AI 取不到数的病根多是名称/维度错位——给两个兒底层能力：
    searchDim：一个名字跨全维度模糊定位(归一互含+评分)；rawRows：直查底表原始行。 */
+/* 数据目录(2026-09-01 RAG)：PSI 层级树一次扫描建全——line→family→series→product→SKU数，
+   模型拿到树就不会把系列名当产品名(层级错位绝症的根治)。 */
+C.Engine.prototype.catalog = function(){
+  const s=this.store; if(!s) return {tree:[],from:0,to:0,records:0};
+  const dims=['line','family','series','product','model'].filter(d=>s.dimCode[d]);
+  const key=i=>dims.map(d=>s.dimCode[d][i]).join('|');
+  const seen=new Set(); const tuples=[];
+  let minY=99999999,maxY=0;
+  for(let i=0;i<s.n;i++){
+    const y=s.ymd[i]; if(y<minY)minY=y; if(y>maxY)maxY=y;
+    const k=key(i); if(seen.has(k)) continue; seen.add(k);
+    const t={}; dims.forEach(d=>{ t[d]=s.dimDict[d][s.dimCode[d][i]]; });
+    tuples.push(t);
+  }
+  // 聚树:line -> family -> series -> product -> modelCount
+  const tree={};
+  tuples.forEach(t=>{
+    const L=t.line||'?', F=t.family||'?', SE=t.series||'?', P=t.product||'?';
+    tree[L]=tree[L]||{}; tree[L][F]=tree[L][F]||{}; tree[L][F][SE]=tree[L][F][SE]||{};
+    tree[L][F][SE][P]=(tree[L][F][SE][P]||0)+(t.model?1:0);
+  });
+  const lines=[];
+  Object.keys(tree).forEach(L=>{
+    Object.keys(tree[L]).forEach(F=>{
+      Object.keys(tree[L][F]).forEach(SE=>{
+        Object.keys(tree[L][F][SE]).forEach(P=>{
+          lines.push({line:L,family:F,series:SE,product:P,skuCount:tree[L][F][SE][P]});
+        });
+      });
+    });
+  });
+  return { from:minY, to:maxY, records:s.n, countries:(s.dimDict.country||[]).slice(0,30),
+    repOffices:(s.dimDict.repOffice||[]).slice(0,20), channels:(s.dimDict.channel||[]).slice(0,10),
+    tree:lines };
+};
 C.Engine.prototype.searchDim = function(p){
   p=p||{};
   const s=this.store; if(!s) return {hits:[]};

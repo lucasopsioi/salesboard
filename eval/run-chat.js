@@ -136,6 +136,20 @@ async function chat(req) {
         ],
       };
     })(),
+    (function () {
+      // 场景 F：总控并行分工——双 sheet Excel 拆两路 Agent 并行，各管一个 sheet 后汇总
+      const { extractOfficeText } = require(path.join(__dirname, '..', 'app', 'office-struct-core.js')) && require(path.join(__dirname, '..', 'app', 'office-text-core.js'));
+      const fx = path.join(__dirname, '..', 'fixtures', 'sample-prices.xlsx');
+      const xtxt = fs.existsSync(fx) ? extractOfficeText(fs.readFileSync(fx)) : '';
+      return {
+        id: 'F', name: '总控并行（多sheet 拆多 Agent，走线上同一份 masterPlan）',
+        files: [{ name: 'sample-prices.xlsx', content: xtxt }],
+        masterPlan: true,
+        turns: [
+          { q: '帮我分析这个价格监测表，平板和音频各自最便宜的竞品是哪个？', must: ['辰星.{0,20}X11|X11', '星潮.{0,20}Buds|星潮'], mustNot: ['无法回答|数据未包含|不包含任何|查不到'], soft: ['179', '29'] },
+        ],
+      };
+    })(),
   ].filter(s => !ONLY.length || ONLY.indexOf(s.id) >= 0);
 
   const results = [];
@@ -156,6 +170,7 @@ async function chat(req) {
       optionsDirect: async (field) => registry.options({ field }),
       catalogDirect: async () => { try { return engine.catalog(); } catch (e) { return null; } },
       provRetry: true,
+      parallel: true,
       schemas: AD.TOOL_SCHEMAS, buildToolSpecs: AD.buildToolSpecs,
       pickTools: AD.pickTools, parseToolCall: AD.parseToolCall,
       snapshot: async () => '', filters: () => null,
@@ -166,7 +181,13 @@ async function chat(req) {
       const hist = CTX.buildHistory(sess);                     // ← 与 send() 同一份逻辑
       sess.msgs.push({ role: 'user', content: turn.q });
       let fullQ = hist ? hist + '【当前问题】' + turn.q : turn.q;
-      if (sc.files && sc.files.length) {
+      // 总控分工（与线上同一份 masterPlan）：命中则材料拆进各任务，主问题不再注入全量文档
+      let forceTasks = null;
+      if (sc.masterPlan) {
+        const plan = CTX.masterPlan(turn.q, sc.files);
+        if (plan) { forceTasks = plan.tasks; console.log('   🧠 总控：' + plan.note); }
+      }
+      if (sc.files && sc.files.length && !forceTasks) {
         const docs = sc.files.map(f => '【用户上传文档：' + f.name + '】\n' + f.content).join('\n\n');
         fullQ = docs.slice(0, 80000) + '\n\n' + hist + '【当前问题】' + turn.q;
       }
@@ -174,8 +195,8 @@ async function chat(req) {
       const t0 = Date.now();
       let res;
       for (let att = 0; att < 3; att++) {
-        try { res = await O.orchestrate(fullQ, null, deps, { mode: 'fast' }); }
-        catch (e) { res = { answer: '', error: String((e && e.message) || e) }; }
+        try { res = await O.orchestrate(fullQ, null, deps, { mode: forceTasks ? 'deep' : 'fast', forceTasks }); }
+        catch (e) { res = { answer: '', error: String((e && e.message) || e) }; console.log('   [异常] ' + String((e && e.stack) || e).split('\n').slice(0, 3).join(' | ')); }
         const t = String((res && res.answer) || '').trim();
         if (t && t.replace(/[\s#*|>-]/g, '').length >= 30) break;
         if (att < 2) console.log('   （空回复，重跑 ' + (att + 1) + '/2）');

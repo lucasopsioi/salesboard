@@ -55,7 +55,10 @@ ok('A24 跨看板问题拆成多个专家(收入+SO+库存)', (() => {
 ok('A25 PPT 问题路由到 ppt 顾问', ids(O.planRoute('如果做一页 PPT，你会怎么组合我现有的数据', 'pptoutput')).indexOf('ppt') >= 0);
 ok('A26 定价问题路由到定价专家', ids(O.planRoute('墨西哥这个产品的 RRP 和毛利怎么样', null)).indexOf('pricing') >= 0);
 ok('A27 路由最多 4 个专家(控制本地模型耗时)', O.planRoute('收入 库存 定价 上市 周报 趋势 PPT 都说一下', null).length <= 4);
-ok('A28 无关键词兜底到汇总专家', ids(O.planRoute('随便说说', null))[0] === 'report');
+// 2026-09-01 兜底分流：无数据信号的通用内容 → 通用助手直接干活；带数据信号仍走汇总专家
+ok('A28a 通用内容兜底到通用助手', ids(O.planRoute('随便说说', null))[0] === 'general');
+ok('A28b 帮写邮件走通用助手', ids(O.planRoute('帮我写一封给渠道伙伴的节日问候邮件', null))[0] === 'general');
+ok('A28c 含数据信号仍兜底汇总专家', ids(O.planRoute('帮我看看销量情况如何', null))[0] === 'report');
 ok('A29 当前看板专家永远排第一(用户在哪问按哪的口径)', ids(O.planRoute('收入多少', 'psi'))[0] === 'psi');
 
 /* ---------- 5) 参数校验：非法参数必须回可读错误，不能静默兜底 ---------- */

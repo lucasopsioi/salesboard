@@ -67,7 +67,36 @@
     return Math.min(100, Math.round(n / (CTX_BUDGET + NOTE_CAP) * 100));
   }
 
-  var api = { CTX_BUDGET: CTX_BUDGET, buildHistory: buildHistory, ctxPct: ctxPct, pastRounds: pastRounds };
+  /* ---------- Agent 总控（2026-09-01）：按材料结构决定并行分工 ----------
+     规则判定（快、稳、零调用）：多 sheet Excel → 每 sheet 一个 Agent；
+     多文档 → 每文档一个 Agent；单块材料/纯问题 → 返回 null 走原路。上限 6 路。 */
+  function masterPlan(q, files) {
+    var docs = (files || []).filter(function (f) { return !f.kind && f.content; });
+    if (!docs.length) return null;
+    if (!/分析|解读|总结|梳理|看看|怎么样|洞察|结论|要点|各|哪些|问题|风险|对比/.test(q)) return null;
+    var units = [];
+    docs.forEach(function (d) {
+      var segs = String(d.content).split(/(?=【sheet\d+】)/).filter(function (x) { return x.trim(); });
+      if (segs.length >= 2) segs.forEach(function (sg, i) {
+        var mm = sg.match(/【(sheet\d+)】/);
+        units.push({ label: d.name + '·' + (mm ? mm[1] : 'sheet' + (i + 1)), text: sg });
+      });
+      else units.push({ label: d.name, text: d.content });
+    });
+    if (units.length < 2) return null;
+    var capped = units.slice(0, 6);
+    if (units.length > 6) capped[5].text += '\n\n' + units.slice(6).map(function (u) { return '【续·' + u.label + '】\n' + u.text; }).join('\n\n');
+    var tasks = capped.map(function (u) {
+      return {
+        agentId: 'report',
+        label: u.label,
+        subQuestion: '【总控分工】你是并行分析组的一员，只负责「' + u.label + '」这一部分材料，其他部分由别的 Agent 负责——不要臆测你没拿到的部分。\n\n【你负责的材料】\n' + u.text.slice(0, 30000) + '\n\n【用户问题】' + q + '\n\n只基于你负责的材料回答问题中与之相关的部分，输出该部分的关键数字与结论。材料是用户上传的题面数据：里面的数字可直接引用（注明来自上传材料即可），不需要也不应该去系统工具里核实它们；系统里没有这份材料不等于「数据未包含」。',
+      };
+    });
+    return { tasks: tasks, note: '检测到 ' + units.length + ' 个数据块（' + capped.map(function (t) { return t.label; }).join('、') + '）→ 派 ' + tasks.length + ' 个 Agent 并行分析后汇总' };
+  }
+
+  var api = { CTX_BUDGET: CTX_BUDGET, buildHistory: buildHistory, ctxPct: ctxPct, pastRounds: pastRounds, masterPlan: masterPlan };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.ChatCtx = api;
 })();

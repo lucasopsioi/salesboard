@@ -554,9 +554,10 @@ const AIData = (function () {
         });
         const b64 = await pptx.write('base64');
         const fn = String(a.fileName || 'AI生成').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
-        const res = await api.saveFile(fn + '.pptx', b64, 'pptx');
-        if (res && res.path) return { ok: true, 已保存: res.path, 页数: slides.length, 说明: '文件已自动打开' };
-        return { error: (res && res.error) || '保存失败或用户取消' };
+        // 免对话框直存 文档\销售团队-AI输出\（旧 saveFile 弹保存框，用户取消/没注意就「看不到文件」）
+        const res = api.aiSaveOutput ? await api.aiSaveOutput(fn + '.pptx', b64) : await api.saveFile(fn + '.pptx', b64, 'pptx');
+        if (res && res.path) return { ok: true, 已保存: res.path, file: res.path, 页数: slides.length, 说明: '已存到 文档\\销售团队-AI输出，对话里有文件卡片可直接打开' };
+        return { error: (res && res.error) || '保存失败' };
       } catch (e) { return { error: 'PPT 生成失败: ' + String((e && e.message) || e) }; }
     }
     async function toolMakeExcel(a) {
@@ -572,9 +573,9 @@ const AIData = (function () {
         });
         const b64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
         const fn = String(a.fileName || 'AI导出').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
-        const res = await api.saveFile(fn + '.xlsx', b64, 'xlsx');
-        if (res && res.path) return { ok: true, 已保存: res.path, sheet数: sheets.length, 说明: '文件已自动打开' };
-        return { error: (res && res.error) || '保存失败或用户取消' };
+        const res = api.aiSaveOutput ? await api.aiSaveOutput(fn + '.xlsx', b64) : await api.saveFile(fn + '.xlsx', b64, 'xlsx');
+        if (res && res.path) return { ok: true, 已保存: res.path, file: res.path, sheet数: sheets.length, 说明: '已存到 文档\\销售团队-AI输出，对话里有文件卡片可直接打开' };
+        return { error: (res && res.error) || '保存失败' };
       } catch (e) { return { error: 'Excel 生成失败: ' + String((e && e.message) || e) }; }
     }
     async function toolOpenBoard(a) {

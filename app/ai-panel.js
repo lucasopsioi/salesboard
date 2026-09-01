@@ -475,6 +475,8 @@
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
       optionsDirect: async (field) => AD.dispatchTool(registry, { tool: 'options', args: { field } }),
       provRetry: true,
+      // 云端 API 才开并行（本地 LM Studio / CorpLink CLI 单通道，并发会排队冻住）
+      parallel: ['deepseek', 'minimax', 'anthropic', 'openai'].indexOf(cfg.provider) >= 0,
       chat: async p => {
         if (cfg.provider === 'corplink') return cliChat(cfg, p);
         /* reasoning 模型(v4-pro/reasoner/思考版)的思考链与答案共用 max_tokens——

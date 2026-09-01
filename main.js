@@ -269,6 +269,24 @@ ipcMain.handle('saveFile', async (_e, name, b64, mime) => {
   fs.writeFileSync(r.filePath, Buffer.from(b64, 'base64'));
   return { path: r.filePath };
 });
+/* AI 产出文件免对话框直存（2026-09-01 用户「看不到文件存哪了」）：
+   固定落 文档\销售团队-AI输出\，重名自动加时间戳；渲染层用返回的 path 画文件卡片 */
+ipcMain.handle('aiSaveOutput', async (_e, name, b64) => {
+  try {
+    const dir = path.join(app.getPath('documents'), '销售团队-AI输出');
+    fs.mkdirSync(dir, { recursive: true });
+    const safe = String(name || 'AI输出').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80);
+    let p = path.join(dir, safe);
+    if (fs.existsSync(p)) {
+      const ext = path.extname(safe), stem = safe.slice(0, safe.length - ext.length);
+      p = path.join(dir, stem + '_' + new Date().toISOString().slice(11, 19).replace(/:/g, '') + ext);
+    }
+    fs.writeFileSync(p, Buffer.from(String(b64 || ''), 'base64'));
+    return { path: p, dir };
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+});
+ipcMain.handle('openPathAbs', (_e, p) => { try { shell.openPath(String(p || '')); return { ok: true }; } catch (e) { return { error: String(e) }; } });
+ipcMain.handle('revealPath', (_e, p) => { try { shell.showItemInFolder(String(p || '')); return { ok: true }; } catch (e) { return { error: String(e) }; } });
 /* ---- 音频周报(纯新增 IPC,不动任何现有通道) ---- */
 // 附件拷入 App 数据目录(userData/audio-attachments),引用存周报存档,随存档走
 ipcMain.handle('audioAttachPick', async () => {
@@ -364,9 +382,60 @@ function parseDocFile(p2) {
     }
     const truncated = content.length > 60000;
     if (truncated) content = content.slice(0, 60000);
-    return { name: path.basename(p2), content, truncated };
+    return { name: path.basename(p2), content, truncated, srcPath: p2 };
   } catch (e) { return { error: String((e && e.message) || e) }; }
 }
+/* ---- PPT 模板体系(2026-09-01)：上传 PPT → AI 识别数据字段做成可刷新模板 ----
+   模板=源 pptx 拷贝 + bindings.json，存 userData/ppt-templates/；
+   刷新=按绑定重查数据 → 原位替换文本重打包（版式 100% 保真）→ 存 文档\销售团队-AI输出\ */
+const OSC = require(path.join(__dirname, 'app', 'office-struct-core.js'));
+function tplDir() { const d = path.join(ud(), 'ppt-templates'); fs.mkdirSync(d, { recursive: true }); return d; }
+ipcMain.handle('pptStructure', (_e, p2) => {
+  try {
+    p2 = String(p2 || '');
+    if (!/\.pptx$/i.test(p2) || !fs.existsSync(p2)) return { error: '需要一个存在的 .pptx 文件' };
+    if (fs.statSync(p2).size > 30 * 1024 * 1024) return { error: 'PPT 超过 30MB' };
+    return OSC.extractPptStructure(fs.readFileSync(p2));
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+});
+ipcMain.handle('pptTplSave', (_e, name, srcPath, bindings) => {
+  try {
+    if (!fs.existsSync(String(srcPath || ''))) return { error: '源 PPT 文件已不在原位置，请重新上传后再保存模板' };
+    const id = 'tpl' + Date.now().toString(36);
+    fs.copyFileSync(srcPath, path.join(tplDir(), id + '.pptx'));
+    const meta = { id, name: String(name || '未命名模板').slice(0, 40), srcName: path.basename(srcPath), createdAt: new Date().toISOString().slice(0, 10), bindings: bindings || [] };
+    fs.writeFileSync(path.join(tplDir(), id + '.json'), JSON.stringify(meta, null, 1));
+    return { ok: true, id, name: meta.name };
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+});
+ipcMain.handle('pptTplList', () => {
+  try {
+    return fs.readdirSync(tplDir()).filter(f => f.endsWith('.json')).map(f => {
+      try { const m = JSON.parse(fs.readFileSync(path.join(tplDir(), f), 'utf8')); return { id: m.id, name: m.name, srcName: m.srcName, createdAt: m.createdAt, fields: (m.bindings || []).filter(b => b.kind === 'data').length }; }
+      catch (e) { return null; }
+    }).filter(Boolean);
+  } catch (e) { return []; }
+});
+ipcMain.handle('pptTplGet', (_e, id) => {
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(tplDir(), String(id) + '.json'), 'utf8'));
+    return m;
+  } catch (e) { return { error: '模板不存在: ' + id }; }
+});
+ipcMain.handle('pptTplApply', (_e, id, repls, outName) => {
+  try {
+    const src = path.join(tplDir(), String(id) + '.pptx');
+    if (!fs.existsSync(src)) return { error: '模板源文件缺失: ' + id };
+    const out = OSC.replacePptTexts(fs.readFileSync(src), Array.isArray(repls) ? repls : []);
+    const dir = path.join(app.getPath('documents'), '销售团队-AI输出');
+    fs.mkdirSync(dir, { recursive: true });
+    const safe = String(outName || '模板刷新').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+    let p = path.join(dir, safe + '.pptx');
+    if (fs.existsSync(p)) p = path.join(dir, safe + '_' + new Date().toISOString().slice(11, 19).replace(/:/g, '') + '.pptx');
+    fs.writeFileSync(p, out);
+    return { ok: true, path: p };
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+});
 ipcMain.handle('readLocalDoc', async () => {
   try {
     const r = await dialog.showOpenDialog(win, {

@@ -69,8 +69,9 @@
       s.files.push({ name: r.name, kind: 'image', dataUrl: r.dataUrl, content: '' });
       s.msgs.push({ role: 'sys', content: '🖼 已附加图片「' + r.name + '」——发送提问时先由当前模型识图转述（需多模态模型，如 deepseek v4-pro），转述文本供全体专家引用。' });
     } else {
-      s.files.push({ name: r.name, content: r.content });
-      s.msgs.push({ role: 'sys', content: '📎 已附加文档「' + r.name + '」（' + Math.round(r.content.length / 1000) + 'K 字符' + (r.truncated ? '，超长已截断' : '') + '）——本会话后续提问都能引用它。' });
+      s.files.push({ name: r.name, content: r.content, srcPath: r.srcPath || '' });
+      const pptHint = /\.pptx$/i.test(r.name) ? ' 想把它做成可刷新的数据模板？直接说「把这个PPT做成模板」。' : '';
+      s.msgs.push({ role: 'sys', content: '📎 已附加文档「' + r.name + '」（' + Math.round(r.content.length / 1000) + 'K 字符' + (r.truncated ? '，超长已截断' : '') + '）——本会话后续提问都能引用它。' + pptHint });
     }
     renderChat(); renderTopbar();
     return true;
@@ -98,6 +99,86 @@
   }
   function toastSafe(t) { try { typeof toast === 'function' ? toast(t, 'err') : alert(t); } catch (e) {} }
 
+  // Agent 总控分工逻辑在 chat-context-core.js（双端同源，连通性测试跑同一份）
+  function masterPlan(q, files) { return window.ChatCtx && window.ChatCtx.masterPlan ? window.ChatCtx.masterPlan(q, files) : null; }
+
+  /* ---------- PPT 模板流程拦截（2026-09-01）：学习/答疑/保存/刷新/列表 ----------
+     命中即整段接管（不走 orchestrate），过程事件进 flowLive 全程可视。 */
+  async function tplIntercept(s, q, sid) {
+    const flow = (t) => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.flowLive.push(t); if (AC.cur === sid) renderChat(); } };
+    const sys = (t) => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.msgs.push({ role: 'sys', content: t }); if (AC.cur === sid) renderChat(); } };
+    const fileCard = (p) => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.msgs.push({ role: 'file', file: p }); if (AC.cur === sid) renderChat(); } };
+    const done = () => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.busy = false; ss.flowLive = []; } renderAll(); };
+    const deps = () => window.AIPanel.makeOrchDeps(cfg(), () => {});
+
+    // —— 会话里有待答疑的模板：本条消息按「答疑/保存/取消」处理 ——
+    if (s.pendingTpl) {
+      try {
+        const save = q.match(/(?:保存|存成?|确认)(?:为|成)?模板[：:，,\s]*([^\s，。,]{0,30})/);
+        if (save || /^(保存|确认|就这样|可以|OK|ok)$/.test(q.trim())) {
+          const name = (save && save[1]) || s.pendingTpl.srcName.replace(/\.pptx$/i, '');
+          const r = await window.sb.pptTplSave(name, s.pendingTpl.srcPath, s.pendingTpl.bindings);
+          if (r && r.ok) { sys('💾 模板「' + r.name + '」已保存（' + s.pendingTpl.bindings.filter(b => b.kind === 'data').length + ' 个数据字段）。以后说「用模板 ' + r.name + ' 刷新」即可一键出最新数据的 PPT。'); s.pendingTpl = null; }
+          else sys('⚠ 保存失败：' + ((r && r.error) || '未知错误'));
+          return done(), true;
+        }
+        if (/^(取消|算了|不要了|不弄了)/.test(q.trim())) { s.pendingTpl = null; sys('已取消模板制作。'); return done(), true; }
+        // 其余一律当答疑 → 精修绑定
+        flow('🔧 合并你的口径说明…');
+        const r2 = await window.PptTpl.refine(deps(), s.pendingTpl.bindings, q, flow);
+        if (r2.error) { sys('⚠ ' + r2.error); return done(), true; }
+        s.pendingTpl.bindings = r2.bindings;
+        s.pendingTpl.questions = r2.bindings.filter(b => b.kind === 'data' && b.confidence === 'low' && b.question);
+        sys(window.PptTpl.report(s.pendingTpl.bindings, s.pendingTpl.questions));
+        return done(), true;
+      } catch (e) { sys('⚠ 出错：' + String((e && e.message) || e)); return done(), true; }
+    }
+
+    // —— 学习：把上传的 PPT 做成模板 ——
+    if (/(做成|变成|学成|生成|建)[个一]?.{0,3}模板|学习?这个PPT|按(照)?这个PPT.{0,8}(格式|模板)/i.test(q)) {
+      const f = [...s.files].reverse().find(x => /\.pptx$/i.test(x.name) && x.srcPath);
+      if (!f) { sys('要先 📎 上传（或拖入）一个 .pptx 文件我才能学它。'); return done(), true; }
+      try {
+        flow('📂 读取 ' + f.name + ' …');
+        const st = await window.sb.pptStructure(f.srcPath);
+        if (!st || st.error) { sys('⚠ 解析失败：' + ((st && st.error) || '未知') + '（若文件已移动请重新上传）'); return done(), true; }
+        const r = await window.PptTpl.learn(deps(), st, flow);
+        if (r.error) { sys('⚠ ' + r.error); return done(), true; }
+        s.pendingTpl = { srcPath: f.srcPath, srcName: f.name, bindings: r.bindings, questions: r.questions };
+        sys(window.PptTpl.report(r.bindings, r.questions));
+      } catch (e) { sys('⚠ 出错：' + String((e && e.message) || e)); }
+      return done(), true;
+    }
+
+    // —— 刷新：用模板出最新数据 PPT ——
+    if (/(用|套).{0,10}模板|模板.{0,4}(刷新|更新|出|生成)|刷新.{0,6}模板/.test(q)) {
+      try {
+        const list = await window.sb.pptTplList();
+        if (!list || !list.length) { sys('还没有保存过模板。先上传一个 PPT 说「把这个PPT做成模板」。'); return done(), true; }
+        let tpl = list.find(t => q.indexOf(t.name) >= 0);
+        if (!tpl && list.length === 1) tpl = list[0];
+        if (!tpl) { sys('有多个模板，请指名用哪个：\n' + list.map(t => '· ' + t.name + '（' + t.fields + ' 个字段，' + t.createdAt + '）').join('\n')); return done(), true; }
+        const meta = await window.sb.pptTplGet(tpl.id);
+        if (!meta || meta.error) { sys('⚠ ' + ((meta && meta.error) || '模板读取失败')); return done(), true; }
+        const rr = await window.PptTpl.refresh(deps, meta, flow);
+        if (rr.error) { sys('⚠ ' + rr.error); return done(), true; }
+        flow('📝 原位替换文本并重打包（版式不动）…');
+        const out = await window.sb.pptTplApply(tpl.id, rr.repls, tpl.name + '_' + new Date().toISOString().slice(0, 10));
+        if (out && out.ok) { sys('✅ 模板「' + tpl.name + '」已按最新数据刷新（' + rr.repls.length + ' 处更新）。'); fileCard(out.path); }
+        else sys('⚠ 生成失败：' + ((out && out.error) || '未知'));
+      } catch (e) { sys('⚠ 出错：' + String((e && e.message) || e)); }
+      return done(), true;
+    }
+
+    // —— 列表 ——
+    if (/(有哪些|列出|查看|看看).{0,4}模板|模板列表/.test(q)) {
+      const list = await window.sb.pptTplList();
+      sys(list && list.length ? ('📋 已保存的模板：\n' + list.map(t => '· ' + t.name + '（' + t.fields + ' 个数据字段，' + t.createdAt + '，源：' + t.srcName + '）').join('\n') + '\n说「用模板 名字 刷新」即可出最新 PPT。') : '还没有模板。上传一个 PPT 说「把这个PPT做成模板」即可创建。');
+      return done(), true;
+    }
+    return false;
+  }
+
   // ---------- 发送（每会话独立并行） ----------
   async function send() {
     const s = curS(); if (!s) return;
@@ -115,6 +196,8 @@
     s.msgs.push({ role: 'user', content: q });
     s.busy = true; s.flowLive = [];
     renderAll();
+    // PPT 模板流程（学习/答疑/保存/刷新/列表）命中即整段接管
+    try { if (await tplIntercept(s, q, s.id)) return; } catch (e) {}
 
     // 组装完整问题：文档前缀 + 会话历史 + 当前问题（专家与综合器都可见；实体检索照常工作）
     let fullQ = hist ? hist + '【当前问题】' + q : q;
@@ -127,6 +210,11 @@
     const onProg = e => {
       try { window.AgentBoard && window.AgentBoard.feed(e); } catch (e2) {}
       const ss = AC.sessions.find(x => x.id === sid); if (!ss) return;
+      if (e.type === 'toolDone' && e.file) {
+        // AI 产出了文件 → 立即在对话里落一张文件卡片（可打开/定位）
+        ss.msgs.push({ role: 'file', file: e.file });
+        if (AC.cur === sid) renderChat();
+      }
       const label = e.type === 'plan' ? ('🧭 路由：' + (e.tasks || []).join(' → '))
         : e.type === 'agentStart' ? ('🤖 ' + e.agent + ' 分析中…')
         : e.type === 'tool' ? ('　🔧 ' + e.tool)
@@ -159,8 +247,19 @@
         const docs2 = s.files.map(f => '【用户上传文档：' + f.name + '】\n' + f.content).join('\n\n');
         fullQ = docs2.slice(0, 80000) + '\n\n' + hist + '【当前问题】' + q;
       }
+      // 总控分工：未手选专家且材料可拆（多 sheet/多文档）→ 并行派工；材料已拆进各任务，主问题不再重复注入全量文档
+      let forceTasks = null, orchQ = fullQ;
+      if (!force) {
+        const plan = masterPlan(q, s.files);
+        if (plan) {
+          forceTasks = plan.tasks;
+          orchQ = (hist || '') + '【当前问题】' + q;
+          const ss1 = AC.sessions.find(x => x.id === sid);
+          if (ss1) { ss1.flowLive.push('🧠 总控：' + plan.note); if (AC.cur === sid) renderChat(); }
+        }
+      }
       try { window.AgentBoard && window.AgentBoard.feed({ type: 'ask', q }); } catch (e) {}
-      const out = await window.AIOrch.orchestrate(fullQ, null, deps, { mode: force && force.length > 1 ? 'deep' : 'fast', forceAgents: force });
+      const out = await window.AIOrch.orchestrate(orchQ, null, deps, { mode: forceTasks ? 'deep' : (force && force.length > 1 ? 'deep' : 'fast'), forceAgents: force, forceTasks });
       try { window.AgentBoard && window.AgentBoard.feed({ type: 'done' }); } catch (e) {}
       const ss = AC.sessions.find(x => x.id === sid); if (!ss) return;
       ss.msgs.push({ role: 'ai', content: out.answer || '(空回复)', flow: ss.flowLive.slice() });
@@ -232,9 +331,15 @@
     const el = document.getElementById('acMsgs'); if (!el) return;
     const s = curS();
     if (!s) { el.innerHTML = ''; return; }
-    let h = s.msgs.map(m => {
+    let h = s.msgs.map((m, mi) => {
       if (m.role === 'user') return '<div class="ac-b u">' + esc(m.content) + '</div>';
       if (m.role === 'sys') return '<div class="ac-b s">' + esc(m.content) + '</div>';
+      if (m.role === 'file') {
+        const base = String(m.file || '').split(/[\\/]/).pop();
+        return '<div class="ac-b f" data-mi="' + mi + '"><span class="ac-fico">' + (/\.pptx?$/i.test(base) ? '📊' : /\.xlsx?$/i.test(base) ? '📗' : '📄') + '</span>' +
+          '<span class="ac-fname" title="' + esc(m.file) + '">' + esc(base) + '</span>' +
+          '<button class="btn ghost ac-fopen">打开</button><button class="btn ghost ac-freveal">所在文件夹</button></div>';
+      }
       const flow = (m.flow && m.flow.length) ? ('<details class="ac-flow"><summary>🛠 执行过程（' + m.flow.length + ' 步）</summary><div>' + m.flow.map(esc).join('<br>') + '</div></details>') : '';
       return '<div class="ac-b a">' + flow + md(m.content) + '</div>';
     }).join('');
@@ -242,6 +347,12 @@
       h += '<div class="ac-b a ac-live"><div class="ac-flowlive">' + (s.flowLive.length ? s.flowLive.map(esc).join('<br>') : '正在规划…') + '</div></div>';
     }
     el.innerHTML = h || '<div class="ac-empty">选好专家（或用自动路由）直接提问。<br>可 📎 上传文档、让我出 PPT / Excel、多开会话并行跑。</div>';
+    el.querySelectorAll('.ac-b.f').forEach(n => {
+      const m = s.msgs[+n.getAttribute('data-mi')]; if (!m) return;
+      const open = n.querySelector('.ac-fopen'), rev = n.querySelector('.ac-freveal');
+      if (open) open.onclick = () => { try { window.sb.openPathAbs(m.file); } catch (e) {} };
+      if (rev) rev.onclick = () => { try { window.sb.revealPath(m.file); } catch (e) {} };
+    });
     el.scrollTop = el.scrollHeight;
   }
   function renderAll() { renderSessions(); renderTopbar(); renderChat(); }
@@ -322,6 +433,10 @@
       '.ac-empty{margin:auto;text-align:center;color:var(--ink3);font-size:13px;line-height:2}' +
       '.ac-input{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}' +
       '.ac-input textarea{flex:1;resize:none;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--c-bg-elev);color:inherit;font-size:13px;font-family:inherit}' +
+      '.ac-b.f{align-self:flex-start;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:8px 12px}' +
+      '.ac-fico{font-size:20px}' +
+      '.ac-fname{font-size:12px;font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '.ac-b.f .btn{font-size:11px;padding:3px 8px}' +
       '#view-agentchat{position:relative}' +
       '#view-agentchat.ac-dropping::after{content:"📎 松手把文件交给 AI 阅读（xlsx / pptx / docx / txt / 图片）";position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;border:2px dashed #C7000B;border-radius:14px;background:var(--c-bg-elev);opacity:.96;font-size:15px;color:#C7000B;z-index:30;pointer-events:none}';
     document.head.appendChild(css);

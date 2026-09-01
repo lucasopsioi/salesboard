@@ -336,11 +336,25 @@
     el.innerHTML = '<button class="btn" id="acNew" style="width:100%;margin-bottom:8px">＋ 新对话</button>' +
       AC.sessions.map(s =>
         '<div class="ac-sess' + (s.id === AC.cur ? ' active' : '') + '" data-sid="' + s.id + '">' +
-          (s.busy ? '<span class="ac-spin"></span>' : '💬 ') + esc(s.title) +
-          (s.files.length ? ' 📎' + s.files.length : '') +
+          '<span class="ac-sess-t">' + (s.busy ? '<span class="ac-spin"></span>' : '💬 ') + esc(s.title) +
+          (s.files.length ? ' 📎' + s.files.length : '') + '</span>' +
+          '<span class="ac-del" data-del="' + s.id + '" title="删除该会话（含全部历史）">✕</span>' +
         '</div>').join('');
     el.querySelector('#acNew').onclick = newSession;
     el.querySelectorAll('.ac-sess').forEach(n => { n.onclick = () => { AC.cur = n.getAttribute('data-sid'); renderAll(); persist(); }; });
+    el.querySelectorAll('.ac-del').forEach(n => {
+      n.onclick = (ev) => {
+        ev.stopPropagation();                       // 别触发会话切换
+        const id = n.getAttribute('data-del');
+        const s2 = AC.sessions.find(x => x.id === id); if (!s2) return;
+        if (s2.busy) { toastSafe('该会话正在运行，等它结束再删'); return; }
+        if (!confirm('删除会话「' + s2.title + '」？其全部历史与附件将一并删除，不可恢复。')) return;
+        AC.sessions = AC.sessions.filter(x => x.id !== id);
+        if (AC.cur === id) AC.cur = AC.sessions.length ? AC.sessions[0].id : null;
+        if (!AC.sessions.length) { newSession(); return; }   // newSession 里已 renderAll+persist
+        renderAll(); persist();
+      };
+    });
   }
   function renderTopbar() {
     const el = document.getElementById('acTop'); if (!el) return;
@@ -458,7 +472,11 @@
     css.textContent =
       '.ac-wrap{display:flex;height:100%;min-height:0}' +
       '.ac-left{width:220px;flex:none;border-right:1px solid var(--line);padding:12px;overflow-y:auto}' +
-      '.ac-sess{padding:8px 10px;border-radius:8px;font-size:12px;cursor:pointer;margin-bottom:4px;border:1px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.ac-sess{display:flex;align-items:center;gap:4px;padding:8px 10px;border-radius:8px;font-size:12px;cursor:pointer;margin-bottom:4px;border:1px solid transparent}' +
+      '.ac-sess-t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.ac-del{flex:none;width:18px;height:18px;line-height:18px;text-align:center;border-radius:5px;color:var(--ink3);opacity:0;font-size:11px}' +
+      '.ac-sess:hover .ac-del{opacity:.75}' +
+      '.ac-del:hover{background:#C7000B18;color:#C7000B;opacity:1}' +
       '.ac-sess:hover{background:var(--panel)}' +
       '.ac-sess.active{border-color:#C7000B55;background:var(--panel)}' +
       '.ac-spin{display:inline-block;width:10px;height:10px;border:2px solid #C7000B;border-top-color:transparent;border-radius:50%;animation:acspin 1s linear infinite;margin-right:5px;vertical-align:-1px}' +

@@ -148,7 +148,7 @@
       const vals = [].concat(b.filters[k] || []);
       if (!vals.length) continue;
       let opts = [];
-      try { const r = await deps.optionsDirect(k); opts = (r && r.values) || (Array.isArray(r) ? r : []) || []; } catch (e) {}
+      try { const r = await deps.optionsDirect(k); opts = (r && (r.values || r['取值'] || r.options)) || (Array.isArray(r) ? r : []) || []; } catch (e) {}
       if (!opts.length) continue;
       const norm = (s) => String(s).toLowerCase().replace(/[\s_\-/()（）·]/g, '');
       for (let i = 0; i < vals.length; i++) {
@@ -161,6 +161,125 @@
       b.filters[k] = vals;
     }
     return true;
+  }
+
+  /* ---------- 图表绑定 Agent + 核数闸（2026-09-01 用户「图表能接PSI底数据吗,准确度是大问题」）----------
+     流程：LLM 按图表的类目/系列/数值样本提议绑定 → 用引擎真跑该绑定拿矩阵 →
+     与原图数值逐点对数（容差5%，命中率≥70%）→ 通过才绑定（数据自动最新），
+     不过保持静态并把差异明细列成问题——绝不让一个对不上数的绑定悄悄上线。 */
+  const CHART_BIND_SYS = [
+    '你是图表数据绑定分析师。给你一个 PPT 图表的类目、系列名与数值，判断它是否对应系统数据接口，并给出绑定：',
+    '{"dataset":"psi","measure":"sellOut|sellIn|inv|dos","catField":"period","legend":"line|family|series|country|rep|channel","filters":{...},"gran":"month|week|day"}',
+    'catField=period 表示横轴是时间；legend 是系列拆分维度（单系列可省）。filters 取值必须与目录写法一致。',
+    '类目形如「1月/2月」「2026-01」是时间；系列名对应产品/产线/国家等维度成员。',
+    '判定纪律：你只负责把图表翻译成最可能的绑定候选——「到底是不是系统数据」由系统用真实数据逐点核验（核不过自动保持静态），你不必替系统拒绝。只要类目是时间序列、系列名像产线/系列/国家维度成员，就必须给出绑定候选；仅当完全无法构造（如类目是竞品名、纯目标推演）才答 {"kind":"static"}。',
+    '只输出一个 JSON 对象。',
+  ].join('\n');
+  function normCat(c) {
+    const s = String(c == null ? '' : c);
+    const ym = s.match(/(20\d{2})[-/年]?(\d{1,2})/);
+    if (ym) return ym[1] + '-' + String(+ym[2]).padStart(2, '0');
+    const m = s.match(/^(\d{1,2})\s*月$/);
+    if (m) return 'M' + (+m[1]);
+    return s.trim();
+  }
+  /* 绑定确定性纠偏：filters 值规整为数组；值在指定维度查无 → 跨七维定位唯一命中后迁移键
+     （模型常把 line 成员放进 series——引擎报错都指了路，代码直接照办），legend 同步跟随。 */
+  const DIM_KEYS = ['line', 'family', 'series', 'product', 'country', 'rep', 'channel'];
+  async function normalizeChartBinding(deps, b) {
+    if (!b) return b;
+    b.filters = b.filters || {};
+    const norm = (s) => String(s).toLowerCase().replace(/[\s_\-/()（）·]/g, '');
+    const optCache = {};
+    const getOpts = async (k) => {
+      if (optCache[k]) return optCache[k];
+      let o = [];
+      try { const r = await deps.optionsDirect(k); o = (r && (r.values || r['取值'] || r.options)) || (Array.isArray(r) ? r : []) || []; } catch (e) {}
+      return (optCache[k] = o);
+    };
+    for (const k of Object.keys(b.filters)) {
+      let vals = [].concat(b.filters[k] || []).filter(v => v != null && v !== '');
+      if (!vals.length) { delete b.filters[k]; continue; }
+      const opts = await getOpts(k);
+      const fixed = [];
+      for (const v of vals) {
+        if (opts.indexOf(v) >= 0) { fixed.push(v); continue; }
+        const hit = opts.filter(o => norm(o) === norm(v) || norm(o).indexOf(norm(v)) >= 0 || norm(v).indexOf(norm(o)) >= 0);
+        if (hit.length === 1) { fixed.push(hit[0]); continue; }
+        // 本维度查无 → 跨维度找唯一归属并迁移
+        let moved = false;
+        for (const k2 of DIM_KEYS) {
+          if (k2 === k) continue;
+          const o2 = await getOpts(k2);
+          const h2 = o2.filter(o => norm(o) === norm(v) || norm(o).indexOf(norm(v)) >= 0);
+          if (h2.length === 1) {
+            b.filters[k2] = [].concat(b.filters[k2] || [], h2[0]);
+            if (b.legend === k) b.legend = k2;
+            moved = true; break;
+          }
+        }
+        if (!moved) fixed.push(v);   // 留着让核数闸报出去
+      }
+      if (fixed.length) b.filters[k] = fixed; else delete b.filters[k];
+    }
+    // legend 维度上没有过滤值且系列只有一个成员时，legend 对齐 filters 里唯一的维度键
+    if (b.legend && !b.filters[b.legend]) {
+      const ks = Object.keys(b.filters);
+      if (ks.length === 1) b.legend = ks[0];
+    }
+    return b;
+  }
+  async function verifyChartBinding(deps, binding, chart) {
+    if (!deps.runTool || !binding || !binding.measure) return { ok: false, reason: '无法核验（缺取数通道）' };
+    let res;
+    try {
+      res = await deps.runTool('query', {
+        stackDim: binding.legend || 'line',
+        metric: binding.measure, gran: binding.gran || 'month',
+        filters: binding.filters || {},
+      });
+    } catch (e) { return { ok: false, reason: '取数失败: ' + String((e && e.message) || e) }; }
+    if (!res || res.error || !res.data) return { ok: false, reason: '取数失败: ' + ((res && res.error) || '空返回') };
+    const engRaw = res.buckets || res.cats || [];
+    // 引擎矩阵: res.cats(期间桶)+res.data{series:{cat:val}} → 与原图逐点对数
+    const engCats = engRaw.map(normCat);
+    const srcCats = (chart.cats || []).map(normCat);
+    let hit = 0, total = 0;
+    const diffs = [];
+    chart.series.forEach(se => {
+      // 系列名宽松对齐引擎系列
+      const norm = (x) => String(x).toLowerCase().replace(/[\s_\-/()（）·]/g, '');
+      const engName = Object.keys(res.data || {}).find(k => norm(k) === norm(se.name) || norm(k).indexOf(norm(se.name)) >= 0 || norm(se.name).indexOf(norm(k)) >= 0);
+      const row = engName ? res.data[engName] : null;
+      se.values.forEach((v, i) => {
+        total++;
+        const cat = srcCats[i];
+        // 无年份类目(「1月」)从后往前对齐——引擎桶含多年时优先最近年份(正序曾撞上2025-01把真值判成对不上)
+        let ei = -1;
+        for (let j = engCats.length - 1; j >= 0; j--) {
+          const c = engCats[j];
+          if (c === cat || c.endsWith(cat) || (cat[0] === 'M' && c.endsWith('-' + String(cat.slice(1)).padStart(2, '0')))) { ei = j; break; }
+        }
+        const rawKey = ei >= 0 ? engRaw[ei] : null;
+        const evv = (row && rawKey != null && row[rawKey] != null) ? +row[rawKey] : null;
+        if (evv != null && isFinite(evv) && Math.abs(evv - v) / Math.max(Math.abs(v), 1) <= 0.05) hit++;
+        else diffs.push(se.name + '@' + (chart.cats[i] || i) + ': 图=' + v + ' 系统=' + (evv == null ? '无' : evv));
+      });
+    });
+    const rate = total ? hit / total : 0;
+    return { ok: rate >= 0.7, rate: +(rate * 100).toFixed(0), diffs: diffs.slice(0, 6), reason: rate >= 0.7 ? '' : ('数值对不上（命中率 ' + (rate * 100).toFixed(0) + '%）') };
+  }
+  async function chartBindAgent(deps, chart, catalogBrief) {
+    const sample = '类目: ' + chart.cats.join('/') + '\n' +
+      chart.series.map(se => '系列「' + se.name + '」: ' + se.values.join(',')).join('\n');
+    const resp = await deps.chat({
+      system: CHART_BIND_SYS,
+      messages: [{ role: 'user', content: sample + '\n\n【数据目录概要】\n' + catalogBrief }],
+      tools: [], maxTokens: 800,
+    });
+    if (!resp || resp.error) return null;
+    const b = pickJson(resp.content);
+    return (b && b.dataset && b.measure) ? b : null;
   }
 
   /* ---------- 页间逻辑 Agent ---------- */
@@ -215,6 +334,28 @@
       });
       const t0 = shapes.find(s => s.type === 'text' && s.text);
       titles.push(t0 ? t0.text.split('\n')[0].slice(0, 30) : ('第' + (si + 1) + '页'));
+
+      // 图表绑定 Agent + 核数闸：提议绑定→引擎真跑→与原图数值逐点对数→通过才接活接口
+      if (deps.chat && deps.runTool) {
+        for (const pe of pageEls) {
+          if (!(pe.sh.type === 'graphic' && pe.sh.chart && pe.sh.chart.series && pe.sh.chart.series.length)) continue;
+          const chartEl = pe.els.find(e => e.type === 'chart');
+          if (!chartEl) continue;
+          onFlow('📊 图表绑定 Agent（第' + (si + 1) + '页）：提议数据接口…');
+          let bind = await chartBindAgent(deps, pe.sh.chart, catalogBrief);
+          if (!bind || bind.kind === 'static') { onFlow('　→ 判定为静态图表（目标值/手工推演类），保持原数据'); continue; }
+          bind = await normalizeChartBinding(deps, bind);
+          const ver = await verifyChartBinding(deps, bind, pe.sh.chart);
+          if (ver.ok) {
+            chartEl.binding = bind;               // 有 binding 设计器即走活数据渲染，el.data 保留兜底
+            dataN++;
+            onFlow('　✅ 核数通过（命中率 ' + ver.rate + '%）→ 图表已接 ' + bind.dataset + '/' + bind.measure + ' 实时接口');
+          } else {
+            questions.push({ page: si + 1, text: '图表', question: '第' + (si + 1) + '页图表提议绑定 ' + JSON.stringify(bind) + ' 但' + ver.reason + (ver.diffs && ver.diffs.length ? ('；差异样本：' + ver.diffs.join('；')) : '') + '。图表暂保持静态原数据——请确认口径后再绑，或就保持静态。', binding: bind });
+            onFlow('　⚠ 核数不过（' + ver.reason + '）→ 保持静态，已列入待确认');
+          }
+        }
+      }
 
       // 2) 数据识别（本页候选：含数字的文本 + 表格）
       const cands = [];

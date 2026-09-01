@@ -2,7 +2,8 @@
    Salesboard — Agent 对话看板（2026-08-31 用户需求，第 17 视图）
    多路会话并行 × 点选专家定向作答 × 模型快切 × 本地文档上传 × PPT/Excel 输出。
    编排复用 AIPanel.makeOrchDeps（护栏/门禁/实体检索全链同源）；
-   会话仅内存，每会话独立 busy——多个 Agent 集群可同时跑。
+   会话持久化到 localStorage['sb.agentchat']（升级/重启不丢，图片附件除外）；
+   每会话独立 busy——多个 Agent 集群可同时跑。
    ============================================================ */
 'use strict';
 (function () {
@@ -19,12 +20,60 @@
   }
   function cfg() { return window.AIPanel && window.AIPanel.loadCfg ? window.AIPanel.loadCfg() : {}; }
 
+  /* ---------- 会话持久化（2026-09-01 用户「发新版历史对话就没了」）----------
+     存 localStorage['sb.agentchat']——sb. 前缀自动进版本化存档并升级继承。
+     图片 dataUrl 不落盘（体积大且可重传）；busy/flowLive 是运行态不存。 */
+  const STORE_KEY = 'sb.agentchat';
+  let persistT = null;
+  function persist() {
+    clearTimeout(persistT);
+    persistT = setTimeout(() => {
+      try {
+        let sessions = AC.sessions.map(s => ({
+          id: s.id, title: s.title, histNote: s.histNote || '',
+          agents: [...s.agents],
+          msgs: s.msgs.slice(-200),
+          files: s.files.map(f => f.kind === 'image'
+            ? { name: f.name, kind: 'image', content: '', dataUrl: '' }   // 图片重启后需重传
+            : { name: f.name, content: f.content, srcPath: f.srcPath || '' }),
+          pendingTpl: s.pendingTpl || null,
+        }));
+        let json = JSON.stringify({ seq: AC.seq, cur: AC.cur, sessions });
+        while (json.length > 2500000 && sessions.length > 1) {   // 总量治理：超 2.5MB 丢最旧会话
+          sessions = sessions.slice(0, -1);
+          json = JSON.stringify({ seq: AC.seq, cur: AC.cur, sessions });
+        }
+        localStorage.setItem(STORE_KEY, json);
+      } catch (e) {}
+    }, 600);
+  }
+  function restore() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return false;
+      const o = JSON.parse(raw);
+      if (!o || !Array.isArray(o.sessions) || !o.sessions.length) return false;
+      AC.seq = o.seq || (o.sessions.length + 1);
+      AC.sessions = o.sessions.map(s => ({
+        id: s.id, title: s.title, histNote: s.histNote || '',
+        agents: new Set(s.agents || []),
+        msgs: (s.msgs || []).filter(m => m && m.role),
+        files: (s.files || []).filter(f => f && !f.kind),      // 图片附件失效丢弃
+        pendingTpl: s.pendingTpl || null,
+        busy: false, flowLive: [],
+      }));
+      AC.cur = AC.sessions.some(x => x.id === o.cur) ? o.cur : AC.sessions[0].id;
+      return true;
+    } catch (e) { return false; }
+  }
+
   // ---------- 会话管理 ----------
   function newSession() {
     const s = { id: 'S' + (AC.seq++), title: '对话 ' + (AC.seq - 1), msgs: [], busy: false, agents: new Set(), files: [], flowLive: [], histNote: '' };
     AC.sessions.unshift(s);
     AC.cur = s.id;
     renderAll();
+    persist();
     return s;
   }
   function curS() { return AC.sessions.find(x => x.id === AC.cur) || null; }
@@ -74,6 +123,7 @@
       s.msgs.push({ role: 'sys', content: '📎 已附加文档「' + r.name + '」（' + Math.round(r.content.length / 1000) + 'K 字符' + (r.truncated ? '，超长已截断' : '') + '）——本会话后续提问都能引用它。' + pptHint });
     }
     renderChat(); renderTopbar();
+    persist();
     return true;
   }
   async function uploadDoc() {
@@ -108,7 +158,7 @@
     const flow = (t) => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.flowLive.push(t); if (AC.cur === sid) renderChat(); } };
     const sys = (t) => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.msgs.push({ role: 'sys', content: t }); if (AC.cur === sid) renderChat(); } };
     const fileCard = (p) => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.msgs.push({ role: 'file', file: p }); if (AC.cur === sid) renderChat(); } };
-    const done = () => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.busy = false; ss.flowLive = []; } renderAll(); };
+    const done = () => { const ss = AC.sessions.find(x => x.id === sid); if (ss) { ss.busy = false; ss.flowLive = []; } renderAll(); persist(); };
     const deps = () => window.AIPanel.makeOrchDeps(cfg(), () => {});
 
     // —— 会话里有待答疑的模板：本条消息按「答疑/保存/取消」处理 ——
@@ -270,6 +320,7 @@
       const ss = AC.sessions.find(x => x.id === sid);
       if (ss) { ss.busy = false; ss.flowLive = []; }
       renderAll();
+      persist();
     }
   }
 
@@ -289,7 +340,7 @@
           (s.files.length ? ' 📎' + s.files.length : '') +
         '</div>').join('');
     el.querySelector('#acNew').onclick = newSession;
-    el.querySelectorAll('.ac-sess').forEach(n => { n.onclick = () => { AC.cur = n.getAttribute('data-sid'); renderAll(); }; });
+    el.querySelectorAll('.ac-sess').forEach(n => { n.onclick = () => { AC.cur = n.getAttribute('data-sid'); renderAll(); persist(); }; });
   }
   function renderTopbar() {
     const el = document.getElementById('acTop'); if (!el) return;
@@ -440,7 +491,7 @@
       '#view-agentchat{position:relative}' +
       '#view-agentchat.ac-dropping::after{content:"📎 松手把文件交给 AI 阅读（xlsx / pptx / docx / txt / 图片）";position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;border:2px dashed #C7000B;border-radius:14px;background:var(--c-bg-elev);opacity:.96;font-size:15px;color:#C7000B;z-index:30;pointer-events:none}';
     document.head.appendChild(css);
-    newSession();
+    if (!restore()) newSession();
   }
 
   window.renderAgentChat = function () { build(); renderAll(); };

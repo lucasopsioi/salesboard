@@ -172,7 +172,10 @@ C.Engine.prototype.launchScan = function(p){
     const c=gc[i];
     let it=byCode.get(c);
     if(!it){ it={code:c, si:new Map(), so:new Map(), invByYmd:new Map(),
-                 firstSI:0, firstSO:0, lastSO:0, cumSI:0, cumSO:0, isAudio:false}; byCode.set(c,it); }
+                 firstSI:0, firstSO:0, lastSO:0, cumSI:0, cumSO:0, isAudio:false,
+                 product:(s.dimCode.product&&s.dimDict.product)?s.dimDict.product[s.dimCode.product[i]]:'',
+                 series:(s.dimCode.series&&s.dimDict.series)?s.dimDict.series[s.dimCode.series[i]]:'',
+                 line:(s.dimCode.line&&s.dimDict.line)?s.dimDict.line[s.dimCode.line[i]]:''}; byCode.set(c,it); }
     const si=s.sellIn[i]||0, so=s.sellOut[i]||0, iv=s.inv[i]||0;
     if(si){ it.si.set(mk,(it.si.get(mk)||0)+si); it.cumSI+=si; if(!it.firstSI||y<it.firstSI) it.firstSI=y; }
     if(so){ it.so.set(mk,(it.so.get(mk)||0)+so); it.cumSO+=so; if(!it.firstSO||y<it.firstSO) it.firstSO=y; if(y>it.lastSO) it.lastSO=y; }
@@ -201,7 +204,7 @@ C.Engine.prototype.launchScan = function(p){
     it.so.forEach((v,m)=>{ so[mIdx.get(m)]=Math.round(v); });
     let invYmd=0, invLast=0;
     it.invByYmd.forEach((v,y)=>{ if(y>invYmd){ invYmd=y; invLast=v; } });
-    items.push({ key:gd[it.code], si, so,
+    items.push({product:it.product,series:it.series,line:it.line, key:gd[it.code], si, so,
       cumSI:Math.round(it.cumSI), cumSO:Math.round(it.cumSO),
       invLast:Math.round(invLast), invYmd:fmtY(invYmd),
       firstSI:fmtY(it.firstSI), firstSO:fmtY(it.firstSO), lastSO:fmtY(it.lastSO),

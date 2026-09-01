@@ -86,6 +86,15 @@ const TOOL_SCHEMAS = {
   financeCustom: { description: '经营自定义取数：按财经维度取指定指标。', properties: { rowDim: { type: 'string', enum: ['rep', 'lv1', 'lv2', 'lv3', 'lv4', 'model'] }, metrics: { type: 'array', items: { type: 'string', enum: ['rev', 'gm', 'gmr', 'cp', 'sellIn', 'sellOut', 'nsip', 'bpAttain', 'fcAttain'] } }, fromM: { type: 'integer' }, toM: { type: 'integer' } }, required: ['rowDim'] },
   industryBoard: { description: '产业 4 个 KPI：今年 SI/SO 累计与同比、当前库存与渠道DOS、全流程库存与DOS。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
   industryTrend: { description: '产业趋势：今年 vs 去年同期逐期序列。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
+  roadmapUpsert: {
+    description: '把产品信息写进路标管理(新建或更新)。用户用自然语言/文档描述产品(名称/上市时间/价格/编码/SKU/卖点/EOM等)时，抽取成结构化参数调本工具。白名单外的信息(如 VN1/VN2 编码)放 extras，会存进产品备注绝不丢。路标是用户规划数据，允许代填。',
+    properties: {
+      name: { type: 'string', description: '产品名(必填;已有产品模糊匹配更新,否则新建)' },
+      fields: { type: 'object', description: '可选字段(中文名→键名): 内部编码→internalCode, 认证型号→certModel, 上市/最晚发货→shipLate(YYYY/MM), 最早发货→shipEarly, 停售→salesEnd, EOM/退市计划→eomPlan, 价格/定价→compositeRrpUsd(美元数字), 系列→seriesGroup, 产业→category, PSI关联名→psiLink。凡能对上这些中文名的信息必须用对应键名写进 fields，对不上的才进 extras' },
+      skus: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, color: { type: 'string' }, ram: { type: 'string' }, rom: { type: 'string' }, chip: { type: 'string' }, ean: { type: 'string' } }, required: ['name'] } },
+      sellingPoints: { type: 'array', items: { type: 'string' } },
+      extras: { type: 'object', description: '白名单外的键值(如 VN1编码)，全部存入产品备注' },
+    }, required: ['name'] },
   makeExcel: {
     description: '生成 Excel 文件并自动保存打开。用于「导出/整理成 Excel/表格文件」类请求：先取数，再把数据组织成 sheets(每个 sheet 首行是表头)。',
     properties: {
@@ -703,6 +712,10 @@ const AIData = (function () {
       industryBoard: wrap(a => api.industryBoard(a || {})),
       industryTrend: wrap(a => api.industryTrend(a || {})),
       // 当前看板界面上选了什么（用户说「这个/当前筛选」时先调它）
+      roadmapUpsert: wrap(async (a) => {
+        if (!window.RoadmapAPI) return { error: '路标看板未初始化，请先打开一次路标管理视图' };
+        return window.RoadmapAPI.upsert(a || {});
+      }),
       makeExcel: wrap(toolMakeExcel),
       makePpt: wrap(toolMakePpt),
       openBoard: wrap(toolOpenBoard),

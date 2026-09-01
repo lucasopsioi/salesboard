@@ -85,6 +85,7 @@
           '.rmc-band .lab{position:absolute;right:6px;top:4px;font-size:11px;color:var(--ink2);font-weight:600;background:rgba(255,255,255,.82);padding:1px 6px;border-radius:5px;box-shadow:0 1px 2px rgba(16,24,40,.08)}' +
           '.rmc-box{position:absolute;transform:translate(-50%,-50%);background:var(--c-bg-elev);border:1px solid var(--line);border-radius:9px;padding:5px 8px;box-shadow:var(--shadow);cursor:pointer;font-size:11px;min-width:96px;z-index:3;transition:box-shadow .16s ease,border-color .16s ease,opacity .16s ease,filter .16s ease}' +
           '.rmc-box.rm-dim{filter:grayscale(1);opacity:.28!important}' +
+          '.rmc-box.eomed{filter:grayscale(1);opacity:.45;border-style:dashed}' +
           '.rmc-svg .rml{transition:opacity .16s ease}.rmc-svg .rml.rm-dim{opacity:.12}' +
           '.rmc-svg .rml.rm-hl{stroke:#C7000B;stroke-width:1.8}' +
           '.rmc-box:hover{border-color:var(--red);box-shadow:var(--shadow-l);z-index:5}.rmc-box.missing{opacity:.4}' +
@@ -243,6 +244,29 @@
         + (DET.orphans.length ? '；PSI 里另有 <b>' + DET.orphans.length + '</b> 个产品路标里还没建（' + esc(DET.orphans.slice(0, 5).map(x => x.key).join('、')) + (DET.orphans.length > 5 ? ' 等' : '') + '）' : '')
         + '　·　数据范围 ' + esc((DET.scan.months || [])[0] || '') + ' ~ ' + esc(DET.scan.maxYmd || '')
         + '</div>';
+      /* 可新建路标(2026-09-01)：孤儿聚合建卡候选——勾选+可改名/改月/改价，一键建卡 */
+      if ((DET.newCards || []).length) {
+        h += '<div class="card" style="margin-top:10px;padding:10px 12px">'
+          + '<div style="font-size:13px;font-weight:600;margin-bottom:6px">可新建路标（' + DET.newCards.length + ' 个：PSI 里有、路标里还没建）</div>'
+          + '<table class="data" style="width:100%;font-size:12px"><tr>'
+          + ['✓', '类型', '名称(可改)', '产业/系列', '识别上市月(可改)', '退市', '上市价US$(可改)', 'SKU', '置信'].map(t => '<th style="text-align:left;padding:4px 6px">' + t + '</th>').join('') + '</tr>';
+        DET.newCards.forEach((c, i) => {
+          const e2 = DET.newEdit[i] || {};
+          h += '<tr>'
+            + '<td style="padding:4px 6px"><input type="checkbox" data-newsel="' + i + '"' + (DET.newSel[i] ? ' checked' : '') + '></td>'
+            + '<td style="padding:4px 6px">' + (c.kind === 'newSku' ? '<span style="color:#C7000B">新SKU</span>' : '新品') + '</td>'
+            + '<td style="padding:4px 6px"><input value="' + esc(e2.name != null ? e2.name : c.name) + '" data-newname="' + i + '" style="width:170px"></td>'
+            + '<td style="padding:4px 6px">' + esc((c.line || '') + (c.series ? '/' + c.series : '')) + '</td>'
+            + '<td style="padding:4px 6px"><input value="' + esc(e2.ship != null ? e2.ship : window.RoadmapDetect.toRoadmapMonth(c.launchMonth)) + '" data-newship="' + i + '" style="width:80px" placeholder="YYYY/MM"></td>'
+            + '<td style="padding:4px 6px">' + (c.status === 'eol' && c.eolMonth ? esc(window.RoadmapDetect.toRoadmapMonth(c.eolMonth)) : '—') + '</td>'
+            + '<td style="padding:4px 6px"><input value="' + esc(e2.price != null ? e2.price : (c.priceUsd != null ? c.priceUsd : '')) + '" data-newprice="' + i + '" style="width:70px" placeholder="未匹配"></td>'
+            + '<td style="padding:4px 6px;color:var(--ink3)">' + esc((c.models || []).join(', ').slice(0, 40)) + '</td>'
+            + '<td style="padding:4px 6px">' + esc((window.RoadmapDetect.CONF_LABEL || {})[c.confidence] || c.confidence || '') + '</td>'
+            + '</tr>';
+        });
+        h += '</table><div style="margin-top:8px"><button class="btn primary" id="rmDetCreate">一键新建勾选产品</button>'
+          + '<span style="font-size:11px;color:var(--ink3);margin-left:10px">上市价自动从定价库匹配(未匹配可手填)；晚上市≥3个月的 SKU 已拆为独立新SKU卡</span></div></div>';
+      }
       h += '<div class="card" style="overflow:auto;padding:8px"><table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<tr>'
         + '<th style="padding:4px 6px"><input type="checkbox" id="detAll"></th>'
@@ -491,16 +515,20 @@
     if (_fobEstN) h += '<div style="position:absolute;right:14px;top:5px;font-size:11px;color:var(--ink2);background:rgba(255,255,255,.88);padding:1px 9px;border-radius:6px;z-index:4">≈ ' + _fobEstN + ' 个产品价格由 Floor FOB×' + state.fobCfg.multTablet + '/' + state.fobCfg.multAudio + ' 推算</div>';
     // 方框（框样式=全局 boxStyle 经产品级覆盖后所见即所得：填充/透明/加粗/字号）
     out.points.forEach(p => {
-      const x = px(p.x), y = p.missing ? py(0.5) : py(p.y);
+      let x = px(p.x), y = p.missing ? py(0.5) : py(p.y);
+      x = Math.max(padL + 52, Math.min(W - padR - 52, x)); y = Math.max(padT + 22, Math.min(H - padB - 22, y));   // 截断修复(2026-09-01):框锚点限在画布内边距,不再被裁半
       const st = p.style || { fill: '#FFFFFF', opacity: 1, bold: true, fontSize: 12 };
       const op = p.missing ? 0.4 : st.opacity;
       const nmSize = st.fontSize, metaSize = Math.max(8, st.fontSize - 2), nmWeight = st.bold ? 700 : 400;
       const dots = p.dots.slice(0, 6).map(c => '<span class="dot" style="background:' + esc(c) + '"></span>').join('');
       const isEst = state._fobEstIds && state._fobEstIds.has(p.realId);
       const val = p.missing ? '无本币价' : ((isEst ? '≈' : '') + (state.chart.mode === 'usd' ? ('$' + Math.round(p.value)) : Math.round(p.value)) + (isEst ? '(FOB)' : ''));
-      h += '<div class="rmc-box' + (p.missing ? ' missing' : '') + '" data-rid="' + esc(p.realId) + '" style="left:' + x + 'px;top:' + y + 'px;background:' + esc(st.fill) + ';opacity:' + op + '">' +
+      const prod = state.products.find(pp => pp.id === p.realId) || {};
+      const eomYm = prod.eomPlan || '';
+      const eomPast = eomYm && (RoadmapChart.ymNum(eomYm) != null) && (RoadmapChart.ymNum(eomYm) <= (new Date().getFullYear() * 12 + new Date().getMonth() + 1));
+      h += '<div class="rmc-box' + (p.missing ? ' missing' : '') + (eomPast ? ' eomed' : '') + '" data-rid="' + esc(p.realId) + '" style="left:' + x + 'px;top:' + y + 'px;background:' + esc(st.fill) + ';opacity:' + op + '">' +
         '<div class="nm" style="font-weight:' + nmWeight + ';font-size:' + nmSize + 'px">' + esc(p.name) + '</div>' + (dots ? '<div class="dots">' + dots + '</div>' : '') +
-        '<div class="meta" style="font-size:' + metaSize + 'px">' + esc(p.config) + '</div><div class="meta" style="font-size:' + metaSize + 'px">' + val + ' · ' + esc(p.shipLate) + '</div></div>';
+        '<div class="meta" style="font-size:' + metaSize + 'px">' + esc(p.config) + '</div><div class="meta" style="font-size:' + metaSize + 'px">' + val + ' · ' + esc(p.shipLate) + '</div></div>' + (eomYm ? ('<div class="meta" style="color:' + (eomPast ? '#999' : '#C7000B') + ';font-size:9px">' + (eomPast ? '已退市' : 'EOM → ' + esc(eomYm)) + '</div>') : '') + '';
     });
     const sPts = RoadmapChart.samplePoints(samplesForView, state.products, { mode: state.chart.mode, country: state.chart.country, tScale: out.tScale, pScale: out.pScale });
     sPts.forEach(s => {
@@ -753,19 +781,28 @@
     el('rmInfo').textContent = '库内 ' + state.products.length + ' 个产品';
     if (!state.products.length) { wrap.innerHTML = '<div class="kpi-card" style="text-align:center;color:var(--c-ink-3);padding:30px">还没有产品，点「＋产品」添加。</div>'; return; }
     let h = '<div class="card" style="overflow:auto"><table class="data" style="width:100%;font-size:12px"><tr>' +
-      ['传播名', '系列', '颜色', '配置', '最晚发货', '综合RRP-USD', '首4月SO', ''].map(t => '<th style="text-align:left;padding:6px 10px">' + t + '</th>').join('') + '</tr>';
+      ['传播名', '系列', '颜色', '配置', '最晚发货', 'EOM计划', '综合RRP-USD', '首4月SO', ''].map(t => '<th style="text-align:left;padding:6px 10px">' + t + '</th>').join('') + '</tr>';
     state.products.forEach((p, i) => {
       const dots = (p.skus || []).slice(0, 6).map(s => '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + esc(s.color || '#ccc') + ';border:1px solid #ddd;margin-right:3px"></span>').join('');
       const cfg = [...new Set((p.skus || []).map(s => [s.ram, s.rom].filter(Boolean).join('/')).filter(Boolean))].join(' ');
       h += '<tr data-edit="' + i + '" style="cursor:pointer;border-top:1px solid var(--c-line-soft)">' +
         '<td style="padding:6px 10px">' + esc(p.name) + '</td><td style="padding:6px 10px">' + esc(p.seriesGroup) + '</td>' +
         '<td style="padding:6px 10px">' + dots + '</td><td style="padding:6px 10px">' + esc(cfg) + '</td>' +
-        '<td style="padding:6px 10px">' + esc(p.shipLate) + '</td><td style="padding:6px 10px">' + (p.compositeRrpUsd == null ? '—' : p.compositeRrpUsd) + '</td>' +
+        '<td style="padding:6px 10px">' + esc(p.shipLate) + '</td>' + '<td style="padding:6px 10px"><input value="' + esc(p.eomPlan || '') + '" data-eomplan="' + i + '" placeholder="YYYY/MM" style="width:76px"></td><td style="padding:6px 10px">' + (p.compositeRrpUsd == null ? '—' : p.compositeRrpUsd) + '</td>' +
         '<td style="padding:6px 10px">' + (p.first4moSO == null ? '—' : p.first4moSO) + '</td>' +
         '<td style="padding:6px 10px"><button class="btn" data-del="' + i + '" style="padding:3px 8px">✕</button></td></tr>';
     });
     h += '</table></div>';
     wrap.innerHTML = h;
+    wrap.querySelectorAll('input[data-eomplan]').forEach(ip => {
+      ip.addEventListener('click', ev2 => ev2.stopPropagation());
+      ip.addEventListener('change', () => {
+        const p2 = state.products[+ip.dataset.eomplan]; if (!p2) return;
+        const v = ip.value.trim();
+        if (v && !/^\d{4}[\/-]\d{1,2}$/.test(v)) { alert('EOM 格式：YYYY/MM'); ip.value = p2.eomPlan || ''; return; }
+        p2.eomPlan = v; save(); renderMain();
+      });
+    });
     wrap.querySelectorAll('tr[data-edit]').forEach(tr => tr.addEventListener('click', (e) => { if (e.target.closest('button[data-del]')) return; openDialog(state.products[+tr.dataset.edit]); }));
     wrap.querySelectorAll('button[data-del]').forEach(b => b.addEventListener('click', () => { const _del = state.products.splice(+b.dataset.del, 1)[0]; if (_del) { purgePredecessor(_del.id); purgeSamplesOfProduct(_del.id); } save(); renderList(); }));
   }
@@ -1860,6 +1897,21 @@
     rd.readAsText(f);
   }
 
+  /* AI 写入口(2026-09-01)：自然语言/文档抽取后的结构化 payload 经 NL 内核合入路标。
+     路标是用户规划数据(非底表)，代填=代替手动编辑；写入后立即落盘+重绘，产品可再编辑可删。 */
+  window.RoadmapAPI = {
+    upsert(payload) {
+      ensureLoaded();
+      if (!window.RoadmapNL) return { error: 'NL 内核未加载' };
+      const r = window.RoadmapNL.upsertProduct(state.products, payload, blankProduct);
+      if (r.error) return r;
+      state.products = r.products;
+      if (!save()) return { error: '保存失败(存储配额?)' };
+      try { if (el('rmListWrap') || el('rmChart')) renderMain(); } catch (e) {}
+      return { ok: true, action: r.action, name: r.name, 写入: r.applied, 其他信息入customInfo: r.extras.length };
+    },
+    listNames() { ensureLoaded(); return state.products.map(p => p.name); },
+  };
   window.renderRoadmap = renderRoadmap;
   window.RM_API = { openDialog, renderList };
   // PPT 设计器消费：返回内存实时 state；未开过路标视图时惰性加载持久化数据后再返回

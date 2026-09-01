@@ -165,7 +165,7 @@
   function detectAll(scan, opt) {
     const months = (scan && scan.months) || [];
     const items = (scan && scan.items) || [];
-    return items.map(it => detectOne(it, months, opt));
+    return items.map(it => { const det = detectOne(it, months, opt); det.product = it.product || ''; det.series = it.series || ''; det.line = it.line || ''; return det; });
   }
 
   /* ---- 路标产品 ↔ PSI 产品 的名称匹配 ----
@@ -217,5 +217,39 @@
   const STATUS_LABEL = { live: '在售', declining: '走弱', eol: '已退市', new: '新上市', siOnly: '仅铺货', nodata: '无数据' };
   const CONF_LABEL = { high: '高', medium: '中', low: '低' };
 
-  return { DEFAULTS, clampOpt, detectOne, detectAll, matchProducts, toRoadmapPatch, toRoadmapMonth, norm, STATUS_LABEL, CONF_LABEL };
+  /* 孤儿聚合(2026-09-01)：底表有、路标没有的 SKU 按 product 聚——
+     主卡=最早上市 SKU；晚 ≥lateSkuMonths(默认3) 个月上市的 SKU 单独成卡(新颜色/新型号场景)。 */
+  function groupOrphans(orphans, opt) {
+    const lateM = Math.max(1, Math.round((opt && opt.lateSkuMonths) || 3));
+    const ymn = m => { const x = String(m || ''); const mm = x.match(/^(\d{4})[-/]?(\d{2})$/); return mm ? (+mm[1] * 12 + +mm[2]) : null; };
+    const byP = new Map();
+    (orphans || []).forEach(d => {
+      if (!d || !d.launchMonth) return;
+      const pk = d.product || d.key;
+      if (!byP.has(pk)) byP.set(pk, []);
+      byP.get(pk).push(d);
+    });
+    const out = [];
+    byP.forEach((list, pk) => {
+      list.sort((a, b) => (ymn(a.launchMonth) || 9e9) - (ymn(b.launchMonth) || 9e9));
+      const first = list[0];
+      const base = ymn(first.launchMonth);
+      const mains = list.filter(d => (ymn(d.launchMonth) - base) < lateM);
+      const lates = list.filter(d => (ymn(d.launchMonth) - base) >= lateM);
+      out.push({ kind: 'new', name: pk, product: pk, modelKey: first.key,
+        models: mains.map(d => d.key), launchMonth: first.launchMonth,
+        eolMonth: first.status === 'eol' ? first.eolMonth : '', status: first.status,
+        confidence: first.confidence, series: first.series || '', line: first.line || '' });
+      lates.forEach(d => {
+        out.push({ kind: 'newSku', name: pk + '（新SKU ' + d.key + '）', product: pk, modelKey: d.key,
+          models: [d.key], launchMonth: d.launchMonth,
+          eolMonth: d.status === 'eol' ? d.eolMonth : '', status: d.status,
+          confidence: d.confidence, series: d.series || '', line: d.line || '' });
+      });
+    });
+    out.sort((a, b) => (ymn(a.launchMonth) || 0) - (ymn(b.launchMonth) || 0));
+    return out;
+  }
+
+  return { DEFAULTS, clampOpt, detectOne, detectAll, matchProducts, groupOrphans, toRoadmapPatch, toRoadmapMonth, norm, STATUS_LABEL, CONF_LABEL };
 });

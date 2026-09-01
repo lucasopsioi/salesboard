@@ -21,7 +21,13 @@ const path = require('path');
 const O = require(path.join(__dirname, '..', 'app', 'ai-orchestrator.js'));
 const AD = require(path.join(__dirname, '..', 'app', 'ai-context.js'));
 const { mountEngine, buildRegistry } = require('./engine-tools.js');
-const SET = require('./eval-set.js');
+// --set <path> 加载专项题集(如 finance-set.js);缺省仍是通用 30 题
+const SET = (() => {
+  const i = process.argv.indexOf('--set');
+  const sp = (process.argv.find(a => a.indexOf('--set=') === 0) || '').slice(6) || (i >= 0 ? process.argv[i + 1] : '');
+  if (sp) { try { return require(require('path').resolve(sp)); } catch (e) { console.error('题集加载失败: ' + e.message); process.exit(1); } }
+  return require('./eval-set.js');
+})();
 
 /* ---------------- CLI ---------------- */
 const argv = process.argv.slice(2);

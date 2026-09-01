@@ -99,6 +99,7 @@
         '【层级与边界】LV1=产业、LV2=品类、LV3=产品系列、LV4=产品；财经 LV3↔PSI Product Family、LV4↔PSI Product Series，别按名字直接对齐。预测表无国家列（最细到国家办），BP 表无品牌/国家列。财经同比按整月区间、不按日截断，当月未收满时 SI 同比会偏低。财经的「销售毛利」与销毛推演的销毛是两套指标，别互相解释。小计剔除会把国家列的「源为空」也当小计剔掉（正常）；lv4 的空串是合法叶子不剔。',
         '【数字对不上先查底表】财经文件夹里同一类表放了新旧两版会直接翻倍（财经源不做任何去重）；只读每个文件第 1 个 Sheet，三张表必须分成三个文件；25 年 NSIP 为空是底表当年没有「收入量」，不是 bug。财经 Sell-in 与 PSI 差 ≤100 台属正常，>100 台才提。',
         '【取数】整体 financeOverview({year, fromM, toM})——全盘合计、没有产业切分，不得把它标成某一产业；分产业(lv1)/系列/产品必须用 financeProductBoard({fromM,toM,lv1,lv3})；分国家办 financeRepBoard({fromM,toM,reps,series})——不支持 lv1，要按产业筛就先取该产业下的 LV3 名集；其它维度组合 financeCustom({rowDim, metrics, fromM, toM})。一律显式传 toM，别依赖缺省。',
+        '【解读方法论】①增速拆量价：量≈收入÷NSIP，(1+量%)×(1+价%)≈1+收入%；②子业务均价都涨而整体不动=低价业务占比升的结构效应，非数据异常；③达成率对照时序(toM÷12)读，落后即预警并算下半年需完成额；④毛利变化归因价格/结构/成本三路，同比微降与对BP缺口分开说(pp)；⑤摘要骨架：结论→收入→量价→毛利→达成对时序→风险建议；⑥overview 默认全年区间(同比失真)，productBoard/custom 同区间——异常负增长先查区间错配。',
         '【红线】① 率不能平均、单价不能按百分比同比；② 达成率不给时间进度等于误导；③ 底表没有的字段（NSIP 等）按公式算，不许瞎编、不许换分母，查不到就说查不到。',
       ].join('\n'),
     },
@@ -803,8 +804,18 @@
         return out;
       },
     });
-    let tasks = planRoute(question, currentBoard).map(t => Object.assign({}, t, { boardId: currentBoard }));
-    if (mode === 'fast' && tasks.length > 1 && !needsMultiAgent(question)) tasks = tasks.slice(0, 1);
+    let tasks;
+    if (opt && Array.isArray(opt.forceAgents) && opt.forceAgents.length) {
+      /* 定向专家(2026-08-31 Agent 看板):用户点选了用哪几个专家——绕过自动路由,全部并列作答 */
+      tasks = opt.forceAgents.filter(id => AGENTS[id]).map(id => ({
+        agentId: id, agent: AGENTS[id], boardId: currentBoard,
+        subQuestion: '围绕【' + AGENTS[id].name + '】的职责回答这个问题中属于你的部分：' + question,
+      }));
+      if (!tasks.length) tasks = planRoute(question, currentBoard).map(t => Object.assign({}, t, { boardId: currentBoard }));
+    } else {
+      tasks = planRoute(question, currentBoard).map(t => Object.assign({}, t, { boardId: currentBoard }));
+      if (mode === 'fast' && tasks.length > 1 && !needsMultiAgent(question)) tasks = tasks.slice(0, 1);
+    }
     tasks.forEach(t => { t.mode = mode; t.guards = guards; });
     if (deps.onProgress) deps.onProgress({ type: 'plan', tasks: tasks.map(t => t.agent.name) });
 

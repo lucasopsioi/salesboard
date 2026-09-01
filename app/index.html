@@ -682,6 +682,7 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
       <div class="nav-item" data-view="audio"><span class="ic" data-icon="audio"></span>产业周报</div>
       <div class="nav-item" data-view="fob"><span class="ic" data-icon="finance"></span>Floor FOB</div>
       <div class="nav-label">助手</div>
+      <div class="nav-item" data-view="agentchat"><span class="ic" data-icon="ai"></span>Agent 对话</div>
       <div class="nav-item" id="navAiEntry"><span class="ic" data-icon="ai"></span>AI 问答</div>
       <div id="navRestore" class="hidden"><span class="ic" data-icon="eye"></span><span id="navRestoreTxt"></span></div>
       <div id="navHiddenList" class="navhidden hidden"></div>
@@ -703,6 +704,8 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
       <button class="btn ghost" id="btnSample">载入示例</button>
       <button class="btn" id="btnRefresh" title="重新扫描所有已锚定文件夹（PSI/库存/经营/IDC/发货/成本），刷新到各看板"><span data-icon="refresh" style="display:inline-flex"></span>刷新</button>
     </div>
+
+    <section class="view" id="view-agentchat" style="padding:0"></section>
 
     <!-- 数据来源/截至时间 信息条 -->
     <div class="data-bar" id="dataBar"></div>
@@ -1046,6 +1049,7 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
   <script src="fob-reports.js"></script>
   <script src="color-memory-core.js"></script>
   <script src="views/report-view.js"></script>
+  <script src="views/agentchat-view.js"></script>
   <script src="views/psi-view.js"></script>
   <script src="views/source-view.js"></script>
   <script src="views/country-view.js"></script>

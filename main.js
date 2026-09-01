@@ -330,6 +330,25 @@ ipcMain.handle('aiProxyInfo', async (_e, url) => {
     return { proxy: r || 'DIRECT' };
   } catch (e) { return { proxy: '', error: String((e && e.message) || e) }; }
 });
+/* 本地文档上传(2026-08-31 Agent 看板)：选文件读文本内容供会话注入。
+   支持纯文本类(txt/md/csv/json/log)；超长截断(60K 字符)。只读不写。 */
+ipcMain.handle('readLocalDoc', async () => {
+  try {
+    const r = await dialog.showOpenDialog(win, {
+      title: '选择要让 AI 阅读的文档',
+      filters: [{ name: '文本文档', extensions: ['txt', 'md', 'csv', 'json', 'log'] }],
+      properties: ['openFile'],
+    });
+    if (!r || r.canceled || !r.filePaths || !r.filePaths.length) return { canceled: true };
+    const p2 = r.filePaths[0];
+    const st = fs.statSync(p2);
+    if (st.size > 8 * 1024 * 1024) return { error: '文件超过 8MB，请精简后再传' };
+    let content = fs.readFileSync(p2, 'utf8');
+    const truncated = content.length > 60000;
+    if (truncated) content = content.slice(0, 60000);
+    return { name: path.basename(p2), content, truncated };
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+});
 ipcMain.handle('aiChatCli', async (_e, payload) => {
   payload = payload || {};
   const { spawn } = require('child_process');

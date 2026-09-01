@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('sb', {
   aiChat:      (payload)     => ipcRenderer.invoke('aiChat', payload),
   aiReadKeyFile: (name)      => ipcRenderer.invoke('aiReadKeyFile', name),
   aiChatCli:   (payload)     => ipcRenderer.invoke('aiChatCli', payload),
+  readLocalDoc: ()           => ipcRenderer.invoke('readLocalDoc'),
   aiProxyInfo: (url)         => ipcRenderer.invoke('aiProxyInfo', url),
   aiListModels: (baseUrl, key) => ipcRenderer.invoke('aiListModels', baseUrl, key),
   lmStatus: (baseUrl) => ipcRenderer.invoke('lmStatus', baseUrl),

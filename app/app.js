@@ -125,7 +125,7 @@ function switchView(v){
   $$('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===v));
   $$('.view').forEach(el=>el.classList.toggle('active',el.id==='view-'+v));
   renderDataBar(v);
-  $('#viewTitle').textContent={psi:'PSI 数据分析',industry:'产业看板',finance:'经营分析',country:'国家看板',report:'汇总表',custom:'自定义图表',designer:'看板设计器',source:'数据源',pricing:'定价测算',pricinglib:'产品定价库',roadmap:'路标管理',pptoutput:'PPT output',inventory:'库存管理',textout:'文字输出',audio:'产业周报',fob:'Floor FOB'}[v]||v;
+  $('#viewTitle').textContent={psi:'PSI 数据分析',industry:'产业看板',finance:'经营分析',country:'国家看板',report:'汇总表',custom:'自定义图表',designer:'看板设计器',source:'数据源',pricing:'定价测算',pricinglib:'产品定价库',roadmap:'路标管理',pptoutput:'PPT output',inventory:'库存管理',textout:'文字输出',audio:'产业周报',fob:'Floor FOB',agentchat:'Agent 对话'}[v]||v;
   if(v==='pricing'&&typeof renderPricing==='function') renderPricing();
   if(v==='pricinglib'&&typeof renderPricingLib==='function') renderPricingLib();
   if(v==='roadmap'&&typeof renderRoadmap==='function') renderRoadmap();
@@ -134,6 +134,7 @@ function switchView(v){
   if(v==='textout'&&typeof renderTextout==='function') renderTextout();
   if(v==='audio'&&typeof renderAudio==='function') renderAudio();
   if(v==='fob'&&typeof renderFob==='function') renderFob();
+  if(v==='agentchat'&&typeof renderAgentChat==='function') renderAgentChat();
   if(v==='psi'&&chart) setTimeout(()=>chart.resize(),50);
   if(v==='industry'){ if(state.dims.length){ if(!ind.data) initIndustry(); else setTimeout(()=>ind.chart&&ind.chart.resize(),50); } else $('#indEmpty').classList.remove('hidden'); }
   if(v==='report' && state.dims.length && !rep.last) drawReport();

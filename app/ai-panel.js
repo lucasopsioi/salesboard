@@ -1051,7 +1051,40 @@
   }
 
   // 暴露给 app.js / nav
-  window.AIPanel = { init, open, close, injectButtons, openSettings };
+  /* 供 Agent 对话看板复用的编排依赖工厂(2026-08-31)：与 runOrchestrated 同源的 deps，
+     onProgress 由调用方提供(多会话并行各自渲染)。 */
+  function makeOrchDeps(cfg, onProgress) {
+    const AD = AIData(), OR = window.AIOrch;
+    const registry = AD ? AD.buildToolRegistry() : {};
+    return {
+      schemas: AD.TOOL_SCHEMAS,
+      buildToolSpecs: names => (AD.buildToolSpecs ? AD.buildToolSpecs(names) : []),
+      pickTools: AD.pickTools,
+      parseToolCall: AD.parseToolCall,
+      boardLabel: b => (b ? AD.labelOf(b) : '全局（跨看板）'),
+      filters: b => { try { const c = AD.boardContext && AD.boardContext(b); return c ? c.filters : null; } catch (e) { return null; } },
+      snapshot: async b => { try { return await AD.genericSnapshot(b); } catch (e) { return ''; } },
+      runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
+      optionsDirect: async (field) => AD.dispatchTool(registry, { tool: 'options', args: { field } }),
+      provRetry: true,
+      onProgress: onProgress || (() => {}),
+      chat: async p => {
+        if (cfg.provider === 'corplink') return cliChat(cfg, p);
+        const mdlName = cfg.provider === 'deepseek' ? (cfg.dsModel || '') : cfg.provider === 'minimax' ? (cfg.model || '') : cfg.provider === 'anthropic' ? (cfg.anModel || '') : cfg.provider === 'openai' ? (cfg.oaModel || '') : '';
+        if (/pro|reasoner|thinking|r1|m3/i.test(mdlName) && (!p.maxTokens || p.maxTokens < 16000)) p = Object.assign({}, p, { maxTokens: 16000 });
+        const endp = cfg.provider === 'deepseek' ? { key: cfg.dsKey, baseUrl: DS_BASE, model: cfg.dsModel || DS_MODELS[0], timeoutMs: 120000 }
+          : cfg.provider === 'minimax' ? { key: cfg.key, baseUrl: cfg.baseUrl, model: cfg.model, timeoutMs: 120000 }
+          : cfg.provider === 'anthropic' ? { key: cfg.anKey, baseUrl: AN_BASE, model: cfg.anModel || AN_MODELS[0], apiFormat: 'anthropic', timeoutMs: 120000 }
+          : cfg.provider === 'openai' ? { key: cfg.oaKey, baseUrl: OA_BASE, model: cfg.oaModel || OA_MODELS[0], timeoutMs: 120000 }
+          : { key: '', baseUrl: lmJoin(cfg.lmBase, '/chat/completions'), model: cfg.lmModel, timeoutMs: (OR && OR.BUDGET.timeoutMs) || 180000 };
+        const payload = Object.assign({}, endp, { messages: p.messages, maxTokens: p.maxTokens, temperature: 0 });
+        if (p.system) payload.messages = [{ role: 'system', content: p.system }].concat(p.messages || []);
+        if (p.tools && p.tools.length) payload.tools = p.tools;
+        return api().aiChat(payload);
+      },
+    };
+  }
+  window.AIPanel = { init, open, close, injectButtons, openSettings, makeOrchDeps, loadCfg, saveCfg };
 
   // 自启：DOM 就绪即初始化（app.js 的 init 在其后运行，nav 点击处理也在此挂）
   if (typeof document !== 'undefined') {

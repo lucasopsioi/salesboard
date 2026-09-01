@@ -86,6 +86,15 @@ const TOOL_SCHEMAS = {
   financeCustom: { description: '经营自定义取数：按财经维度取指定指标。', properties: { rowDim: { type: 'string', enum: ['rep', 'lv1', 'lv2', 'lv3', 'lv4', 'model'] }, metrics: { type: 'array', items: { type: 'string', enum: ['rev', 'gm', 'gmr', 'cp', 'sellIn', 'sellOut', 'nsip', 'bpAttain', 'fcAttain'] } }, fromM: { type: 'integer' }, toM: { type: 'integer' } }, required: ['rowDim'] },
   industryBoard: { description: '产业 4 个 KPI：今年 SI/SO 累计与同比、当前库存与渠道DOS、全流程库存与DOS。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
   industryTrend: { description: '产业趋势：今年 vs 去年同期逐期序列。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
+  makeExcel: {
+    description: '生成 Excel 文件并自动保存打开。用于「导出/整理成 Excel/表格文件」类请求：先取数，再把数据组织成 sheets(每个 sheet 首行是表头)。',
+    properties: {
+      fileName: { type: 'string', description: '文件名(不含扩展名)' },
+      sheets: { type: 'array', items: { type: 'object', properties: {
+        name: { type: 'string', description: 'sheet 名(≤31字符)' },
+        rows: { type: 'array', items: { type: 'array' }, description: '二维数组,首行表头' },
+      }, required: ['name', 'rows'] } },
+    }, required: ['fileName', 'sheets'] },
   makePpt: {
     description: '生成 PPT 文件（Acme红模板，微软雅黑）并自动保存打开。用于「做/生成/整理/导出 PPT」类请求：先取数，再把结论与表格组织成 slides。',
     properties: {
@@ -529,6 +538,24 @@ const AIData = (function () {
         return { error: (res && res.error) || '保存失败或用户取消' };
       } catch (e) { return { error: 'PPT 生成失败: ' + String((e && e.message) || e) }; }
     }
+    async function toolMakeExcel(a) {
+      try {
+        if (typeof XLSX === 'undefined') return { error: 'Excel 引擎不可用' };
+        const sheets = Array.isArray(a.sheets) ? a.sheets.slice(0, 10) : [];
+        if (!sheets.length) return { error: 'sheets 为空' };
+        const wb = XLSX.utils.book_new();
+        sheets.forEach((sh, i) => {
+          const rows = (Array.isArray(sh.rows) ? sh.rows.slice(0, 2000) : []).map(r => (Array.isArray(r) ? r : [r]));
+          const ws = XLSX.utils.aoa_to_sheet(rows.length ? rows : [['(空)']]);
+          XLSX.utils.book_append_sheet(wb, ws, String(sh.name || ('Sheet' + (i + 1))).slice(0, 31));
+        });
+        const b64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+        const fn = String(a.fileName || 'AI导出').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+        const res = await api.saveFile(fn + '.xlsx', b64, 'xlsx');
+        if (res && res.path) return { ok: true, 已保存: res.path, sheet数: sheets.length, 说明: '文件已自动打开' };
+        return { error: (res && res.error) || '保存失败或用户取消' };
+      } catch (e) { return { error: 'Excel 生成失败: ' + String((e && e.message) || e) }; }
+    }
     async function toolOpenBoard(a) {
       try {
         const id = String(a && a.boardId || '');
@@ -676,6 +703,7 @@ const AIData = (function () {
       industryBoard: wrap(a => api.industryBoard(a || {})),
       industryTrend: wrap(a => api.industryTrend(a || {})),
       // 当前看板界面上选了什么（用户说「这个/当前筛选」时先调它）
+      makeExcel: wrap(toolMakeExcel),
       makePpt: wrap(toolMakePpt),
       openBoard: wrap(toolOpenBoard),
       boardState: async a => {

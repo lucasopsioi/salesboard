@@ -563,10 +563,8 @@
 
     if (prog._synth) { prog._synth.state = 'ok'; prog._synth.ms = null; }
     let ans = out.answer || '(空回复)';
-    // 门禁已在答案里附「⚠ 溯源门禁…」时不再追加同义第二条(2026-08-31 用户实测:两条 ⚠ 重复)
-    if (out.verified && !out.verified.ok && out.verified.unsupported.length && ans.indexOf('溯源门禁') < 0) {
-      ans += '\n\n> ⚠ 以下数字未在工具返回里找到出处，请核对：' + out.verified.unsupported.join('、');
-    }
+    /* verifyNumbers 弱警示已撤(2026-08-31)：门禁(带反馈循环)是权威——claims 层弱校验
+       的池比门禁窄,会对「15.1%」这类有出处的同比数误报;结果仍留 out.verified 供排障。 */
     const used = (out.results || []).filter(r => !r.error).map(r => r.agentName);
     if (used.length > 1) ans += '\n\n*（由 ' + used.join('、') + ' 协同得出）*';
     try { window.AgentBoard && window.AgentBoard.feed({ type: 'done' }); } catch (e) {}

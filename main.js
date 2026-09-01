@@ -197,6 +197,10 @@ ipcMain.handle('financeCustom', (_e, params) => { try { return engine.financeCus
 ipcMain.handle('industryBoard', (_e, params) => {
   try { return engine.industryBoard(params || {}); } catch (e) { return { error: String(e) }; }
 });
+// 2026-09-01 接线审计补齐：engine.industryTrend 早已存在且评测在用，唯独线上缺这条桥（AI 的产业趋势工具一直静默坏）
+ipcMain.handle('industryTrend', (_e, params) => {
+  try { return engine.industryTrend(params || {}); } catch (e) { return { error: String(e) }; }
+});
 // 产业看板·两代产品生命周期对齐对比
 ipcMain.handle('lifecycleCompare', (_e, params) => {
   try { return engine.lifecycleCompare(params || {}); } catch (e) { return { error: String(e) }; }

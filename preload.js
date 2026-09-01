@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('sb', {
   financeRepBoard: (params) => ipcRenderer.invoke('financeRepBoard', params),
   financeCustom: (params) => ipcRenderer.invoke('financeCustom', params),
   industryBoard:(params)     => ipcRenderer.invoke('industryBoard', params),
+  industryTrend:(params)     => ipcRenderer.invoke('industryTrend', params),
   lifecycleCompare:(params)  => ipcRenderer.invoke('lifecycleCompare', params),
   launchScan:  (params)      => ipcRenderer.invoke('launchScan', params),
   psiCatalog:  ()            => ipcRenderer.invoke('psiCatalog'),

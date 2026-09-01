@@ -19,7 +19,7 @@ ok('A3 每个专家都有 id/名称/工具白名单/提示词', Object.keys(O.AG
   const a = O.AGENTS[k];
   return a.id && a.name && Array.isArray(a.tools) && a.tools.length && typeof a.prompt === 'string' && a.prompt.length > 200;
 }));
-ok('A4 专家提示词长度受控(≤1800 字符,本地模型上下文有限)', Object.keys(O.AGENTS).every(k => O.AGENTS[k].prompt.length <= 1800));
+ok('A4 专家提示词长度受控(≤2200 字符,2026-09-01 自 1800 放宽:在线模型时代+全员方法论段)', Object.keys(O.AGENTS).every(k => O.AGENTS[k].prompt.length <= 2200));
 ok('A5 工具白名单里的工具都在 ai-context 的 schema 真源里', Object.keys(O.AGENTS).every(k => O.AGENTS[k].tools.every(t => !!AD.TOOL_SCHEMAS[t])));
 
 /* ---------- 2) 专家提示词必须含可执行公式(不是"要理解口径"的空话) ---------- */

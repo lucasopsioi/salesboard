@@ -468,6 +468,7 @@
       snapshot: async b => { try { return await AD.genericSnapshot(b); } catch (e) { return ''; } },
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
       optionsDirect: async (field) => AD.dispatchTool(registry, { tool: 'options', args: { field } }),
+      provRetry: true,
       chat: async p => {
         if (cfg.provider === 'corplink') return cliChat(cfg, p);
         /* reasoning 模型(v4-pro/reasoner/思考版)的思考链与答案共用 max_tokens——

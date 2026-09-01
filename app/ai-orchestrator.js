@@ -620,7 +620,10 @@
      确定性要求只能靠代码层。允许的合法变换：原值、×100、÷100（比率↔百分比）、
      任意两个工具数的商（占比/同比）与差（pp差/绝对差）——纯编造的数字凑不出任何工具数对。
      日期豁免：0..31 整数与 1900..2100 年份不查（"2026年1月"不是作答数值）。 */
-  function enforceProvenance(answer, toolTrace, question) {
+  function enforceProvenance(answer, toolTrace, question, opt) {
+    opt = opt || {};
+    const PLACEHOLDER = opt.placeholder || '?';
+    const DETECT_ONLY = !!opt.detectOnly;
     const text = String(answer || '');
     if (!text || !toolTrace || !toolTrace.length) return { answer: text, blocked: [] };
     const NUM = /-?\d[\d,]*(?:\.\d+)?/g;
@@ -684,14 +687,54 @@
       if (!isPct && Number.isInteger(v) && ((v >= 0 && v <= 31) || (v >= 1900 && v <= 2100))) return m;
       if (backed(v)) return m;
       blocked.push(m);
-      return '?';
+      return DETECT_ONLY ? m : PLACEHOLDER;
     });
     const uniqBlocked = [...new Set(blocked)].slice(0, 12);
     if (!uniqBlocked.length) return { answer: text, blocked: [] };
+    if (DETECT_ONLY) return { answer: text, blocked: uniqBlocked };
     return {
-      answer: out + '\n\n> ⚠ 溯源门禁：以下数字在本轮工具返回中找不到出处，已替换为「?」。数据未包含时请以「数据未包含」为准：' + uniqBlocked.join('、'),
+      answer: out + '\n\n> ⚠ 经重新核查，以下数字仍无法从本轮数据中取得，已标注' + PLACEHOLDER + '：' + uniqBlocked.join('、') + '。可能原因：数据范围未覆盖该期间/对象，或问法与数据口径不匹配——请换个问法，或确认相应底表已导入。',
       blocked: uniqBlocked,
     };
+  }
+
+  /* 门禁反馈循环(2026-08-31 用户:「找不到出处应该继续找」)：被拦数字反馈给模型,
+     开工具让它重新取数自证(新取的数进 toolTrace 池,第二遍检测自然放行)或改写答案。
+     ≤3 轮工具;模型不配合/仍有无出处数 → 交回上层做「(未取到)」标注。 */
+  async function provenanceRetry(question, answer, blocked, deps, boardId) {
+    try {
+      const agent = agentForBoard(boardId);
+      const sys = (agent ? buildSpecialistSystem(agent.id, { full: false }) : '你是数据分析专家。')
+        + '\n【溯源规则】回答里的每个数字都必须来自本轮工具返回原文；合计要用工具返回的合计字段或逐项列出加数。';
+      const names = (deps.pickTools && agent) ? deps.pickTools(agent.tools, question, 4) : null;
+      const specs = (deps.buildToolSpecs && names) ? deps.buildToolSpecs(names) : [];
+      const messages = [
+        { role: 'user', content: question + '\n\n你上一稿的回答：\n' + String(answer).slice(0, 3000)
+          + '\n\n【溯源核查未通过】这些数字在本轮工具返回里找不到出处：' + blocked.join('、')
+          + '。两种处理，二选一：\n①用工具重新取数，取到后重写完整回答（数字必须与工具返回一致）；'
+          + '\n②确认系统数据里确实没有，重写回答，把对应项明确写成「数据未包含」并说明原因（如期间超出数据范围/该对象无数据/问法与口径不匹配）。'
+          + '\n禁止保留任何无出处的数字。直接输出重写后的完整回答。' },
+      ];
+      for (let round = 0; round < 3; round++) {
+        const resp = await deps.chat({ system: sys, messages, tools: specs, maxTokens: BUDGET.subAgentTokens });
+        if (!resp || resp.error) return null;
+        const calls = normalizeCalls(resp, agent ? agent.tools : [], deps);
+        if (calls.length) {
+          messages.push({ role: 'assistant', content: resp.content || '' });
+          for (const call of calls.slice(0, 4)) {
+            const v = validateToolArgs(call.tool, call.args, deps.schemas);
+            if (!v.ok) { messages.push({ role: 'user', content: '[参数错误] ' + v.error }); continue; }
+            let out2; try { out2 = await deps.runTool(call.tool, v.args); } catch (e) { out2 = { error: String((e && e.message) || e) }; }
+            messages.push({ role: 'user', content: shrinkToolResult(call.tool, out2) + '\n\n请继续（重写完整回答）。' });
+          }
+          continue;
+        }
+        const txt = splitThink(resp.content || '').answer;
+        if (String(txt || '').trim()) return txt;
+        return null;
+      }
+      return null;
+    } catch (e) { return null; }
   }
 
   /* 主入口：一个问题 → 路由 → 串行跑专家 → 综合 → 数字校验 → 溯源硬门禁
@@ -822,8 +865,13 @@
       // claims 和 notes 都要进答案：模型守规矩把数字放进 claims JSON 时，notes 往往只是补充说明——
       // 旧写法 notes||claims 会把装着数字的 claims 整个丢掉（评测 2026-08-25 云端首题逮住的真 bug）
       const claimsTxt = (only.claims || []).map(c => c.metric + '：' + c.value + (c.unit ? ' ' + c.unit : '')).join('\n');
-      const text = [claimsTxt, only.notes].filter(Boolean).join('\n');
-      const g1 = enforceProvenance(text, toolTrace, question);
+      let text = [claimsTxt, only.notes].filter(Boolean).join('\n');
+      let det = enforceProvenance(text, toolTrace, question, { detectOnly: true });
+      if (det.blocked.length && deps.provRetry) {
+        const rw = await provenanceRetry(question, text, det.blocked, deps, currentBoard);
+        if (rw) { text = rw; det = enforceProvenance(text, toolTrace, question, { detectOnly: true }); }
+      }
+      const g1 = det.blocked.length ? enforceProvenance(text, toolTrace, question, { placeholder: '(未取到)' }) : { answer: text, blocked: [] };
       return { answer: g1.answer || '(空回复)', results, verified: { ok: g1.blocked.length === 0, unsupported: g1.blocked }, singleAgent: true, provenanceBlocked: g1.blocked };
     }
 
@@ -841,8 +889,13 @@
       const gf = enforceProvenance(fallback, toolTrace, question);
       return { answer: gf.answer || '(综合失败)', results, verified: { ok: gf.blocked.length === 0, unsupported: gf.blocked }, synthError: (resp && resp.error) || '无响应', provenanceBlocked: gf.blocked };
     }
-    const answer = splitThink(resp.content || '').answer;
-    const g2 = enforceProvenance(answer, toolTrace, question);
+    let answer = splitThink(resp.content || '').answer;
+    let det2 = enforceProvenance(answer, toolTrace, question, { detectOnly: true });
+    if (det2.blocked.length && deps.provRetry) {
+      const rw2 = await provenanceRetry(question, answer, det2.blocked, deps, currentBoard);
+      if (rw2) { answer = rw2; det2 = enforceProvenance(answer, toolTrace, question, { detectOnly: true }); }
+    }
+    const g2 = det2.blocked.length ? enforceProvenance(answer, toolTrace, question, { placeholder: '(未取到)' }) : { answer: answer, blocked: [] };
     const verified = verifyNumbers(g2.answer, results);
     if (g2.blocked.length) {
       verified.ok = false;

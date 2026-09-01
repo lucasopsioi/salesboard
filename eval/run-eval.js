@@ -321,6 +321,7 @@ function asciiJson(obj) {
         return out;
       },
       optionsDirect: async (field) => registry.options({ field }),
+      provRetry: true,
       schemas: AD.TOOL_SCHEMAS,
       buildToolSpecs: AD.buildToolSpecs,
       pickTools: AD.pickTools,

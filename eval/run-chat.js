@@ -120,6 +120,22 @@ async function chat(req) {
         { q: '把音频线2026年各系列的SO整理成一个Excel文件给我', tool: 'makeExcel' },
       ],
     },
+    (function () {
+      // 场景 E：真实 xlsx 上传——走线上同一条解析路径（office-text-core），连环三问
+      const { extractOfficeText } = require(path.join(__dirname, '..', 'app', 'office-text-core.js'));
+      const fx = path.join(__dirname, '..', 'fixtures', 'sample-prices.xlsx');
+      if (!fs.existsSync(fx)) { try { require('child_process').execSync('node ' + JSON.stringify(path.join(__dirname, 'make-fixtures.js'))); } catch (e) {} }
+      const xtxt = extractOfficeText(fs.readFileSync(fx));
+      return {
+        id: 'E', name: 'Excel 上传（xlsx 解析注入 + 定位/指代计算/跨sheet）',
+        files: [{ name: 'sample-prices.xlsx', content: xtxt }],
+        turns: [
+          { q: '我上传的Excel里，平板竞品促销价最便宜的是哪家的哪个型号？多少钱？', must: ['辰星', 'X11', '179'] },
+          { q: '它比表里促销价最贵的平板便宜多少钱？', must: ['120'] },
+          { q: '音频那个sheet里，头戴式耳机是什么价格？', must: ['澄海|StudioGo', '115|129'] },
+        ],
+      };
+    })(),
   ].filter(s => !ONLY.length || ONLY.indexOf(s.id) >= 0);
 
   const results = [];

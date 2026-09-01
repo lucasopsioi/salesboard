@@ -199,6 +199,8 @@ ipcMain.handle('lifecycleCompare', (_e, params) => {
   try { return engine.lifecycleCompare(params || {}); } catch (e) { return { error: String(e) }; }
 });
 // 路标自动识别取数：按产品/型号给逐月 SI/SO 序列（判定在渲染层的 roadmap-detect.js）
+ipcMain.handle('searchDim', (_e, params) => { try { return engine.searchDim(params || {}); } catch (e) { return { error: String(e) }; } });
+ipcMain.handle('rawRows', (_e, params) => { try { return engine.rawRows(params || {}); } catch (e) { return { error: String(e) }; } });
 ipcMain.handle('launchScan', (_e, params) => {
   try { return engine.launchScan(params || {}); } catch (e) { return { error: String(e) }; }
 });

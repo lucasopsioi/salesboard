@@ -63,6 +63,8 @@ function buildRegistry(engine) {
   };
   return {
     meta: async () => engine.meta(),
+    searchDim: async (a) => engine.searchDim(a || {}),
+    rawRows: async (a) => engine.rawRows(a || {}),
     options: async (a) => {
       a = a || {};
       const f = a.field;

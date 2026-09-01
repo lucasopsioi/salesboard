@@ -64,7 +64,7 @@
   const AGENTS = {
     psi: {
       id: 'psi', name: 'PSI 分析专家', boards: ['psi'],
-      tools: ['meta', 'options', 'query', 'report', 'boardState'],
+      tools: ['meta', 'options', 'query', 'report', 'boardState', 'searchDim', 'rawRows'],
       prompt: [
         '你是 PSI 数据分析专家，负责 Sell-in / Sell-out / 库存 / DOS 的时间序列（全是台数，无金额）。',
         '【底表与录入】长表：同一「9维×期间」拆成 Sell In / Sell Out / Inventory / DOS 四行；解析只认全称（sellin/sellout/inventory|inv/dos），SI/SO 缩写整行丢弃。同键行 sellIn/sellOut 累加、inv/dos 后写覆盖；多文件按 mtime 新文件整行覆盖，不相加。底表自带的 DOS 列一律不用，DOS 永远重算。音频 SO 是人工延迟录入（一般晚 1–2 周），不是激活回传：缺周＝没录，不是卖了 0。真实底表没有汇总行，别用「小计重复计数」解释对不上。',
@@ -79,7 +79,7 @@
     },
     report: {
       id: 'report', name: '汇总/国家/产业专家', boards: ['report', 'country', 'industry'],
-      tools: ['meta', 'options', 'report', 'industryBoard', 'industryTrend', 'boardState'],
+      tools: ['meta', 'options', 'report', 'industryBoard', 'industryTrend', 'boardState', 'searchDim', 'rawRows'],
       prompt: [
         '你是汇总表 / 国家看板 / 产业看板专家，负责「卖了多少、同比多少、库存多少、周转多少天」。三者取数同源于 report()，数字应当一致。',
         '【公式】累计SO/SI＝自然年 1/1 起至全局最新日 maxYmd；去年同期＝去年同一日历 MMDD 截取；同比＝(今年−去年)/去年，去年≤0 记 null 显「—」。年度锚点固定用全量数据的 maxYmd，不随下钻漂移（下钻到当年无SO的停产品也要显示「当年0 / 去年真实值 / −100%」）。周列走 ISO 周，默认近 9 周；WoW＝周列最后两周之比（周列只统计当前 ISO 年，年初时去年 W52/W53 恒 0）。DOS 的近4周窗口按**真实日期**回看 28 天、以 maxYmd 那周收尾，**跨年正确**（2026-08-11 起；此前按 ISO 周号取且只认当年，1 月 DOS 曾虚高至 4 倍）：改 fromW/toW 只改周列与 WoW，不改 DOS。显示库存 inv＝maxYmd 当天所有行求和；DOS 分子在音频走该原子单元 W_last 那周的库存（显示/计算分离）。dos=null 只在「含音频且日均=0」时出现，纯平板日均=0 给 0。全流程库存＝渠道库存 + 库龄表最新运行日的 CDC+FDC；全流程列忽略 channel 筛选，groupDim=channel 时不出该列。DOS 红绿灯：渠道 <90/90–120/>120，全流程 <120/120–150/>150。',
@@ -107,7 +107,7 @@
     },
     inventory: {
       id: 'inventory', name: '库存与销毛专家', boards: ['inventory'],
-      tools: ['meta', 'sosimSummary', 'report', 'options', 'boardState'],
+      tools: ['meta', 'sosimSummary', 'report', 'options', 'boardState', 'searchDim', 'rawRows'],
       prompt: [
         '你是库存管理 / SO 模拟专家（销毛推演已迁出到 siso-lab，本仓只修不加）。',
         '【计算域】库存、成本、约束都是累计量，必须从生命周期起点算到区间末，range 只做显示切片——库存绝不能随所选月份变。cutoff＝PSI 与发货行里的最大 ymd，≤cutoff 是历史只读，>cutoff 是未来可编辑。',
@@ -166,7 +166,7 @@
     },
     source: {
       id: 'source', name: '数据源与口径专家', boards: ['source'],
-      tools: ['meta', 'options', 'boardState'],
+      tools: ['meta', 'options', 'boardState', 'searchDim', 'rawRows'],
       prompt: [
         '你是数据源 / 录入口径专家，回答「这个数从哪来、什么时候更新、为什么缺、为什么解析不出来」。',
         '【六个源】PSI、库龄(全流程CDC+FDC)、财经(实际/预测/BP)、IDC、发货、成本，各锚一个文件夹。识别只认表头，不认文件名、不认列序、不认 Sheet 名；判定顺序 财经快路→PSI→财经→IDC→库龄，先命中即停（同一文件被判成 PSI，里面的财经就不再解析）。PSI 必须同时认出 PSIType 与数量列，缺一整个 Sheet 跳过；PSI_MAP 只认 Sell In/Sell Out/Inventory|INV/DOS 全称，SI/SO 缩写整行丢弃。财经只读第 1 个 Sheet（Sheet2 是 PQ 源底表，扫了会爆内存），表头可在前 60 行内任意一行，三张表要分成三个文件放。成本表认不出表头时按固定列序读（1系列/2型号/3日期/4数值），日期支持文本形态的 5 位 Excel 序列号，Value 空＝缺成本 null 不是 0。发货表只有国家，大区/国家办靠 PSI 反推，名字对不上就成孤儿单元。',
@@ -180,7 +180,7 @@
     },
     weekly: {
       id: 'weekly', name: '产业周报专家', boards: ['audio'],
-      tools: ['meta', 'options', 'report', 'query', 'financeProductBoard', 'boardState'],
+      tools: ['meta', 'options', 'report', 'query', 'financeProductBoard', 'boardState', 'searchDim', 'rawRows'],
       prompt: [
         '你是产业周报（音频/平板可切换）专家。六块：M1 遗留问题（人工录入）、M2 产业经营进展（财经分系列/分国家办）、M3 SI 达成进展、M4 周度销售进展（4 个 KPI + 趋势）、M5 产品维度（按国家逐块）、M6 新品进展。',
         '【M3 口径】累计SI＝Sell-in（渠道全加不去重）；时间进度＝年内第几天 ÷ 全年天数（自然日，闰年366）——注意这与财经 BP/预测的时间进度 (toM−fromM+1)/12 不是同一个算法，不要混用；达成率＝累计SI ÷ SI目标，目标≤0 记 null；「拉美其他」＝范围总量 − 已列名国家之和，不为负（clamp 0）。大盘年空间、目标份额、SI目标都是人工维护的目标值，底表里没有。',
@@ -610,7 +610,7 @@
     /* Round 8(评测 2026-08-28 R7 终审对症)：五类高频失分题型的口径护栏 */
     if (/平均/.test(q) && /(达成|率)/.test(q)) g.push('整体达成率/比率 = 分子合计 ÷ 分母合计（先加总后相除），把各行比率简单平均是错误算法。请给出正确口径的整体值，点名它与简单平均的差异，并把每个成员各自的比率逐行列全。');
     if (/断货|缺货|没卖出去|一台都没|卖不动/.test(q)) g.push('判断断货前必查两件事：①音频产业报量人工延迟1-2周，序列末端1-2周为0多半是「未录入」而不是真没卖；②查当前库存(report 的 inv/dos)，库存充足+末端零 → 结论是「延迟报量/未录入」而非断货。若按产品名查不到，先用 options 确认维度取值再查。');
-    if (/(各个?(系列|产品|型号)|哪些产品|卖得好|卖得不好|表现怎么样)/.test(q)) g.push('批量对比分析：用 query({stackDim:"product"或"series", gran:"month", from/to, filters}) 两次(今年+去年同区间)拿全量矩阵自行汇总，或无期间限制时用 report({groupDim})一把拿全——绝不逐产品单查。某成员取不到数时：必须先用 options 校正该名称属于哪个维度(常见错误：把系列/品类名当产品名)再重查一次；仍取不到才写「未取到」并附上你的调用参数与返回错误原文。');
+    if (/(各个?(系列|产品|型号)|哪些产品|卖得好|卖得不好|表现怎么样)/.test(q)) g.push('批量对比分析：用 query({stackDim:"product"或"series", gran:"month", from/to, filters}) 两次(今年+去年同区间)拿全量矩阵自行汇总，或无期间限制时用 report({groupDim})一把拿全——绝不逐产品单查。某成员取不到数时：必须先用 searchDim({q:该名称}) 跨全维度定位它的真实维度与精确写法(常见错误：把系列/品类名当产品名)再重查一次；仍怀疑数据本身时用 rawRows 下钻原始行；仍取不到才写「未取到」并附上你的调用参数与返回错误原文。');
     if (/逐月|逐周|月度|各月|分别|各占|每个月|每一个/.test(q)) g.push('用户要求逐项数据：必须把每个成员(每月/每处/每国)各自的数值一行一个完整列出，不许只给合计、只挑最大最小或用「等」省略；确无数据的项逐个标「数据未包含」。');
     if (/(上市|首销|发布)/.test(q) && /(什么时候|何时|哪个月|怎么回事|一点量|少量|很小)/.test(q)) g.push('判断上市时间：放量前1-2个月出现的极小销量(比放量月低一个数量级)通常是样机/演示机铺货，不算正式上市。回答必须把「样机期(小量)」与「正式上市(放量月)」分开说，上市时间以首个放量月为准。');
     if (/(做|生成|整理|导出|弄|输出).{0,8}(PPT|ppt|幻灯)/.test(q)) g.push('用户要 PPT：先用 query/report 取齐数据，再调 makePpt({fileName, slides:[{title,bullets,table}]}) 生成——每个主题一页，数字表格放 table（headers+rows），结论要点放 bullets；标题页写清口径与截至时间。生成后告知用户文件已保存并自动打开。');
@@ -756,6 +756,11 @@
     // 记录本轮全部工具返回原文——溯源门禁的比对池
     const toolTrace = [];
     const guards = classifyGuards(question);
+    /* 今天日期恒注入(2026-09-01)：模型不知道今天几号，把「今年」猜成数据里的旧年份(实测把今年当 2025)。 */
+    try {
+      const dnow = new Date();
+      guards.unshift('今天是 ' + dnow.getFullYear() + '-' + String(dnow.getMonth() + 1).padStart(2, '0') + '-' + String(dnow.getDate()).padStart(2, '0') + '；「今年」=' + dnow.getFullYear() + '、「去年」=' + (dnow.getFullYear() - 1) + '；数据截至日以 meta 为准。');
+    } catch (e) {}
     /* 实体预检索(2026-08-31,用户称之为 RAG):问题里点名的产品/国家/产业,先对全维度字典做
        确定性匹配,生成「实体卡」硬约束——取数按实体来,不受界面当前筛选摆布;多实体全带上。
        去前缀:问「Slate 11 Pro」时 'slate11' 也是其子串,同维度内被更长命中值盖住的短值剔除。 */
@@ -808,7 +813,7 @@
               for (const so of dv) { for (const k in so) { if (+so[k]) { empty = false; break; } } if (!empty) break; }
             } catch (e) { empty = false; }
           }
-          if (empty) out.hint = '结果为空：很可能 filters 的维度取值不存在（如把产品名当型号、中英文/大小写不符）。请先用 options({dim:"product"}) 等列出该维度可用取值，校正后重查；确认取值正确仍为空才是真无数据。';
+          if (empty) out.hint = '结果为空：很可能 filters 的维度取值不存在（如把产品名当型号、中英文/大小写不符）。请用 searchDim({q:名称}) 跨全维度定位真实维度与精确写法后重查；确认取值正确仍为空可用 rawRows 下钻确认是否真无数据。';
         }
         try { toolTrace.push(JSON.stringify(out)); } catch (e) {}
         return out;

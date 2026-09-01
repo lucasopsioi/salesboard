@@ -86,6 +86,12 @@ const TOOL_SCHEMAS = {
   financeCustom: { description: '经营自定义取数：按财经维度取指定指标。', properties: { rowDim: { type: 'string', enum: ['rep', 'lv1', 'lv2', 'lv3', 'lv4', 'model'] }, metrics: { type: 'array', items: { type: 'string', enum: ['rev', 'gm', 'gmr', 'cp', 'sellIn', 'sellOut', 'nsip', 'bpAttain', 'fcAttain'] } }, fromM: { type: 'integer' }, toM: { type: 'integer' } }, required: ['rowDim'] },
   industryBoard: { description: '产业 4 个 KPI：今年 SI/SO 累计与同比、当前库存与渠道DOS、全流程库存与DOS。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
   industryTrend: { description: '产业趋势：今年 vs 去年同期逐期序列。', properties: { filters: FILTERS_SCHEMA, metric: { type: 'string', enum: ['sellIn', 'sellOut', 'inv', 'dos'] }, gran: { type: 'string', enum: ['day', 'week', 'month'] } }, required: [] },
+  searchDim: {
+    description: '跨全维度定位一个名称属于哪个维度、精确写法是什么。取不到数/拿不准维度时第一时间用（常见病：把系列名当产品名）。',
+    properties: { q: { type: 'string', description: '要定位的名称(如「低成本TWS耳机」)' } }, required: ['q'] },
+  rawRows: {
+    description: '直查 PSI 底表原始行(未聚合：全维度+日期+SI/SO/INV)。聚合工具查不到/怀疑数据异常时下钻到最底层看记录；默认200行上限500，大范围请用聚合工具。',
+    properties: { filters: FILTERS_SCHEMA, from: { type: 'string', description: 'YYYY-MM-DD' }, to: { type: 'string' }, limit: { type: 'number' } }, required: [] },
   roadmapUpsert: {
     description: '把产品信息写进路标管理(新建或更新)。用户用自然语言/文档描述产品(名称/上市时间/价格/编码/SKU/卖点/EOM等)时，抽取成结构化参数调本工具。白名单外的信息(如 VN1/VN2 编码)放 extras，会存进产品备注绝不丢。路标是用户规划数据，允许代填。',
     properties: {
@@ -712,6 +718,8 @@ const AIData = (function () {
       industryBoard: wrap(a => api.industryBoard(a || {})),
       industryTrend: wrap(a => api.industryTrend(a || {})),
       // 当前看板界面上选了什么（用户说「这个/当前筛选」时先调它）
+      searchDim: wrap(async (a) => api.searchDim(a || {})),
+      rawRows: wrap(async (a) => api.rawRows(a || {})),
       roadmapUpsert: wrap(async (a) => {
         if (!window.RoadmapAPI) return { error: '路标看板未初始化，请先打开一次路标管理视图' };
         return window.RoadmapAPI.upsert(a || {});

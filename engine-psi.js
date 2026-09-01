@@ -150,6 +150,56 @@ C.Engine.prototype.agg = function(p){
      · 附 firstSI/firstSO/lastSO 真实日期，供「样机激活 vs 真上市」取证。
    月轴是所有 item 共享的完整月份序列，缺月补 0（该月没卖 = 0，语义正确）。
    ============================================================ */
+/* 底数据直查(2026-09-01)：AI 取不到数的病根多是名称/维度错位——给两个兒底层能力：
+   searchDim：一个名字跨全维度模糊定位(归一互含+评分)；rawRows：直查底表原始行。 */
+C.Engine.prototype.searchDim = function(p){
+  p=p||{};
+  const s=this.store; if(!s) return {hits:[]};
+  const q=String(p.q||'').trim(); if(!q) return {error:'q 必填(要定位的名称)'};
+  const nrm=x=>String(x==null?'':x).toLowerCase().replace(/[\s\-_/()\uff08\uff09"']/g,'');
+  const nq=nrm(q);
+  const hits=[];
+  C.DIM_KEYS.forEach(dim=>{
+    const dict=s.dimDict[dim]; if(!dict) return;
+    dict.forEach(v=>{
+      const nv=nrm(v); if(!nv) return;
+      let score=0;
+      if(nv===nq) score=100;
+      else if(nv.indexOf(nq)>=0) score=80-Math.min(30,(nv.length-nq.length));
+      else if(nq.indexOf(nv)>=0 && nv.length>=3) score=60-Math.min(30,(nq.length-nv.length));
+      if(score>0) hits.push({dim:dim,value:v,score:score});
+    });
+  });
+  hits.sort((a,b)=>b.score-a.score);
+  return { q:q, hits:hits.slice(0,12),
+    说明: hits.length? '用命中的 dim 作为 filters 键、value 作为取值重查' : '全维度无命中：该名称不在 PSI 底表里(可能是别名/未导入/另一份底表的概念)' };
+};
+C.Engine.prototype.rawRows = function(p){
+  p=p||{};
+  const s=this.store; if(!s) return {rows:[],total:0};
+  const {fl,invalid}=buildFilters(s,p.filters,null);
+  if(invalid) return {rows:[],total:0,error:'filters 里有维度取值不存在，先用 searchDim 定位精确写法'};
+  const fromI=p.from?ymdInt(p.from):0, toI=p.to?ymdInt(p.to):99999999;
+  const limit=Math.max(1,Math.min(500,+p.limit||200));
+  const dims=C.DIM_KEYS.filter(d=>s.dimCode[d]);
+  const rows=[]; let total=0;
+  for(let i=0;i<s.n;i++){
+    let pass=true;
+    for(let j=0;j<fl.length;j++){ if(!fl[j][1].has(fl[j][0][i])){ pass=false; break; } }
+    if(!pass) continue;
+    const y=s.ymd[i]; if(y<fromI||y>toI) continue;
+    total++;
+    if(rows.length>=limit) continue;
+    const r={ymd:y};
+    dims.forEach(d=>{ r[d]=s.dimDict[d][s.dimCode[d][i]]; });
+    if(s.sellIn[i]) r.sellIn=s.sellIn[i];
+    if(s.sellOut[i]) r.sellOut=s.sellOut[i];
+    if(s.inv[i]) r.inv=s.inv[i];
+    rows.push(r);
+  }
+  return { rows:rows, total:total, 截断:total>rows.length,
+    说明:'原始底表行(未聚合);total='+total+' 行命中'+(total>rows.length?(',仅返回前 '+rows.length+' 行——缩小范围或用聚合工具'):'') };
+};
 C.Engine.prototype.launchScan = function(p){
   p=p||{};
   const s=this.store;

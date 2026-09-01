@@ -52,11 +52,12 @@
     '判断每个形状是「静态文字」（标题/口号/固定说明，刷新时不变）还是「数据字段」（数字/日期/带数字的结论，刷新时要换成最新值）。',
     '对每个数据字段写清楚：它是什么数据（描述到能取数的程度：什么指标、什么维度过滤、什么期间口径）、原文的文字模板（把会变的数字换成 {v} 占位，其余文字保留）。',
     '拿不准数据口径的（比如不知道这个数字是怎么算的、从哪筛的）标 confidence:"low" 并在 question 里写出要问用户的具体问题。',
-    '表格：整表算一个形状，逐个会变的单元格列进 cells（r/c 从 0 计，表头行通常是静态不列）。',
+    '表格：整表算一个形状，必须把【每一个】会变的数据格逐行逐格列全进 cells（r/c 从 0 计，表头行通常是静态不列）——有几行数据就列几行，绝不允许只列第一行当例子。每个 cell 也带 tmpl 保留原格的文字格式（如原格是"+7.7%"则 tmpl 为"+{v}%"，原格是"12,345"则 tmpl 为"{v}"）。',
+    'dataDesc 必须写全过滤口径（产线/系列/国家等维度 + 期间），保证照着描述任何时候取数都是同一个口径。',
     '只输出 JSON 数组，不要任何其他文字：',
     '[{"slide":1,"shapeIdx":0,"kind":"static"},',
-    ' {"slide":1,"shapeIdx":2,"kind":"data","dataDesc":"墨西哥平板2026年累计SO(台),PSI口径","tmpl":"累计SO：{v}台","confidence":"high"},',
-    ' {"slide":2,"shapeIdx":0,"kind":"data","table":true,"cells":[{"r":1,"c":1,"dataDesc":"Slate 11系列2026累计SO","confidence":"high"}],"confidence":"high"},',
+    ' {"slide":1,"shapeIdx":2,"kind":"data","dataDesc":"墨西哥平板2026年初至今累计SO(台),PSI渠道全加口径","tmpl":"累计SO：{v}台","confidence":"high"},',
+    ' {"slide":2,"shapeIdx":0,"kind":"data","table":true,"cells":[{"r":1,"c":1,"dataDesc":"Slate系列2026累计SO(台)","tmpl":"{v}","confidence":"high"},{"r":1,"c":2,"dataDesc":"Slate系列SO同比(%)","tmpl":"+{v}%","confidence":"high"},{"r":2,"c":1,"dataDesc":"Coral系列2026累计SO(台)","tmpl":"{v}","confidence":"high"},{"r":2,"c":2,"dataDesc":"Coral系列SO同比(%)","tmpl":"+{v}%","confidence":"high"}],"confidence":"high"},',
     ' {"slide":1,"shapeIdx":3,"kind":"data","dataDesc":"不明比率","tmpl":"达成 {v}","confidence":"low","question":"第1页的『达成 87%』是什么达成率？分子分母各是什么？"}]',
   ].join('\n');
 
@@ -76,10 +77,45 @@
       const sl = struct.slides[(+b.slide || 1) - 1];
       return Object.assign({ id: 'b' + i, slideFile: sl ? sl.file : '', slide: +b.slide || 1, shapeIdx: +b.shapeIdx || 0 }, b);
     }).filter(b => b.slideFile);
+    completeTableCells(struct, bindings, onFlow);
     const dataN = bindings.filter(b => b.kind === 'data').length;
     const lowQ = bindings.filter(b => b.kind === 'data' && b.confidence === 'low' && b.question);
     onFlow('✅ 识别完成：' + dataN + ' 个数据字段（' + lowQ.length + ' 个待确认）');
     return { bindings, questions: lowQ };
+  }
+
+  /* 表格绑定确定性补全：模型常只列第一数据行当例子（提示词五令不止）——
+     对已绑列，把绑定按行成员名复制到其余未绑的数据行，dataDesc 换行首名。 */
+  function completeTableCells(struct, bindings, onFlow) {
+    bindings.forEach(b => {
+      if (b.kind !== 'data' || !b.table || !b.cells || !b.cells.length) return;
+      const sl = struct.slides[(b.slide || 1) - 1];
+      const shape = sl && sl.shapes[b.shapeIdx];
+      if (!shape || shape.type !== 'table' || !shape.rows) return;
+      const rows = shape.rows;
+      const have = {};
+      b.cells.forEach(c => { have[c.r + ',' + c.c] = true; });
+      const added = [];
+      // 已绑的每一列取一个样本，向其余数据行复制
+      const byCol = {};
+      b.cells.forEach(c => { if (!byCol[c.c]) byCol[c.c] = c; });
+      Object.keys(byCol).forEach(cStr => {
+        const col = +cStr, sample = byCol[cStr];
+        const srcMember = String((rows[sample.r] && rows[sample.r][0]) || '').trim();
+        for (let r = 1; r < rows.length; r++) {
+          if (have[r + ',' + col]) continue;
+          const cellTxt = String((rows[r] && rows[r][col]) || '').trim();
+          const member = String((rows[r] && rows[r][0]) || '').trim();
+          if (!cellTxt || !member) continue;           // 空格/无行首名不补
+          let desc = String(sample.dataDesc || '');
+          desc = (srcMember && desc.indexOf(srcMember) >= 0) ? desc.split(srcMember).join(member) : (desc + '（行成员：' + member + '）');
+          b.cells.push({ r, c: col, dataDesc: desc, tmpl: sample.tmpl || '{v}', confidence: sample.confidence || 'high' });
+          have[r + ',' + col] = true;
+          added.push('(' + r + ',' + col + ')' + member);
+        }
+      });
+      if (added.length && onFlow) onFlow('🧮 表格绑定补全：' + added.join(' '));
+    });
   }
 
   async function refine(deps, bindings, userAnswer, onFlow) {
@@ -125,7 +161,7 @@
     onFlow('🔄 按 ' + data.length + ' 个绑定取最新数据…');
     const items = [];
     data.forEach(b => {
-      if (b.table && b.cells) b.cells.forEach((c, ci) => items.push({ key: b.id + '_' + ci, desc: c.dataDesc || '', tmpl: '{v}', b, cell: c }));
+      if (b.table && b.cells) b.cells.forEach((c, ci) => items.push({ key: b.id + '_' + ci, desc: c.dataDesc || '', tmpl: c.tmpl || '{v}', b, cell: c }));
       else items.push({ key: b.id, desc: b.dataDesc || '', tmpl: b.tmpl || '{v}', b });
     });
     const ask = '【模板刷新取数】对下面每个字段用工具查出最新值，严格按字段的口径描述取数；查不到的填 "(未取到)"。全部查完后，最终回复只输出一个 JSON（不要任何其他文字）：{"字段key":"填入的完整文本(把数值代入文字模板的{v})", ...}\n\n' +

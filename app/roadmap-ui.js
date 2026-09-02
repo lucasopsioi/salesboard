@@ -53,7 +53,7 @@
     try { const sm = JSON.parse(localStorage.getItem('sb.roadmap.samples.v1') || 'null'); if (sm && Array.isArray(sm.samples)) state.samples = sm.samples; } catch (e) {}
     try { const ss = JSON.parse(localStorage.getItem('sb.roadmap.samplestyle.v1') || 'null'); if (ss && typeof ss === 'object') state.sampleStyle = { color: ss.color || '#E0A400', opacity: ss.opacity == null ? 0.85 : ss.opacity }; } catch (e) {}
     try { const bs = JSON.parse(localStorage.getItem('sb.roadmap.boxstyle.v1') || 'null'); if (bs && typeof bs === 'object') state.boxStyle = normBoxStyle(bs); } catch (e) {}
-    try { const cr = JSON.parse(localStorage.getItem('sb.roadmap.chart.v1') || 'null'); if (cr && typeof cr === 'object') { state.chart.timeFrom = cr.timeFrom || ''; state.chart.timeTo = cr.timeTo || ''; } } catch (e) {}
+    try { const cr = JSON.parse(localStorage.getItem('sb.roadmap.chart.v1') || 'null'); if (cr && typeof cr === 'object') { state.chart.timeFrom = cr.timeFrom || ''; state.chart.timeTo = cr.timeTo || ''; state.chart.manualFrom = cr.manualFrom || ''; state.chart.manualTo = cr.manualTo || ''; } } catch (e) {}
     try { const ln = JSON.parse(localStorage.getItem(LKEY) || 'null'); if (ln && Array.isArray(ln.launch)) state.launch = ln.launch; } catch (e) {}
     try { const bt = JSON.parse(localStorage.getItem(BKEY) || 'null'); if (bt && Array.isArray(bt.battle)) state.battle = bt.battle; } catch (e) {}
     state.loaded = true;
@@ -69,7 +69,7 @@
   function saveSampleStyle() { try { localStorage.setItem('sb.roadmap.samplestyle.v1', JSON.stringify(state.sampleStyle)); } catch (e) {} }
   function normBoxStyle(bs) { bs = bs || {}; return { fill: /^#[0-9a-fA-F]{6}$/.test(bs.fill) ? bs.fill : '#FFFFFF', opacity: bs.opacity == null ? 1 : +bs.opacity, bold: bs.bold == null ? true : !!bs.bold, fontSize: bs.fontSize == null ? 12 : +bs.fontSize }; }
   function saveBoxStyle() { try { localStorage.setItem('sb.roadmap.boxstyle.v1', JSON.stringify(state.boxStyle)); } catch (e) {} }
-  function saveChartRange() { try { localStorage.setItem('sb.roadmap.chart.v1', JSON.stringify({ timeFrom: state.chart.timeFrom || '', timeTo: state.chart.timeTo || '' })); } catch (e) {} }
+  function saveChartRange() { try { localStorage.setItem('sb.roadmap.chart.v1', JSON.stringify({ timeFrom: state.chart.timeFrom || '', timeTo: state.chart.timeTo || '', manualFrom: state.chart.manualFrom || '', manualTo: state.chart.manualTo || '' })); } catch (e) {} }
   function saveLaunch() { try { localStorage.setItem(LKEY, JSON.stringify({ launch: state.launch })); } catch (e) {} }
   function saveBattle() { try { localStorage.setItem(BKEY, JSON.stringify({ battle: state.battle })); } catch (e) {} }
 
@@ -555,8 +555,21 @@
       const est = RoadmapChart.fobEstimate(ps, FOBCACHE, state.fobCfg);
       ps = est.list; state._fobEstIds = est.estIds; _fobEstN = est.count;
     }
+    /* 缺价兜底(2026-09-01 用户「产品全挤在一个价格段」验尸：缺价产品全钉在中线同一高度)：
+       USD 模式下无价产品沿用前代产品价格落位(渲染副本不落库，框上标 ≈前代)；仍无价的落到底部缺价区 */
+    state._predEstIds = new Set();
+    if (state.chart.mode === 'usd') {
+      const byId = {}; state.products.forEach(pp => { byId[pp.id] = pp; });
+      ps = ps.map(p => {
+        if (p.compositeRrpUsd != null && !isNaN(p.compositeRrpUsd)) return p;
+        let pred = p.predecessorId ? byId[p.predecessorId] : null, hop = 0;
+        while (pred && (pred.compositeRrpUsd == null || isNaN(pred.compositeRrpUsd)) && pred.predecessorId && hop++ < 4) pred = byId[pred.predecessorId];
+        if (pred && pred.compositeRrpUsd != null && !isNaN(pred.compositeRrpUsd)) { state._predEstIds.add(p.realId || p.id); return Object.assign({}, p, { compositeRrpUsd: +pred.compositeRrpUsd }); }
+        return p;
+      });
+    }
     const mf = parseFloat(state.chart.manualFrom), mt = parseFloat(state.chart.manualTo);
-    const manual = (!isNaN(mf) && !isNaN(mt) && mf !== mt) ? { from: mf, to: mt } : null;
+    const manual = (!isNaN(mf) || !isNaN(mt)) ? { from: isNaN(mf) ? null : mf, to: isNaN(mt) ? null : mt } : null;   // 单边也生效
     const isUsd = state.chart.mode === 'usd';
     const usedSeries = [...new Set(ps.map(p => p.seriesGroup).filter(Boolean))];
     const seriesRanges = isUsd ? usedSeries.map(s => state.seriesColors[s]).filter(Boolean).map(sc => ({ from: sc.from, to: sc.to })) : [];
@@ -598,17 +611,21 @@
       }).join('') + '</svg>';
     // 超范围产品计数提示（时间切片器裁掉的产品数）
     if (out.hidden) h += '<div style="position:absolute;left:50%;top:5px;transform:translateX(-50%);font-size:11px;color:var(--c-brand);background:rgba(255,255,255,.88);padding:1px 9px;border-radius:6px;box-shadow:0 1px 2px rgba(16,24,40,.08);z-index:4">' + out.hidden + ' 个产品在时间范围外</div>';
+    const _missN = out.points.filter(p => p.missing).length;
+    if (_missN) h += '<div style="position:absolute;left:' + padL + 'px;bottom:' + (padB + 2) + 'px;font-size:10px;color:var(--ink3);z-index:4">↓ 缺价区：' + _missN + ' 个产品无上市价（编辑产品填价或用≈FOB推算）</div>';
+    if (state._predEstIds && state._predEstIds.size) h += '<div style="position:absolute;right:14px;top:' + (_fobEstN ? 24 : 5) + 'px;font-size:11px;color:var(--ink2);background:rgba(255,255,255,.88);padding:1px 9px;border-radius:6px;z-index:4">≈ ' + state._predEstIds.size + ' 个产品价格沿用前代</div>';
     if (_fobEstN) h += '<div style="position:absolute;right:14px;top:5px;font-size:11px;color:var(--ink2);background:rgba(255,255,255,.88);padding:1px 9px;border-radius:6px;z-index:4">≈ ' + _fobEstN + ' 个产品价格由 Floor FOB×' + state.fobCfg.multTablet + '/' + state.fobCfg.multAudio + ' 推算</div>';
     // 方框（框样式=全局 boxStyle 经产品级覆盖后所见即所得：填充/透明/加粗/字号）
     out.points.forEach(p => {
-      let x = px(p.x), y = p.missing ? py(0.5) : py(p.y);
+      let x = px(p.x), y = p.missing ? (H - padB - 22) : py(p.y);   // 缺价产品落底部缺价区，不再堆在中线
       x = Math.max(padL + 52, Math.min(W - padR - 52, x)); y = Math.max(padT + 22, Math.min(H - padB - 22, y));   // 截断修复(2026-09-01):框锚点限在画布内边距,不再被裁半
       const st = p.style || { fill: '#FFFFFF', opacity: 1, bold: true, fontSize: 12 };
       const op = p.missing ? 0.4 : st.opacity;
       const nmSize = st.fontSize, metaSize = Math.max(8, st.fontSize - 2), nmWeight = st.bold ? 700 : 400;
       const dots = p.dots.slice(0, 6).map(c => '<span class="dot" style="background:' + esc(c) + '"></span>').join('');
       const isEst = state._fobEstIds && state._fobEstIds.has(p.realId);
-      const val = p.missing ? '无本币价' : ((isEst ? '≈' : '') + (state.chart.mode === 'usd' ? ('$' + Math.round(p.value)) : Math.round(p.value)) + (isEst ? '(FOB)' : ''));
+      const isPred = state._predEstIds && state._predEstIds.has(p.realId);
+      const val = p.missing ? (state.chart.mode === 'usd' ? '缺价' : '无本币价') : ((isEst || isPred ? '≈' : '') + (state.chart.mode === 'usd' ? ('$' + Math.round(p.value)) : Math.round(p.value)) + (isEst ? '(FOB)' : (isPred ? '(前代)' : '')));
       const prod = state.products.find(pp => pp.id === p.realId) || {};
       const eomYm = prod.eomPlan || '';
       const eomPast = eomYm && (RoadmapChart.ymNum(eomYm) != null) && (RoadmapChart.ymNum(eomYm) <= (new Date().getFullYear() * 12 + new Date().getMonth() + 1));
@@ -738,6 +755,7 @@
       '<input type="color" id="rmSampleColor" value="' + (/^#[0-9a-fA-F]{6}$/.test(state.sampleStyle.color) ? state.sampleStyle.color : '#E0A400') + '" title="样机框颜色" style="width:34px;height:24px;border:1px solid var(--line);border-radius:6px;padding:0;vertical-align:middle">' +
       '<input type="range" id="rmSampleOpacity" min="0" max="1" step="0.05" value="' + (state.sampleStyle.opacity == null ? 0.85 : state.sampleStyle.opacity) + '" title="样机框透明度" style="width:80px;vertical-align:middle">' +
       '<span style="font-size:12px;color:var(--ink2);margin-right:4px">Y量程</span><input id="rmYFrom" placeholder="自动" value="' + esc(c.manualFrom) + '" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-right:3px">~<input id="rmYTo" placeholder="自动" value="' + esc(c.manualTo) + '" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-left:3px">' +
+      '<button class="btn" id="rmYAuto" title="量程复位为自动" style="padding:4px 8px;margin-left:4px">自动</button>' +
       '<span style="font-size:12px;color:var(--ink2);margin:0 4px 0 12px">时间</span>' +
       '<input type="date" id="rmTimeFrom" value="' + toDateValue(c.timeFrom) + '" title="起始(空=自动)" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit">' +
       '<span style="margin:0 3px">~</span>' +
@@ -759,8 +777,9 @@
     el('rmShowSamples').onchange = (e) => { c.showSamples = e.target.checked; rec(); };
     el('rmSampleColor').oninput = (e) => { state.sampleStyle.color = e.target.value; saveSampleStyle(); rec(); };
     el('rmSampleOpacity').oninput = (e) => { state.sampleStyle.opacity = +e.target.value; saveSampleStyle(); rec(); };
-    el('rmYFrom').oninput = (e) => { c.manualFrom = e.target.value.trim(); rec(); };
-    el('rmYTo').oninput = (e) => { c.manualTo = e.target.value.trim(); rec(); };
+    el('rmYFrom').oninput = (e) => { c.manualFrom = e.target.value.trim(); saveChartRange(); rec(); };
+    el('rmYTo').oninput = (e) => { c.manualTo = e.target.value.trim(); saveChartRange(); rec(); };
+    el('rmYAuto').onclick = () => { c.manualFrom = ''; c.manualTo = ''; saveChartRange(); renderChartTools(); rec(); };
     el('rmTimeFrom').onchange = () => { c.timeFrom = dateRead('rmTimeFrom'); applyTimeRange(); };
     el('rmTimeTo').onchange = () => { c.timeTo = dateRead('rmTimeTo'); applyTimeRange(); };
     el('rmTimeReset').onclick = () => { c.timeFrom = ''; c.timeTo = ''; applyTimeRange(); };

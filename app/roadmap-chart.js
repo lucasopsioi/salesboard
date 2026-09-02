@@ -46,8 +46,10 @@
   }
   function priceScale(values, manualRange) {
     let min, max;
-    if (manualRange && manualRange.from != null && manualRange.to != null) {
-      min = +manualRange.from; max = +manualRange.to;                 // 手动量程：用户说了算
+    const mF = manualRange && manualRange.from != null && !isNaN(+manualRange.from) ? +manualRange.from : null;
+    const mT = manualRange && manualRange.to != null && !isNaN(+manualRange.to) ? +manualRange.to : null;
+    if (mF != null && mT != null && mF !== mT) {
+      min = Math.min(mF, mT); max = Math.max(mF, mT);                 // 手动量程：用户说了算（起止写反自动对调）
     } else {
       const xs = (values || []).map(Number).filter(v => !isNaN(v));
       let lo = xs.length ? Math.min(...xs) : 0, hi = xs.length ? Math.max(...xs) : 0;
@@ -59,6 +61,11 @@
       if (lo > 0 && lo < step) lo = 0;                                // 贴近 0 时干脆落到 0，轴更好读
       if (hi === lo) hi = lo + step;
       min = lo; max = hi;
+      // 单边手动(2026-09-01)：只填了起或止 → 该边用户说了算，另一边沿用自动
+      if (mF != null && mF !== max) min = mF;
+      if (mT != null && mT !== min) max = mT;
+      if (max < min) { const t = min; min = max; max = t; }
+      if (max === min) max = min + 1;
     }
     return { min, max, y: (v) => (max === min ? 0.5 : (max - v) / (max - min)) };
   }
@@ -174,7 +181,7 @@
     });
     const vals = [];
     entries.forEach(e => { if (e.out) return; e.boxes.forEach(b => { if (b.value != null) vals.push(b.value); }); });
-    (opts.seriesRanges || []).forEach(r => { const f = parseFloat(r.from), t = parseFloat(r.to); if (!isNaN(f)) vals.push(f); if (!isNaN(t)) vals.push(t); });
+    // 自动量程只看产品价(2026-09-01)：系列色带 from/to 曾一并参与，一条 0~2000 的色带就把所有产品挤成一条线；色带越界部分由 seriesBands 裁到轴内
     const ps = priceScale(vals, opts.manualRange);
     const points = [];
     entries.forEach(e => {

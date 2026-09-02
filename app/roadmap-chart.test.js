@@ -112,4 +112,21 @@ ok('pptx lines 正交', prL.lines.length >= 2 && prL.lines.every(l => Math.abs(l
 ok('pptx lines 仅末段箭头', prL.lines.filter(l => l.arrow).length === 1 && prL.lines[prL.lines.length - 1].arrow === true);
 ok('pptx lines 段间连续', prL.lines.slice(1).every((l, i) => Math.abs(l.x1 - prL.lines[i].x2) < 1e-9 && Math.abs(l.y1 - prL.lines[i].y2) < 1e-9));
 
+
+// 2026-09-01 Y 量程修复：单边手动量程生效；自动量程不再被系列色带 from/to 撑大
+{
+  const RC = (typeof RoadmapChart !== 'undefined') ? RoadmapChart : require('./roadmap-chart.js');
+  const mk = (n, v, d) => ({ id: n, name: n, shipLate: d, compositeRrpUsd: v, skus: [], seriesGroup: 'S' });
+  const ps = [mk('a', 100, '2025/01'), mk('b', 200, '2025/06'), mk('c', 300, '2026/01')];
+  const auto = RC.productPoints(ps, { mode: 'usd' }).pScale;
+  const oneTop = RC.productPoints(ps, { mode: 'usd', manualRange: { from: null, to: 500 } }).pScale;
+  const oneBot = RC.productPoints(ps, { mode: 'usd', manualRange: { from: 50, to: null } }).pScale;
+  const swapped = RC.productPoints(ps, { mode: 'usd', manualRange: { from: 400, to: 150 } }).pScale;
+  const inflated = RC.productPoints(ps, { mode: 'usd', seriesRanges: [{ from: 0, to: 5000 }] }).pScale;
+  const okq = (n, c) => { console.log((c ? 'PASS ' : 'FAIL ') + n); if (!c && typeof fail !== 'undefined') fail++; if (!c && typeof fails !== 'undefined') fails++; };
+  okq('Y1 单边只填上限 → max=500 且 min 沿用自动', oneTop.max === 500 && oneTop.min === auto.min);
+  okq('Y2 单边只填下限 → min=50 且 max 沿用自动', oneBot.min === 50 && oneBot.max === auto.max);
+  okq('Y3 起止写反自动对调', swapped.min === 150 && swapped.max === 400);
+  okq('Y4 系列色带 0~5000 不再撑大自动量程', inflated.max === auto.max && inflated.min === auto.min);
+}
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS'); process.exit(f ? 1 : 0);

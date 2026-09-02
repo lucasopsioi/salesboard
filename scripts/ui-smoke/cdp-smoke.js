@@ -4,7 +4,7 @@
 'use strict';
 const fs = require('fs'); const path = require('path');
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-const VIEWS = ['psi', 'industry', 'country', 'report', 'finance', 'inventory', 'fob', 'pricing', 'pricinglib', 'custom', 'designer', 'pptoutput', 'textout', 'roadmap', 'source', 'agentchat'];
+const VIEWS = ['home', 'psi', 'industry', 'country', 'report', 'finance', 'inventory', 'fob', 'pricing', 'pricinglib', 'custom', 'designer', 'pptoutput', 'textout', 'roadmap', 'source', 'agentchat'];
 (async () => {
   let target = null;
   for (let i = 0; i < 30 && !target; i++) { try { const list = await (await fetch('http://127.0.0.1:9224/json')).json(); target = list.find(t => t.type === 'page' && /index\.html/.test(t.url || '')); } catch (e) {} if (!target) await sleep(1000); }

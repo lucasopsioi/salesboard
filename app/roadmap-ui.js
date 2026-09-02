@@ -750,21 +750,21 @@
       '<span class="rm-seg" style="margin-right:10px"><button id="rmModeUsd" class="' + (c.mode === 'usd' ? 'on' : '') + '">USD</button><button id="rmModeLocal" class="' + (c.mode === 'local' ? 'on' : '') + '">本币</button></span>' +
       (c.mode === 'local' ? sel('rmCountry', '选国家', countries, c.country) : '') +
       '<span style="font-size:12px;color:var(--ink2);margin:0 6px">年份</span>' + sel('rmYear', '全部', years, c.year) +
-      '<label style="font-size:12px;margin-right:10px"><input type="checkbox" id="rmExplode"' + (c.explode ? ' checked' : '') + '> 型号拆解</label>' +
+      '<label style="font-size:12px;margin-right:10px"><input type="checkbox" id="rmExplode"' + (c.explode ? ' checked' : '') + ' title="把每个产品按 SKU 型号拆成多个卡片"> 按型号拆开</label>' +
       '<label style="font-size:12px;margin-right:6px"><input type="checkbox" id="rmShowSamples"' + (c.showSamples ? ' checked' : '') + '> 显示样机</label>' +
       '<input type="color" id="rmSampleColor" value="' + (/^#[0-9a-fA-F]{6}$/.test(state.sampleStyle.color) ? state.sampleStyle.color : '#E0A400') + '" title="样机框颜色" style="width:34px;height:24px;border:1px solid var(--line);border-radius:6px;padding:0;vertical-align:middle">' +
       '<input type="range" id="rmSampleOpacity" min="0" max="1" step="0.05" value="' + (state.sampleStyle.opacity == null ? 0.85 : state.sampleStyle.opacity) + '" title="样机框透明度" style="width:80px;vertical-align:middle">' +
-      '<span style="font-size:12px;color:var(--ink2);margin-right:4px">Y量程</span><input id="rmYFrom" placeholder="自动" value="' + esc(c.manualFrom) + '" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-right:3px">~<input id="rmYTo" placeholder="自动" value="' + esc(c.manualTo) + '" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-left:3px">' +
-      '<button class="btn" id="rmYAuto" title="量程复位为自动" style="padding:4px 8px;margin-left:4px">自动</button>' +
+      '<span style="font-size:12px;color:var(--ink2);margin-right:4px" title="价格轴显示范围：填起止价即可，只填一边另一边自动；空=自动">价格轴</span><input id="rmYFrom" placeholder="最低" title="价格轴最低值(美元)，空=自动" value="' + esc(c.manualFrom) + '" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-right:3px">~<input id="rmYTo" placeholder="最高" title="价格轴最高值(美元)，空=自动" value="' + esc(c.manualTo) + '" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-left:3px">' +
+      '<button class="btn" id="rmYAuto" title="价格轴恢复自动" style="padding:4px 8px;margin-left:4px">自动</button>' +
       '<span style="font-size:12px;color:var(--ink2);margin:0 4px 0 12px">时间</span>' +
       '<input type="date" id="rmTimeFrom" value="' + toDateValue(c.timeFrom) + '" title="起始(空=自动)" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit">' +
       '<span style="margin:0 3px">~</span>' +
       '<input type="date" id="rmTimeTo" value="' + toDateValue(c.timeTo) + '" title="结束(空=自动)" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit">' +
       '<button class="btn" id="rmTimeReset" title="复位为自动全范围" style="padding:4px 8px;margin-left:4px">复位</button>' +
-      '<button class="btn" id="rmBoxStyle" title="全局框样式（单产品可在产品弹窗覆盖）" style="padding:4px 10px;margin-left:12px">框样式…</button>' +
-      '<label style="font-size:12px;margin-left:12px" title="缺价产品用 Floor FOB×渠长倍数推算 RRP 落位(≈标注);手填RRP/SKU价永远优先"><input type="checkbox" id="rmFobEst"' + (state.fobCfg.on ? ' checked' : '') + '> ≈FOB推算缺价</label>' +
-      '<span style="font-size:12px;color:var(--ink2)"> 平板×</span><input id="rmFobMt" value="' + state.fobCfg.multTablet + '" style="width:42px;border:1px solid var(--line);border-radius:6px;padding:4px 4px">' +
-      '<span style="font-size:12px;color:var(--ink2)"> 音频×</span><input id="rmFobMa" value="' + state.fobCfg.multAudio + '" style="width:36px;border:1px solid var(--line);border-radius:6px;padding:4px 4px">';
+      '<button class="btn" id="rmBoxStyle" title="产品卡片的填充色/透明度/字号（单个产品可在编辑弹窗单独设置）" style="padding:4px 10px;margin-left:12px">卡片样式…</button>' +
+      '<label style="font-size:12px;margin-left:12px" title="缺价产品用 Floor FOB×渠长倍数推算 RRP 落位(≈标注);手填RRP/SKU价永远优先"><input type="checkbox" id="rmFobEst"' + (state.fobCfg.on ? ' checked' : '') + '> 缺价用 FOB 估算</label>' +
+      '<span style="font-size:12px;color:var(--ink2)" title="平板：FOB × 该倍数 ≈ 零售价"> 平板×</span><input id="rmFobMt" value="' + state.fobCfg.multTablet + '" style="width:42px;border:1px solid var(--line);border-radius:6px;padding:4px 4px">' +
+      '<span style="font-size:12px;color:var(--ink2)" title="音频：FOB × 该倍数 ≈ 零售价"> 音频×</span><input id="rmFobMa" value="' + state.fobCfg.multAudio + '" style="width:36px;border:1px solid var(--line);border-radius:6px;padding:4px 4px">';
     const rec = () => renderChart();
     el('rmModeUsd').onclick = () => { c.mode = 'usd'; renderChartTools(); rec(); };
     el('rmModeLocal').onclick = () => { c.mode = 'local'; if (!c.country && countries.length) c.country = countries[0]; renderChartTools(); rec(); };

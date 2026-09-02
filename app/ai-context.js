@@ -99,7 +99,7 @@ const TOOL_SCHEMAS = {
     description: '把产品信息写进路标管理(新建或更新)。用户用自然语言/文档描述产品(名称/上市时间/价格/编码/SKU/卖点/EOM等)时，抽取成结构化参数调本工具。白名单外的信息(如 VN1/VN2 编码)放 extras，会存进产品备注绝不丢。路标是用户规划数据，允许代填。',
     properties: {
       name: { type: 'string', description: '产品名(必填;已有产品模糊匹配更新,否则新建)' },
-      fields: { type: 'object', description: '可选字段(中文名→键名): 内部编码→internalCode, 认证型号→certModel, 上市/最晚发货→shipLate(YYYY/MM), 最早发货→shipEarly, 停售→salesEnd, EOM/退市计划→eomPlan, 价格/定价→compositeRrpUsd(美元数字), 系列→seriesGroup, 产业→category, PSI关联名→psiLink。凡能对上这些中文名的信息必须用对应键名写进 fields，对不上的才进 extras' },
+      fields: { type: 'object', description: '可选字段(中文名→键名): 内部编码→internalCode, 认证型号→certModel, 上市/最晚发货→shipLate(YYYY/MM), 最早发货→shipEarly, 停售→salesEnd, EOM/退市计划→eomPlan, 价格/定价→compositeRrpUsd(美元数字), 系列→seriesGroup, 产业→category, PSI关联名→psiLink, 前代/上一代/接续的产品→predecessor(填前代产品名)。凡能对上这些中文名的信息必须用对应键名写进 fields，对不上的才进 extras' },
       skus: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, color: { type: 'string' }, ram: { type: 'string' }, rom: { type: 'string' }, chip: { type: 'string' }, ean: { type: 'string' } }, required: ['name'] } },
       sellingPoints: { type: 'array', items: { type: 'string' } },
       extras: { type: 'object', description: '白名单外的键值(如 VN1编码)，全部存入产品备注' },

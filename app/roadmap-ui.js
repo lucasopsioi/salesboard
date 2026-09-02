@@ -178,7 +178,8 @@
       /* 可新建路标(2026-09-01 补接线：此前 newCards 从未被赋值，建卡表格永远不出现)：
          孤儿按 product 聚成卡(晚上市≥3月的 SKU 单独成卡)，上市价从定价库匹配，中高置信默认勾选 */
       DET.newCards = window.RoadmapDetect.groupOrphans(m.orphans, { lateSkuMonths: 3 });
-      DET.newCards.forEach(c => { c.priceUsd = detMatchPrice(c); c.noProductCol = !!(c.product && c.product === c.modelKey); });
+      DET.newCards.forEach(c => { c.priceUsd = detMatchPrice(c); c.noProductCol = !!(c.product && c.product === c.modelKey); c.predId = ''; });
+      DET.newCards.forEach(c => { c.predId = detGuessPredecessor(c, DET.newCards); });
       DET.newSel = {}; DET.newEdit = {};
       DET.newCards.forEach((c, i) => { if (c.confidence !== 'low' && c.launchMonth) DET.newSel[i] = true; });
       // 默认只勾「有匹配 + 中高置信度」的，低置信度让用户自己看过再决定
@@ -206,11 +207,29 @@
       return (v != null && isFinite(v)) ? +v.toFixed(2) : null;
     } catch (e) { return null; }
   }
-  /* 一键建卡：勾选的候选 → 新路标产品(名称/上市月/系列/PSI关联/SKU/上市价)，写盘后刷新 */
+  /* 猜前代产品：同名去掉数字后相同且数字更小的最大者(Slate SE 11 → Slate SE 10)，其次同系列里上市最晚的既有产品 */
+  function detGuessPredecessor(c, cards) {
+    const stem = s => String(s || '').toLowerCase().replace(/[0-9]+/g, '#').replace(/ +/g, '');
+    const num = s => { const m = String(s || '').match(/[0-9]+/g); return m ? +m[m.length - 1] : NaN; };
+    const cands = (state.products || []).filter(p => p.name);
+    const st = stem(c.name), n = num(c.name);
+    const same = cands.filter(p => stem(p.name) === st && isFinite(num(p.name)) && num(p.name) < n).sort((a, b) => num(b.name) - num(a.name));
+    if (same.length) return same[0].id;
+    // 同批候选互为前代：Slate SE 11 的前代 Slate SE 10 往往就在同一批识别结果里
+    const sameCard = (cards || []).map((x, i) => ({ x, i })).filter(o => o.x !== c && stem(o.x.name) === st && isFinite(num(o.x.name)) && num(o.x.name) < n).sort((a, b) => num(b.x.name) - num(a.x.name));
+    if (sameCard.length) return 'card:' + sameCard[0].i;
+    const ser = c.series || c.line;
+    const sib = cands.filter(p => ser && p.seriesGroup === ser && p.shipLate).sort((a, b) => String(b.shipLate).localeCompare(String(a.shipLate)));
+    return sib.length ? sib[0].id : '';
+  }
+  /* 一键建卡：勾选的候选 → 新路标产品(名称/上市月/系列/PSI关联/SKU/上市价/前代)，写盘后刷新 */
   function detCreateCards() {
     const picked = (DET.newCards || []).map((c, i) => ({ c, i })).filter(x => DET.newSel[x.i]);
     if (!picked.length) { alert('没有勾选任何候选。'); return; }
     let n = 0;
+    const createdByIdx = {};   // 同批候选 idx → 新建产品(供回填前代)
+    const pendingPred = [];    // [{p, cardIdx}]
+    picked.sort((a, b) => String(a.c.launchMonth || '').localeCompare(String(b.c.launchMonth || '')));   // 先建早上市的（前代）
     picked.forEach(({ c, i }) => {
       const e2 = DET.newEdit[i] || {};
       const name = String(e2.name != null ? e2.name : c.name).trim(); if (!name) return;
@@ -222,12 +241,20 @@
       p.seriesGroup = c.series || c.line || '';
       p.category = c.line || '';
       p.psiLink = c.modelKey || '';
-      const price = e2.price != null && String(e2.price).trim() !== '' ? +e2.price : c.priceUsd;
+      const predRef = e2.pred != null ? e2.pred : (c.predId || '');
+      let pred = null;
+      if (/^card:/.test(predRef)) { const ci = +predRef.slice(5); if (createdByIdx[ci]) pred = createdByIdx[ci]; else pendingPred.push({ p, cardIdx: ci }); }
+      else if (predRef) pred = state.products.find(x => x.id === predRef) || null;
+      if (pred) p.predecessorId = pred.id;
+      let price = e2.price != null && String(e2.price).trim() !== '' ? +e2.price : c.priceUsd;
+      let priceNote = '';
+      if ((price == null || !isFinite(price)) && pred && pred.compositeRrpUsd != null) { price = +pred.compositeRrpUsd; priceNote = '；上市价参考前代 ' + pred.name + ' US$' + price; }
       if (price != null && isFinite(price)) p.compositeRrpUsd = +price;
       p.skus = (c.models && c.models.length ? c.models : [c.modelKey]).filter(Boolean).map(mk => ({ name: mk, color: '#1E9E57', ean: '', ram: '', rom: '', chip: '', matte: false, bom: '' }));
-      p.customInfo = '【自动识别 ' + new Date().toISOString().slice(0, 10) + '】来源 PSI 底表：' + (c.line || '') + (c.series ? '/' + c.series : '') + '；识别上市 ' + (c.launchMonth || '') + '（置信 ' + (c.confidence || '') + '）' + (c.kind === 'newSku' ? '；晚上市 SKU 独立成卡' : '');
-      state.products.push(p); n++;
+      p.customInfo = '【自动识别 ' + new Date().toISOString().slice(0, 10) + '】来源 PSI 底表：' + (c.line || '') + (c.series ? '/' + c.series : '') + '；识别上市 ' + (c.launchMonth || '') + '（置信 ' + (c.confidence || '') + '）' + (c.kind === 'newSku' ? '；晚上市 SKU 独立成卡' : '') + (pred ? '；前代 ' + pred.name : '') + priceNote;
+      state.products.push(p); createdByIdx[i] = p; n++;
     });
+    pendingPred.forEach(({ p, cardIdx }) => { const t = createdByIdx[cardIdx]; if (t) p.predecessorId = t.id; });
     if (!n) { alert('没有可新建的产品（可能同名已存在）。'); return; }
     if (save()) { alert('已新建 ' + n + ' 个路标产品。可在列表/路标图中继续补充信息。'); DET.newSel = {}; detRun(); }
   }
@@ -298,7 +325,7 @@
         h += '<div class="card" style="margin-top:10px;padding:10px 12px">'
           + '<div style="font-size:13px;font-weight:600;margin-bottom:6px">可新建路标（' + DET.newCards.length + ' 个：PSI 里有、路标里还没建）</div>'
           + '<table class="data" style="width:100%;font-size:12px"><tr>'
-          + ['✓', '类型', '名称(可改)', '产业/系列', '识别上市月(可改)', '退市', '上市价US$(可改)', 'SKU', '置信'].map(t => '<th style="text-align:left;padding:4px 6px">' + t + '</th>').join('') + '</tr>';
+          + ['✓', '类型', '名称(可改)', '产业/系列', '识别上市月(可改)', '退市', '前代产品(可选)', '上市价US$(可改)', 'SKU', '置信'].map(t => '<th style="text-align:left;padding:4px 6px">' + t + '</th>').join('') + '</tr>';
         DET.newCards.forEach((c, i) => {
           const e2 = DET.newEdit[i] || {};
           h += '<tr>'
@@ -308,7 +335,9 @@
             + '<td style="padding:4px 6px">' + esc((c.line || '') + (c.series ? '/' + c.series : '')) + '</td>'
             + '<td style="padding:4px 6px"><input value="' + esc(e2.ship != null ? e2.ship : window.RoadmapDetect.toRoadmapMonth(c.launchMonth)) + '" data-newship="' + i + '" style="width:80px" placeholder="YYYY/MM"></td>'
             + '<td style="padding:4px 6px">' + (c.status === 'eol' && c.eolMonth ? esc(window.RoadmapDetect.toRoadmapMonth(c.eolMonth)) : '—') + '</td>'
-            + '<td style="padding:4px 6px"><input value="' + esc(e2.price != null ? e2.price : (c.priceUsd != null ? c.priceUsd : '')) + '" data-newprice="' + i + '" style="width:70px" placeholder="未匹配"></td>'
+            + (function () { const cur = e2.pred != null ? e2.pred : (c.predId || ''); const pre = state.products.find(x => x.id === cur);
+                return '<td style="padding:4px 6px"><select data-newpred="' + i + '" style="max-width:150px"><option value="">（无）</option>' + (state.products || []).map(p => '<option value="' + esc(p.id) + '"' + (p.id === cur ? ' selected' : '') + '>' + esc(p.name || p.id) + '</option>').join('') + DET.newCards.map((o, j) => j === i ? '' : '<option value="card:' + j + '"' + (('card:' + j) === cur ? ' selected' : '') + '>' + esc((DET.newEdit[j] && DET.newEdit[j].name) || o.name) + '（本批新建）</option>').join('') + '</select></td>'
+                  + '<td style="padding:4px 6px"><input value="' + esc(e2.price != null ? e2.price : (c.priceUsd != null ? c.priceUsd : '')) + '" data-newprice="' + i + '" style="width:70px" placeholder="' + (pre && pre.compositeRrpUsd != null ? ('参考前代$' + pre.compositeRrpUsd) : '未匹配') + '"></td>'; })()
             + '<td style="padding:4px 6px;color:var(--ink3)">' + esc((c.models || []).join(', ').slice(0, 40)) + '</td>'
             + '<td style="padding:4px 6px">' + esc((window.RoadmapDetect.CONF_LABEL || {})[c.confidence] || c.confidence || '') + '</td>'
             + '</tr>';
@@ -403,6 +432,7 @@
     host.querySelectorAll('[data-newname]').forEach(ip => ip.addEventListener('change', () => { (DET.newEdit[ip.dataset.newname] = DET.newEdit[ip.dataset.newname] || {}).name = ip.value; }));
     host.querySelectorAll('[data-newship]').forEach(ip => ip.addEventListener('change', () => { (DET.newEdit[ip.dataset.newship] = DET.newEdit[ip.dataset.newship] || {}).ship = ip.value; }));
     host.querySelectorAll('[data-newprice]').forEach(ip => ip.addEventListener('change', () => { (DET.newEdit[ip.dataset.newprice] = DET.newEdit[ip.dataset.newprice] || {}).price = ip.value; }));
+    host.querySelectorAll('[data-newpred]').forEach(sel => sel.addEventListener('change', () => { (DET.newEdit[sel.dataset.newpred] = DET.newEdit[sel.dataset.newpred] || {}).pred = sel.value; renderMain(); }));
     bind('rmDetCreate', detCreateCards);
   }
 

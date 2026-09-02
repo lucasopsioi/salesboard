@@ -36,5 +36,19 @@ ok('N10 模糊多命中走新建不猜', r.action === 'created' && r.products.le
 r = NL.upsertProduct([], { fields: { shipLate: '2026/01' } }, blank);
 ok('N11 缺 name 报错', !!r.error);
 
+// N12 前代产品按名字解析成 predecessorId（模型只会说「前代是 Slate SE 11」）
+{
+  let ps = NL.upsertProduct([], { name: 'Slate SE 11', fields: { shipLate: '2025/01', seriesGroup: 'Dorado' } }, blank).products;
+  const r12 = NL.upsertProduct(ps, { name: 'Slate SE 12', fields: { shipLate: '2026/11', predecessor: 'Slate SE 11', compositeRrpUsd: 199 } }, blank);
+  const p12 = r12.products.find(x => x.name === 'Slate SE 12'), p11 = r12.products.find(x => x.name === 'Slate SE 11');
+  ok('N12a 前代名解析成 id', !!p12 && !!p11 && p12.predecessorId === p11.id);
+  ok('N12b applied 记录前代', r12.applied.some(a => /predecessorId=Slate SE 11/.test(a)));
+  const r13 = NL.upsertProduct(r12.products, { name: 'Slate SE 13', fields: { predecessorId: 'Slate SE 12' } }, blank);
+  const p13 = r13.products.find(x => x.name === 'Slate SE 13');
+  ok('N12c 模型把名字塞进 predecessorId 也解析', !!p13 && p13.predecessorId === p12.id);
+  const r14 = NL.upsertProduct(r13.products, { name: 'X1', fields: { predecessor: '不存在的产品' } }, blank);
+  ok('N12d 解析不到进备注不丢', r14.extras.some(e => /前代产品/.test(e)) && !r14.products.find(x => x.name === 'X1').predecessorId);
+}
+
 console.log(fail ? (fail + ' FAILED') : ('ALL PASS (' + pass + ')'));
 process.exit(fail ? 1 : 0);

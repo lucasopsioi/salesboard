@@ -19,7 +19,7 @@
     name: 'string', internalCode: 'string', certModel: 'string',
     shipLate: 'ym', shipEarly: 'ym', salesEnd: 'ym', eomPlan: 'ym',
     compositeRrpUsd: 'number', seriesGroup: 'string', category: 'string',
-    psiLink: 'string', predecessorId: 'string', customInfo: 'append',
+    psiLink: 'string', predecessorId: 'string', predecessor: 'ref', customInfo: 'append',
   };
 
   const normYm = v => {
@@ -62,6 +62,12 @@
       if (v == null || v === '') return;
       if (!kind) { out.extras.push(k + '：' + v); return; }
       if (kind === 'ym') { const ym = normYm(v); if (ym) { p[k] = ym; out.applied.push(k + '=' + ym); } return; }
+      // 前代产品：按名字在既有产品里解析成 id（模型只会说「前代是 Slate SE 11」）；解析不到进备注不丢
+      if (kind === 'ref' || (k === 'predecessorId' && !out.products.some(x => x.id === v))) {
+        const t = findProduct(out.products.filter(x => x !== p), String(v));
+        if (t) { p.predecessorId = t.id; out.applied.push('predecessorId=' + t.name); } else { out.extras.push('前代产品：' + v); }
+        return;
+      }
       if (kind === 'number') { const n2 = parseFloat(v); if (isFinite(n2)) { p[k] = Math.round(n2 * 100) / 100; out.applied.push(k + '=' + p[k]); } return; }
       if (kind === 'append') return;   // customInfo 统一走 extras 通道
       p[k] = String(v).trim(); out.applied.push(k + '=' + p[k]);

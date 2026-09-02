@@ -175,12 +175,61 @@
       const m = window.RoadmapDetect.matchProducts(state.products, DET.dets);
       DET.rows = m.rows; DET.orphans = m.orphans;
       DET.sel = {}; DET.edit = {};
+      /* 可新建路标(2026-09-01 补接线：此前 newCards 从未被赋值，建卡表格永远不出现)：
+         孤儿按 product 聚成卡(晚上市≥3月的 SKU 单独成卡)，上市价从定价库匹配，中高置信默认勾选 */
+      DET.newCards = window.RoadmapDetect.groupOrphans(m.orphans, { lateSkuMonths: 3 });
+      DET.newCards.forEach(c => { c.priceUsd = detMatchPrice(c); c.noProductCol = !!(c.product && c.product === c.modelKey); });
+      DET.newSel = {}; DET.newEdit = {};
+      DET.newCards.forEach((c, i) => { if (c.confidence !== 'low' && c.launchMonth) DET.newSel[i] = true; });
       // 默认只勾「有匹配 + 中高置信度」的，低置信度让用户自己看过再决定
       DET.rows.forEach(r => { if (r.det && r.det.confidence !== 'low' && r.det.launchMonth) DET.sel[r.productId] = true; });
     } catch (e) {
       DET.err = (e && e.message) || String(e);
     }
     DET.busy = false; renderMain();
+  }
+
+  /* 定价库匹配：按产品名/型号归一互含找记录，上市价取 RRP 美元(rrp/fx)，退而取 NSIP */
+  function detMatchPrice(c) {
+    try {
+      let recs = [];
+      const px = window.PXLIB;
+      if (px && px.records) recs = px.records instanceof Map ? [...px.records.values()] : (Array.isArray(px.records) ? px.records : []);
+      if (!recs.length) { try { const o = JSON.parse(localStorage.getItem('sb.pricing.lib.v1') || 'null'); recs = (o && o.records) || []; } catch (e) {} }
+      if (!recs.length) return null;
+      const nm = s => String(s == null ? '' : s).toLowerCase().replace(/[\s_\-\/()（）·]/g, '');
+      const keys = [c.name, c.product].concat(c.models || []).map(nm).filter(Boolean);
+      const hit = recs.filter(r => { const a = nm(r.product), b = nm(r.sku); return keys.some(k => (a && (a === k || a.indexOf(k) >= 0 || k.indexOf(a) >= 0)) || (b && (b === k || b.indexOf(k) >= 0 || k.indexOf(b) >= 0))); });
+      if (!hit.length) return null;
+      const r = hit[0];
+      const v = (r.rrpUsd != null) ? +r.rrpUsd : (r.rrp && r.fx ? +r.rrp / +r.fx : (r.snap && r.snap.nsipUsd != null ? +r.snap.nsipUsd : null));
+      return (v != null && isFinite(v)) ? +v.toFixed(2) : null;
+    } catch (e) { return null; }
+  }
+  /* 一键建卡：勾选的候选 → 新路标产品(名称/上市月/系列/PSI关联/SKU/上市价)，写盘后刷新 */
+  function detCreateCards() {
+    const picked = (DET.newCards || []).map((c, i) => ({ c, i })).filter(x => DET.newSel[x.i]);
+    if (!picked.length) { alert('没有勾选任何候选。'); return; }
+    let n = 0;
+    picked.forEach(({ c, i }) => {
+      const e2 = DET.newEdit[i] || {};
+      const name = String(e2.name != null ? e2.name : c.name).trim(); if (!name) return;
+      if (state.products.some(p => p.name === name)) return;   // 同名已存在不重复建
+      const p = blankProduct();
+      p.name = name;
+      p.shipLate = e2.ship != null ? String(e2.ship).trim() : window.RoadmapDetect.toRoadmapMonth(c.launchMonth);
+      if (c.status === 'eol' && c.eolMonth) p.salesEnd = window.RoadmapDetect.toRoadmapMonth(c.eolMonth);
+      p.seriesGroup = c.series || c.line || '';
+      p.category = c.line || '';
+      p.psiLink = c.modelKey || '';
+      const price = e2.price != null && String(e2.price).trim() !== '' ? +e2.price : c.priceUsd;
+      if (price != null && isFinite(price)) p.compositeRrpUsd = +price;
+      p.skus = (c.models && c.models.length ? c.models : [c.modelKey]).filter(Boolean).map(mk => ({ name: mk, color: '#1E9E57', ean: '', ram: '', rom: '', chip: '', matte: false, bom: '' }));
+      p.customInfo = '【自动识别 ' + new Date().toISOString().slice(0, 10) + '】来源 PSI 底表：' + (c.line || '') + (c.series ? '/' + c.series : '') + '；识别上市 ' + (c.launchMonth || '') + '（置信 ' + (c.confidence || '') + '）' + (c.kind === 'newSku' ? '；晚上市 SKU 独立成卡' : '');
+      state.products.push(p); n++;
+    });
+    if (!n) { alert('没有可新建的产品（可能同名已存在）。'); return; }
+    if (save()) { alert('已新建 ' + n + ' 个路标产品。可在列表/路标图中继续补充信息。'); DET.newSel = {}; detRun(); }
   }
 
   function detApply() {
@@ -265,7 +314,8 @@
             + '</tr>';
         });
         h += '</table><div style="margin-top:8px"><button class="btn primary" id="rmDetCreate">一键新建勾选产品</button>'
-          + '<span style="font-size:11px;color:var(--ink3);margin-left:10px">上市价自动从定价库匹配(未匹配可手填)；晚上市≥3个月的 SKU 已拆为独立新SKU卡</span></div></div>';
+          + '<span style="font-size:11px;color:var(--ink3);margin-left:10px">上市价自动从定价库匹配(未匹配可手填)；晚上市≥3个月的 SKU 已拆为独立新SKU卡'
+          + (DET.newCards.some(c => c.noProductCol) ? '；<b style="color:#C7000B">底表无「产品」列，部分卡按型号编码命名——建前请改名</b>' : '') + '</span></div></div>';
       }
       h += '<div class="card" style="overflow:auto;padding:8px"><table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<tr>'
@@ -348,6 +398,12 @@
     host.querySelectorAll('[data-detend]').forEach(ip => ip.addEventListener('change', () => {
       (DET.edit[ip.dataset.detend] = DET.edit[ip.dataset.detend] || {}).salesEnd = ip.value.trim();
     }));
+    // 可新建路标：勾选 / 改名 / 改月 / 改价 / 一键新建
+    host.querySelectorAll('[data-newsel]').forEach(cb => cb.addEventListener('change', () => { DET.newSel[cb.dataset.newsel] = cb.checked; }));
+    host.querySelectorAll('[data-newname]').forEach(ip => ip.addEventListener('change', () => { (DET.newEdit[ip.dataset.newname] = DET.newEdit[ip.dataset.newname] || {}).name = ip.value; }));
+    host.querySelectorAll('[data-newship]').forEach(ip => ip.addEventListener('change', () => { (DET.newEdit[ip.dataset.newship] = DET.newEdit[ip.dataset.newship] || {}).ship = ip.value; }));
+    host.querySelectorAll('[data-newprice]').forEach(ip => ip.addEventListener('change', () => { (DET.newEdit[ip.dataset.newprice] = DET.newEdit[ip.dataset.newprice] || {}).price = ip.value; }));
+    bind('rmDetCreate', detCreateCards);
   }
 
   /* ================= 生命周期视图（类甘特图，阶段三·玻璃设计语言） =================

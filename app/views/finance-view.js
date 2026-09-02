@@ -904,6 +904,8 @@ async function exportUnitPpt(id){
     const s1=pptx.addSlide();
     s1.addText(u.title,{x:0.3,y:0.25,w:12.7,h:0.5,fontFace:'微软雅黑',fontSize:18,bold:true,color:'C7000B'});
     const url=ch.getDataURL({pixelRatio:2, backgroundColor:'#ffffff'});
+    // 空图守卫(2026-09-02 全看板冒烟)：图表未渲染出像素时 dataURL 无 base64 段，PptxGenJS 会抛错——改为提示
+    if(!/;base64,/.test(String(url||''))){ toast('图表尚未渲染完成，请稍后再导出','err'); return; }
     s1.addImage({data:url, x:0.6, y:1.0, w:12.13, h:6.0});
     // 页2：图底数据表(自定义透视数据)
     if(spec && spec.aoa && spec.aoa.length>1) finPptAddTable(pptx, u.title+' · 数据', spec);

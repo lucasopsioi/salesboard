@@ -1,0 +1,24 @@
+/* 界面文字一律单行（2026-09-02 用户「不喜欢文字换行」）
+   原则：标题/状态/按钮/标签/表头/导航/分段按钮/卡片标题与说明 一行显示；放不下省略号，悬停看全文（title 由 ux-guide 补）。
+   正文段落（AI 回答、表格单元格、文本域）不在此列。 */
+
+/* 顶栏：标题不缩、状态串省略号、进度文字不折 */
+.topbar, .topbar * { white-space: nowrap; }
+.topbar h1 { flex: none; }
+#viewSub { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.topbar .status { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+#statusText { display: inline-block; vertical-align: middle; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; }
+#statusText > span { display: inline; }
+#topProg, #topProgTxt { white-space: nowrap; }
+
+/* 控件与标签类：永不折行 */
+button, .btn, label, th, .nav-item, .nav-label, .seg button, .rm-seg button, .metric-tabs button, .tab, .fin-tab, .chip, .ac-chip,
+.fld label, .lbl, .grp .lbl, .kpi .lab, .kpi .t, .kpi-t, .sh, .rmc-ax, .ac-sess, .ac-fname, .badge, .pd-tb-btn, .pd-lib-item, .pd-tpl-row .nm,
+h1, h2, h3, h4 { white-space: nowrap; }
+.rmc-box .nm, .rmc-box .meta { white-space: nowrap; }
+
+/* 说明类短文本：单行 + 省略号 */
+.ux-card .d, .ux-step > div > div:last-child, .inv-card h4, .ac-sess-t, .pd-tpl-row .nm, .db-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inv-card h4 { min-width: 0; }
+.fob-bar button, .fob-bar label { white-space: nowrap; }
+.ux-nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

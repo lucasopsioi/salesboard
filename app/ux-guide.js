@@ -98,9 +98,9 @@
       '<div class="ux-hero"><div><h2>你想做什么？</h2><p>点卡片直达；随时按 <span class="ux-kbd">Ctrl</span>+<span class="ux-kbd">K</span> 搜功能或直接问 AI；每个看板右上角的 <b>?</b> 三句话说清怎么用。</p></div>' +
       '<div style="font-size:12px;color:var(--ink3)">' + (mounted ? '✅ 数据已挂载' : '⚠ 还没挂载数据：先点下面第 1 步') + '</div></div>' +
       '<div class="ux-steps">' +
-        '<div class="ux-step' + (mounted ? ' done' : '') + '" data-go="source"><b>1</b><div><div style="font-weight:600">挂载数据</div><div style="color:var(--ink3)">选底表文件夹（或先「载入示例」看效果）</div></div></div>' +
-        '<div class="ux-step" data-go="industry"><b>2</b><div><div style="font-weight:600">看一眼看板</div><div style="color:var(--ink3)">产业看板四个 KPI 一屏看完</div></div></div>' +
-        '<div class="ux-step" data-go="__ai__"><b>3</b><div><div style="font-weight:600">直接问 AI</div><div style="color:var(--ink3)">「墨西哥平板今年卖了多少」这样问</div></div></div>' +
+        '<div class="ux-step' + (mounted ? ' done' : '') + '" data-go="source"><b>1</b><div class="ux-nowrap"><span style="font-weight:600">挂载数据</span><span style="color:var(--ink3);margin-left:8px">选底表文件夹（或先「载入示例」看效果）</span></div></div>' +
+        '<div class="ux-step" data-go="industry"><b>2</b><div class="ux-nowrap"><span style="font-weight:600">看一眼看板</span><span style="color:var(--ink3);margin-left:8px">产业看板四个 KPI 一屏看完</span></div></div>' +
+        '<div class="ux-step" data-go="__ai__"><b>3</b><div class="ux-nowrap"><span style="font-weight:600">直接问 AI</span><span style="color:var(--ink3);margin-left:8px">「墨西哥平板今年卖了多少」这样问</span></div></div>' +
       '</div>' +
       '<div class="ux-grid">' + TASKS.map(t => '<div class="ux-card" data-go="' + t.go + '"><div class="ic">' + t.icon + '</div><div class="t">' + esc(t.t) + '</div><div class="d">' + esc(t.d) + '</div></div>').join('') + '</div>';
     sec.querySelectorAll('[data-go]').forEach(n => n.onclick = () => go(n.getAttribute('data-go')));
@@ -318,13 +318,20 @@
     });
     if (cfg.primary) { const p = $(cfg.primary); if (p && !p.classList.contains('primary')) p.classList.add('primary'); }
   }
+  // 单行省略号截断的文字：把全文放进 title，悬停可见（nowrap.css 负责截断，这里负责不丢信息）
+  function applyEllipsisTitles() {
+    document.querySelectorAll('#statusText, #viewSub, .ux-card .d, .inv-card h4, .ac-sess-t, .db-chip, .pd-tpl-row .nm').forEach(el => {
+      const t = (el.textContent || '').trim();
+      if (t && el.scrollWidth > el.clientWidth + 1 && el.title !== t) el.title = t;
+    });
+  }
   let simpT = null, mo = null, applying = false;
   function scheduleSimplify() {
     if (applying) return;                       // 自己改 DOM 触发的观察不再排队，杜绝回环
     clearTimeout(simpT);
     simpT = setTimeout(() => {
       applying = true;
-      try { if (mo) mo.disconnect(); applySimplify(curView); applyJargon(document.getElementById('view-' + curView) || document); } catch (e) {}
+      try { if (mo) mo.disconnect(); applySimplify(curView); applyJargon(document.getElementById('view-' + curView) || document); applyEllipsisTitles(); } catch (e) {}
       finally { if (mo) mo.observe(document.body, { subtree: true, childList: true }); applying = false; }
     }, 220);
   }

@@ -151,10 +151,13 @@
   function toastSafe(t) { try { typeof toast === 'function' ? toast(t, 'err') : alert(t); } catch (e) {} }
   // 文档注入块：大文件只带开头 + docId 标注（全文在主进程索引，模型用 docSearch/docSlice 读其余）
   function docBlock(f) {
-    const head = '【用户上传文档：' + f.name + (f.docId ? '  docId=' + f.docId + '  全文 ' + (f.totalLines || '?') + ' 行' + (f.summary ? '  结构：' + f.summary.slice(0, 200) : '') : '') + '】';
+    const head = '【用户上传文档：' + f.name + (f.docId ? '  docId=' + f.docId + '  全文 ' + (f.totalLines || '?') + ' 行' + (f.srcPath ? '  路径=' + f.srcPath : '') + (f.summary ? '  结构：' + f.summary.slice(0, 200) : '') : '') + '】';
     const body = String(f.content || '');
-    const tail = (f.docId && f.totalLines && body.length >= 60000) ? '\n…（以下省略，全文已索引：用 docSearch({docId:"' + f.docId + '",q:"关键词"}) 搜索、docSlice 读原文）' : '';
-    return head + '\n' + body + tail;
+    // 大文件只注入极小开头——否则模型会拿开头当全文，查不到就说「没有」、求和就拿开头几行凑（实测 S3/S6）
+    const big = !!(f.docId && f.totalLines && (f.totalLines > 3000 || body.length >= 60000));
+    const shown = big ? body.slice(0, 3000) : body;
+    const tail = big ? '\n…（以上只是开头极小一部分，全文 ' + f.totalLines + ' 行已建索引。**查找/定位某内容必须调 docSearch({docId:"' + f.docId + '",q:"关键词"})**；读某段用 docSlice；**对整份文件求和/计数/统计/汇总，必须用 runCode(lang:"node") 读「路径=」后面的原文件计算**（脚本可 require("xlsx")）。严禁只凭这段开头就回答「没有/未找到」或给出任何合计数。）' : '';
+    return head + '\n' + shown + tail;
   }
   /* ---------- 本机写操作审批闸（Claude Code 式）：写文件/改Excel/改PPT/跑脚本前弹卡片，用户点允许才执行 ---------- */
   const APPROVE_LABEL = { fsWrite: '写入文件', excelEdit: '修改 Excel', pptEdit: '修改 PPT', runCode: '运行脚本' };
@@ -432,6 +435,7 @@
       })() : '') +
       '<button class="btn ghost" id="acDoc" title="上传本地文档(txt/md/csv/json/xlsx/pptx/docx，也可传 png/jpg 图片)——多大都行，全文建索引">📎 附件</button>' +
       '<button class="btn ghost" id="acWs" title="选择允许 Agent 读写的本机文件夹（工作区）。之后可让它直接修改里面的 Excel/PPT/文本，每次写入前会弹卡片确认">📁 工作区</button>' +
+      '<button class="btn ghost" id="acRecv" title="从手机或另一台电脑把文件传到这台电脑（不走会崩的网页上传）——手机扫码即可">📥 接收文件</button>' +
       '<button class="btn ghost" id="acBoard" title="Agent 架构">🕸</button>';
     el.querySelector('#acModel').onchange = e => switchModel(e.target.value);
     el.querySelectorAll('.ac-chip').forEach(n => {
@@ -446,7 +450,68 @@
     el.querySelector('#acDoc').onclick = uploadDoc;
     el.querySelector('#acWs').onclick = pickWorkspace;
     el.querySelector('#acBoard').onclick = () => { try { window.AgentBoard && window.AgentBoard.open(); } catch (e) {} };
+    el.querySelector('#acRecv').onclick = openReceiver;
   }
+  /* ---- 本机接收窗口（2026-09-04 用户：这台电脑网页上传崩溃，要从手机把文件传进来）----
+     打开即在本机开一个小服务，显示二维码+链接；手机同 Wi-Fi 扫码上传，文件落到本机并可一键给 Agent。 */
+  let recvFiles = [], recvBound = false, recvImported = new Set();
+  async function openReceiver() {
+    let m = document.getElementById('acRecvModal'); if (m) m.remove();
+    m = document.createElement('div'); m.id = 'acRecvModal'; m.className = 'ai-modal';
+    m.innerHTML = '<div class="ai-modal-box acr-box"><div class="ai-modal-h">📥 从手机 / 另一台电脑接收文件' +
+      '<button class="ai-modal-x" id="acrX">✕</button></div><div class="ai-modal-body acr-body" id="acrBody">正在开启本机接收服务…</div></div>';
+    document.body.appendChild(m);
+    const close = () => { m.remove(); try { window.sb.recvStop(); } catch (e) {} };
+    m.querySelector('#acrX').onclick = close;
+    m.onclick = e => { if (e.target === m) close(); };
+    if (!recvBound && window.sb.onRecvFile) { recvBound = true; window.sb.onRecvFile((f) => { recvFiles.unshift(f); paintRecvList(); toastSafe2('📥 收到文件：' + f.name); }); }
+    let info;
+    try { info = await window.sb.recvStart(); } catch (e) { info = { error: String((e && e.message) || e) }; }
+    const body = document.getElementById('acrBody'); if (!body) return;
+    if (!info || info.error || !info.url) { body.innerHTML = '<div class="acr-err">开启失败：' + esc((info && info.error) || '未知错误') + '<br>若是首次运行，Windows 可能弹防火墙提示，请选“允许访问”。</div>'; return; }
+    const ips = (info.ips && info.ips.length) ? info.ips : [info.ip];
+    const urlFor = (ip) => 'http://' + ip + ':' + info.port + '/' + info.code;
+    const renderFor = (ip) => {
+      let qrSvg = ''; const url = urlFor(ip); try { qrSvg = window.QRCore ? window.QRCore.toSvg(url, { scale: 6, quiet: 3 }) : ''; } catch (e) {}
+      const alts = ips.filter(x => x !== ip);
+      body.innerHTML =
+        '<div class="acr-cols">' +
+          '<div class="acr-qr">' + (qrSvg || '<div class="acr-err">二维码生成失败，请用下方链接</div>') + '<div class="acr-tip">手机相机对准二维码</div></div>' +
+          '<div class="acr-info">' +
+            '<div class="acr-step"><b>手机扫上面的码</b>，或在手机浏览器输入下面这行：</div>' +
+            '<div class="acr-url" id="acrUrl">' + esc(url.replace(/^https?:\/\//, '')) + '</div>' +
+            '<div class="acr-note">取件码 <b>' + esc(info.code) + '</b>（已含在链接里）· 手机需和这台电脑连<b>同一个 Wi-Fi</b></div>' +
+            (alts.length ? '<div class="acr-note">扫不上 / 连不上？换个地址：' + alts.map(x => '<a href="javascript:void 0" class="acr-alt" data-ip="' + esc(x) + '">' + esc(x) + '</a>').join('　') + '</div>' : '') +
+            '<div class="acr-note">连不上时：确认手机和电脑连同一 Wi-Fi；若首次运行 Windows 弹了防火墙提示，请点「允许访问」（专用网络）。</div>' +
+            '<div class="acr-note">收到的文件存到：<span class="acr-dir">' + esc(info.dir) + '</span> <a href="javascript:void 0" id="acrOpen">打开文件夹</a></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="acr-list-h">已接收（<span id="acrN">' + recvFiles.length + '</span>）</div><div class="acr-list" id="acrList"></div>';
+      body.querySelector('#acrOpen').onclick = () => { try { window.sb.recvOpenDir(); } catch (e) {} };
+      body.querySelectorAll('.acr-alt').forEach(a => a.onclick = () => renderFor(a.getAttribute('data-ip')));
+      paintRecvList();
+    };
+    renderFor(info.ip);
+  }
+  function paintRecvList() {
+    const list = document.getElementById('acrList'); const n = document.getElementById('acrN'); if (n) n.textContent = recvFiles.length;
+    if (!list) return;
+    if (!recvFiles.length) { list.innerHTML = '<div class="acr-empty">还没有文件。手机发送后会实时出现在这里。</div>'; return; }
+    list.innerHTML = recvFiles.map((f, i) => {
+      const kb = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB';
+      const ic = /\.pptx?$/i.test(f.name) ? '📊' : /\.xlsx?$/i.test(f.name) ? '📗' : /\.(png|jpe?g|webp)$/i.test(f.name) ? '🖼' : '📄';
+      const done = recvImported.has(f.path);
+      return '<div class="acr-li"><span class="acr-ic">' + ic + '</span><span class="acr-nm" title="' + esc(f.path) + '">' + esc(f.name) + '</span><span class="acr-sz">' + kb + '</span>' +
+        (done ? '<button class="btn ghost acr-use" disabled>已导入对话 ✓</button>' : '<button class="btn primary acr-use" data-i="' + i + '">用 Agent 打开</button>') + '</div>';
+    }).join('');
+    list.querySelectorAll('.acr-use:not([disabled])').forEach(b => b.onclick = async () => {
+      const f = recvFiles[+b.getAttribute('data-i')]; if (!f) return;
+      b.disabled = true; b.textContent = '导入中…';
+      try { const s = curS() || newSession(); const r = await window.sb.readDocByPath(f.path); if (addFileRecord(s, r)) { recvImported.add(f.path); toastSafe2('已把「' + f.name + '」放进当前对话，关闭本窗即可开始提问'); paintRecvList(); } else { b.disabled = false; b.textContent = '用 Agent 打开'; } }
+      catch (e) { toastSafe2('导入失败：' + String((e && e.message) || e)); b.disabled = false; b.textContent = '用 Agent 打开'; }
+    });
+  }
+  function toastSafe2(t) { try { typeof toast === 'function' ? toast(t, 'ok') : 0; } catch (e) {} }
   function renderChat() {
     const el = document.getElementById('acMsgs'); if (!el) return;
     const s = curS();
@@ -579,7 +644,20 @@
       '.ac-fname{font-size:12px;font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.ac-b.f .btn{font-size:11px;padding:3px 8px}' +
       '#view-agentchat{position:relative}' +
-      '#view-agentchat.ac-dropping::after{content:"📎 松手把文件交给 AI 阅读（xlsx / pptx / docx / txt / 图片）";position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;border:2px dashed #C7000B;border-radius:14px;background:var(--c-bg-elev);opacity:.96;font-size:15px;color:#C7000B;z-index:30;pointer-events:none}';
+      '#view-agentchat.ac-dropping::after{content:"📎 松手把文件交给 AI 阅读（xlsx / pptx / docx / txt / 图片）";position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;border:2px dashed #C7000B;border-radius:14px;background:var(--c-bg-elev);opacity:.96;font-size:15px;color:#C7000B;z-index:30;pointer-events:none}' +
+      '.acr-box{width:min(680px,94vw)}.acr-body{gap:14px}' +
+      '.acr-cols{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}' +
+      '.acr-qr{flex:0 0 auto;text-align:center}.acr-qr svg{width:180px;height:180px;display:block;border:1px solid var(--line);border-radius:10px}' +
+      '.acr-tip{font-size:11px;color:var(--ink3);margin-top:6px}' +
+      '.acr-info{flex:1;min-width:240px;display:flex;flex-direction:column;gap:10px}' +
+      '.acr-step{font-size:13px}.acr-url{font:15px/1.4 Consolas,monospace;font-weight:700;color:#C7000B;background:var(--c-bg);border:1px solid var(--line);border-radius:8px;padding:9px 12px;word-break:break-all;user-select:all}' +
+      '.acr-note{font-size:12px;color:var(--ink3)}.acr-dir{font-family:Consolas,monospace;font-size:11px}.acr-note a{color:#C7000B}.acr-alt{font-family:Consolas,monospace}' +
+      '.acr-list-h{font-size:12.5px;font-weight:600;border-top:1px solid var(--line);padding-top:12px}' +
+      '.acr-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto}' +
+      '.acr-empty{font-size:12px;color:var(--ink3);padding:6px 0}' +
+      '.acr-li{display:flex;align-items:center;gap:9px;padding:7px 9px;background:var(--c-bg);border:1px solid var(--line);border-radius:9px}' +
+      '.acr-ic{font-size:17px}.acr-nm{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.acr-sz{font-size:11px;color:var(--ink3)}' +
+      '.acr-use{font-size:11px;padding:4px 10px;white-space:nowrap}.acr-err{color:#C7000B;font-size:13px;line-height:1.6}';
     document.head.appendChild(css);
     if (!restore()) newSession();
   }

@@ -24,6 +24,9 @@ const preChannels = [];
   // 非 ipc 的纯函数暴露（如 pathForFile）
   const re2 = /^\s*([A-Za-z_$][\w$]*)\s*:\s*\((?:[^)]*)\)\s*=>\s*\{/gm;
   let m2; while ((m2 = re2.exec(pre))) preMethods.add(m2[1]);
+  // 事件订阅桥（onProgress/onAiStream/onRecvFile 等 ipcRenderer.on 形式）：只暴露方法名，通道是 main 主动 send 的，不需 ipcMain.handle
+  const re3 = /^\s*([A-Za-z_$][\w$]*)\s*:\s*\([^)]*\)\s*=>\s*ipcRenderer\.on\(/gm;
+  let m3; while ((m3 = re3.exec(pre))) preMethods.add(m3[1]);
 }
 
 // ── main：ipcMain.handle/on 通道 ──

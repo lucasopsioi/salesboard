@@ -50,6 +50,10 @@
     "portable": {
       "artifactName": "${productName}.exe"
     },
-    "asar": true
+    "asar": true,
+    "extraResources": [{ "from": "demo-data", "to": "demo-data" }],
+    "asarUnpack": [
+      "node_modules/xlsx/**"
+    ]
   }
 }

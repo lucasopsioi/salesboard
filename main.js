@@ -388,6 +388,7 @@ function parseDocFile(p2) {
     const docId = 'doc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const lines = LTC.docIndex(content);
     DOC_STORE.set(docId, { name: path.basename(p2), lines, size: st.size, srcPath: p2 });
+    UPLOADED.add(path.resolve(p2));   // 上传即授权：本机工具可对这份文件读/改（写仍走审批卡）
     if (DOC_STORE.size > 12) { const first = DOC_STORE.keys().next().value; DOC_STORE.delete(first); }   // 最多留 12 份全文
     const truncated = content.length > 60000;
     let summary = '';
@@ -468,8 +469,12 @@ ipcMain.handle('docSearch', (_e, id, q, opt) => { const d = DOC_STORE.get(String
 ipcMain.handle('docSlice', (_e, id, from, to) => { const d = DOC_STORE.get(String(id)); if (!d) return { error: '文档不在索引里，请重新上传' }; return Object.assign({ file: d.name }, LTC.docSlice(d.lines, from, to)); });
 /* ---- 工作区 + 本机工具(2026-09-02)：Claude Code 式本机操作。守卫=路径必须在用户指定的工作区内；写前自动备份 .bak ---- */
 function wsFile() { return path.join(ud(), 'workspace.json'); }
-function wsDirs() { try { const o = JSON.parse(fs.readFileSync(wsFile(), 'utf8')); return Array.isArray(o.dirs) ? o.dirs.filter(Boolean) : []; } catch (e) { return []; } }
-function wsGuard(p2) { const dirs = wsDirs(); if (!dirs.length) return '还没有设置工作区：在 Agent 对话右上角「📁 工作区」里选择允许操作的文件夹'; if (!LTC.inWorkspace(p2, dirs)) return '路径不在工作区内(' + dirs.join(' ; ') + ')：' + p2; return ''; }
+/* 默认工作区 = 文档\销售团队-AI输出（AI 生成文件本来就落这里）——不设也能本地编程；用户可在「📁 工作区」加更多文件夹。
+   上传过的文件（📎/拖拽）视为用户亲手交给 Agent 的：即使不在工作区也允许读/改/作为脚本目录（写仍走审批卡）。 */
+function wsDefault() { try { const d = path.join(app.getPath('documents'), '销售团队-AI输出'); fs.mkdirSync(d, { recursive: true }); return d; } catch (e) { return ''; } }
+function wsDirs() { let dirs = []; try { const o = JSON.parse(fs.readFileSync(wsFile(), 'utf8')); dirs = Array.isArray(o.dirs) ? o.dirs.filter(Boolean) : []; } catch (e) {} const d = wsDefault(); if (d && dirs.indexOf(d) < 0) dirs.push(d); return dirs; }
+const UPLOADED = new Set();   // 本次运行里用户上传过的文件绝对路径
+function wsGuard(p2) { const dirs = wsDirs(); const abs = path.resolve(String(p2 || '')); if (UPLOADED.has(abs) || [...UPLOADED].some(u => path.dirname(u) === abs)) return ''; if (!LTC.inWorkspace(abs, dirs)) return '路径不在工作区内(' + dirs.join(' ; ') + ')：' + p2 + '。上传过的文件可直接操作；其它文件夹请在 Agent 对话右上角「📁 工作区」添加'; return ''; }
 function backupFile(p2) { try { if (!fs.existsSync(p2)) return ''; const bak = p2 + '.' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.bak'; fs.copyFileSync(p2, bak); return bak; } catch (e) { return ''; } }
 ipcMain.handle('wsGet', () => ({ dirs: wsDirs() }));
 ipcMain.handle('wsSet', (_e, dirs) => { try { fs.writeFileSync(wsFile(), JSON.stringify({ dirs: (dirs || []).filter(Boolean) })); return { ok: true, dirs: wsDirs() }; } catch (e) { return { error: String(e) }; } });
@@ -479,7 +484,67 @@ ipcMain.handle('fsRead', (_e, a) => { try { a = a || {}; const p2 = path.resolve
 ipcMain.handle('fsWrite', (_e, a) => { try { a = a || {}; const p2 = path.resolve(String(a.path || '')); const g = wsGuard(p2); if (g) return { error: g }; if (/\.(xlsx|pptx|docx|exe|dll|bat|cmd|ps1)$/i.test(p2)) return { error: 'fsWrite 只写文本类文件；Excel 用 excelEdit，PPT 用 pptEdit' }; fs.mkdirSync(path.dirname(p2), { recursive: true }); const bak = backupFile(p2); fs.writeFileSync(p2, String(a.content == null ? '' : a.content), 'utf8'); return { ok: true, path: p2, bytes: Buffer.byteLength(String(a.content || ''), 'utf8'), backup: bak }; } catch (e) { return { error: String(e) }; } });
 ipcMain.handle('excelEdit', (_e, a) => { try { a = a || {}; const p2 = path.resolve(String(a.path || '')); const g = wsGuard(p2); if (g) return { error: g }; if (!/\.xlsx$/i.test(p2)) return { error: '只支持 .xlsx' }; const XLSX = require('xlsx'); let buf; if (fs.existsSync(p2)) buf = fs.readFileSync(p2); else { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), 'Sheet1'); buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }); } const r = LTC.applyExcelOps(buf, a.ops || [], XLSX); const bak = backupFile(p2); fs.writeFileSync(p2, r.buf); return { ok: true, path: p2, applied: r.applied, sheets: r.sheets, backup: bak, note: '已写入；原文件已备份为 .bak。注意：单元格样式/公式可能被简化' }; } catch (e) { return { error: String((e && e.message) || e) }; } });
 ipcMain.handle('pptEdit', (_e, a) => { try { a = a || {}; const p2 = path.resolve(String(a.path || '')); const g = wsGuard(p2); if (g) return { error: g }; if (!/\.pptx$/i.test(p2) || !fs.existsSync(p2)) return { error: '需要一个存在的 .pptx' }; const r = LTC.pptReplaceText(fs.readFileSync(p2), a.replace || [], OSC); if (!r.hits) return { ok: false, hits: 0, note: '没有任何文本命中 find，文件未改' }; const bak = backupFile(p2); fs.writeFileSync(p2, r.buf); return { ok: true, path: p2, hits: r.hits, shapesChanged: r.changed, backup: bak }; } catch (e) { return { error: String((e && e.message) || e) }; } });
-ipcMain.handle('runCode', async (_e, a) => { try { a = a || {}; const cwd = path.resolve(String(a.cwd || wsDirs()[0] || '')); const g = wsGuard(cwd); if (g) return { error: g }; const lang = String(a.lang || 'node'); const code = String(a.code || ''); if (!code.trim()) return { error: 'code 为空' }; const { spawn } = require('child_process'); const tmp = path.join(cwd, '.sb-run-' + Date.now().toString(36) + (lang === 'python' ? '.py' : '.js')); fs.writeFileSync(tmp, code, 'utf8'); const env = Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1', PYTHONUTF8: '1' }); const cmd = lang === 'python' ? (process.platform === 'win32' ? 'py' : 'python3') : process.execPath; const args = lang === 'python' ? ['-3', tmp] : [tmp]; return await new Promise(res => { let out = '', err = ''; let child; try { child = spawn(cmd, args, { cwd, env, windowsHide: true, shell: false }); } catch (e) { try { fs.unlinkSync(tmp); } catch (e2) {} return res({ error: '启动失败: ' + e.message }); } const t = setTimeout(() => { try { child.kill(); } catch (e) {} }, Math.min(300000, Math.max(5000, +a.timeoutMs || 120000))); child.stdout.on('data', d => { out += d; if (out.length > 60000) out = out.slice(-60000); }); child.stderr.on('data', d => { err += d; if (err.length > 20000) err = err.slice(-20000); }); child.on('error', e => { clearTimeout(t); try { fs.unlinkSync(tmp); } catch (e2) {} res({ error: '运行失败: ' + e.message + (lang === 'python' ? '（本机可能没有 Python，用 node）' : '') }); }); child.on('close', code2 => { clearTimeout(t); try { fs.unlinkSync(tmp); } catch (e2) {} res({ ok: code2 === 0, exitCode: code2, stdout: out.slice(0, 20000), stderr: err.slice(0, 8000), cwd }); }); }); } catch (e) { return { error: String(e) }; } });
+ipcMain.handle('runCode', async (_e, a) => { try { a = a || {}; const cwd = path.resolve(String(a.cwd || wsDirs()[0] || '')); const g = wsGuard(cwd); if (g) return { error: g }; const lang = String(a.lang || 'node'); const code = String(a.code || ''); if (!code.trim()) return { error: 'code 为空' }; const { spawn } = require('child_process'); const tmp = path.join(cwd, '.sb-run-' + Date.now().toString(36) + (lang === 'python' ? '.py' : '.js')); fs.writeFileSync(tmp, code, 'utf8'); /* 脚本能 require 软件自带的库(xlsx 等)：NODE_PATH 指向 app 的 node_modules；打包后 xlsx 走 asarUnpack 真实目录 */
+      const nmDirs = [path.join(__dirname, 'node_modules'), path.join(__dirname.replace(/app\.asar$/, 'app.asar.unpacked'), 'node_modules')].filter((d, i, arr) => arr.indexOf(d) === i);
+      const env = Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1', PYTHONUTF8: '1', NODE_PATH: nmDirs.join(path.delimiter) + (process.env.NODE_PATH ? path.delimiter + process.env.NODE_PATH : '') }); const cmd = lang === 'python' ? (process.platform === 'win32' ? 'py' : 'python3') : process.execPath; const args = lang === 'python' ? ['-3', tmp] : [tmp]; return await new Promise(res => { let out = '', err = ''; let child; try { child = spawn(cmd, args, { cwd, env, windowsHide: true, shell: false }); } catch (e) { try { fs.unlinkSync(tmp); } catch (e2) {} return res({ error: '启动失败: ' + e.message }); } const t = setTimeout(() => { try { child.kill(); } catch (e) {} }, Math.min(300000, Math.max(5000, +a.timeoutMs || 120000))); child.stdout.on('data', d => { out += d; if (out.length > 60000) out = out.slice(-60000); }); child.stderr.on('data', d => { err += d; if (err.length > 20000) err = err.slice(-20000); }); child.on('error', e => { clearTimeout(t); try { fs.unlinkSync(tmp); } catch (e2) {} res({ error: '运行失败: ' + e.message + (lang === 'python' ? '（本机可能没有 Python，用 node）' : '') }); }); child.on('close', code2 => { clearTimeout(t); try { fs.unlinkSync(tmp); } catch (e2) {} res({ ok: code2 === 0, exitCode: code2, stdout: out.slice(0, 20000), stderr: err.slice(0, 8000), cwd }); }); }); } catch (e) { return { error: String(e) }; } });
+/* ---- 本机接收（2026-09-04 用户：这台电脑网页上传功能坏了、一上传就崩，要从手机/另一台设备把文件传进来）----
+   本机开一个 http 服务，另一台同 Wi-Fi 的设备扫码/开链接，把文件「发送」过来，流式落到 文档\销售团队-AI输出\接收\，
+   直接出现在软件里。接收端是 Node http 服务，跟这台电脑那套会崩的浏览器上传毫无关系。
+   安全：4 位取件码写在 URL 路径里（别的路径一律 404）；只在接收窗口开着时运行；只写本机磁盘、单文件封顶 1GB。 */
+let recvServer = null, recvInfo = null;
+function lanIps() {   // 全部候选，按「最像手机能连的物理局域网」排序：192.168 > 10 > 172.16-31 > 其它 > 100.x(多为 Tailscale/CGNAT 虚拟网卡)
+  try { const os = require('os'); const cands = []; Object.values(os.networkInterfaces()).forEach(list => (list || []).forEach(x => { if (x.family === 'IPv4' && !x.internal) cands.push(x.address); }));
+    const score = a => /^192\.168\./.test(a) ? 0 : /^10\./.test(a) ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(a) ? 2 : /^100\./.test(a) ? 4 : 3;
+    return [...new Set(cands)].sort((a, b) => score(a) - score(b)); } catch (e) { return []; }
+}
+function recvDir() { const d = path.join(docs(), '销售团队-AI输出', '接收'); fs.mkdirSync(d, { recursive: true }); return d; }
+function safeName(n) { n = String(n || 'file').replace(/[\\/:*?"<>|]/g, '_').replace(/[\x00-\x1f]/g, '').replace(/^\.+/, '').slice(0, 180); return n || 'file'; }
+function uniqPath(dir, name) { let p = path.join(dir, name); if (!fs.existsSync(p)) return p; const ext = path.extname(name), base = name.slice(0, name.length - ext.length); return path.join(dir, base + '_' + Date.now().toString(36) + ext); }
+function recvPage(code) {
+  return '<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>发送文件到电脑</title>' +
+    '<style>*{box-sizing:border-box}body{font-family:-apple-system,system-ui,"Segoe UI",sans-serif;margin:0;background:#f5f5f7;color:#1d1d1f;-webkit-text-size-adjust:100%}.w{max-width:520px;margin:0 auto;padding:22px}h1{font-size:20px;margin:6px 0 2px}.sub{color:#86868b;font-size:14px;margin-bottom:8px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin:14px 0}input[type=file]{width:100%;padding:14px 0;font-size:16px}button{width:100%;padding:15px;font-size:17px;border:0;border-radius:12px;background:#C7000B;color:#fff;font-weight:600;cursor:pointer}button:disabled{opacity:.45}.li{padding:10px 2px;border-bottom:1px solid #eee;font-size:14px;word-break:break-all}.ok{color:#0a8a3a}.err{color:#C7000B}#bar{height:6px;background:#eee;border-radius:3px;overflow:hidden;margin-top:12px;display:none}#bar>i{display:block;height:100%;width:0;background:#C7000B;transition:width .12s}</style></head>' +
+    '<body><div class="w"><h1>📥 发送文件到电脑</h1><div class="sub">和电脑连同一个 Wi-Fi 即可。文件会直接出现在电脑的 销售团队 软件里。</div>' +
+    '<div class="card"><input type="file" id="f" multiple><div id="bar"><i></i></div><div style="height:12px"></div><button id="b">发送到电脑</button></div>' +
+    '<div class="card" id="log" style="display:none"><b>发送记录</b><div id="list"></div></div></div><script>' +
+    'var code=' + JSON.stringify(String(code)) + ';var f=document.getElementById("f"),b=document.getElementById("b"),bar=document.getElementById("bar"),barI=bar.firstElementChild,log=document.getElementById("log"),list=document.getElementById("list");' +
+    'function add(name,cls,txt){log.style.display="block";var d=document.createElement("div");d.className="li "+(cls||"");d.textContent=name+(txt?" — "+txt:"");list.appendChild(d);return d}' +
+    'b.onclick=function(){var files=[].slice.call(f.files);if(!files.length){alert("请先选择文件");return}b.disabled=true;var i=0;function next(){if(i>=files.length){b.disabled=false;f.value="";bar.style.display="none";barI.style.width="0";return}var file=files[i++];var row=add(file.name,"","发送中…");var xhr=new XMLHttpRequest();xhr.open("POST","/"+code+"/up?name="+encodeURIComponent(file.name));xhr.upload.onprogress=function(e){if(e.lengthComputable){bar.style.display="block";barI.style.width=(e.loaded/e.total*100)+"%"}};xhr.onload=function(){if(xhr.status===200){row.className="li ok";row.textContent=file.name+" — 已送达电脑 ✓"}else{row.className="li err";row.textContent=file.name+" — 失败("+xhr.status+") "+xhr.responseText}next()};xhr.onerror=function(){row.className="li err";row.textContent=file.name+" — 网络错误，确认和电脑同一 Wi-Fi";next()};xhr.send(file)}next()};' +
+    '</scr' + 'ipt></body></html>';
+}
+ipcMain.handle('recvStart', async () => {
+  try {
+    if (recvServer && recvInfo) return recvInfo;
+    const http = require('http');
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const dir = recvDir();
+    const server = http.createServer((req, res) => {
+      try {
+        const u = new URL(req.url, 'http://x'); const parts = u.pathname.split('/').filter(Boolean);
+        if (req.method === 'GET' && parts.length === 1 && parts[0] === code) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(recvPage(code)); return; }
+        if (req.method === 'POST' && parts.length === 2 && parts[0] === code && parts[1] === 'up') {
+          const cl = +req.headers['content-length'] || 0;
+          if (cl > 1024 * 1024 * 1024) { res.writeHead(413); res.end('文件超过 1GB'); return; }
+          const dest = uniqPath(dir, safeName(u.searchParams.get('name') || 'file'));
+          const wstream = fs.createWriteStream(dest); let bytes = 0, aborted = false;
+          req.on('data', d => { bytes += d.length; if (bytes > 1024 * 1024 * 1024 && !aborted) { aborted = true; try { wstream.destroy(); } catch (e) {} try { fs.unlinkSync(dest); } catch (e) {} res.writeHead(413); res.end('文件超过 1GB'); try { req.destroy(); } catch (e) {} } });
+          wstream.on('finish', () => { if (aborted) return; res.writeHead(200); res.end('ok'); try { if (win && !win.isDestroyed()) win.webContents.send('recvFile', { name: path.basename(dest), path: dest, size: bytes, at: Date.now() }); } catch (e) {} });
+          wstream.on('error', () => { if (!aborted) { try { res.writeHead(500); res.end('write error'); } catch (e) {} } });
+          req.on('error', () => { try { wstream.destroy(); } catch (e) {} });
+          req.pipe(wstream); return;
+        }
+        res.writeHead(404); res.end('not found');
+      } catch (e) { try { res.writeHead(500); res.end('err'); } catch (e2) {} }
+    });
+    await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '0.0.0.0', resolve); });
+    const port = server.address().port; const ips = lanIps(); const ip = ips[0] || '127.0.0.1';
+    recvServer = server; recvInfo = { running: true, url: 'http://' + ip + ':' + port + '/' + code, ip, ips, port, code, dir };
+    return recvInfo;
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+});
+ipcMain.handle('recvStop', () => { try { if (recvServer) { recvServer.close(); recvServer = null; } recvInfo = null; return { ok: true }; } catch (e) { return { error: String(e) }; } });
+ipcMain.handle('recvStatus', () => recvInfo || { running: false });
+ipcMain.handle('recvOpenDir', () => { try { shell.openPath(recvDir()); return { ok: true }; } catch (e) { return { error: String(e) }; } });
+app.on('before-quit', () => { try { if (recvServer) recvServer.close(); } catch (e) {} });
 ipcMain.handle('readDocByPath', async (_e, p2) => {
   try {
     p2 = String(p2 || '');

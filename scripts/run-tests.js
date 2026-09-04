@@ -12,6 +12,7 @@ const collect = (dir, filter) => {
   names.filter(filter).sort().forEach(n => files.push(path.join(dir, n)));
 };
 collect('app', n => n.endsWith('.test.js'));
+collect('app/lib', n => n.endsWith('.test.js'));
 collect('app/pptoutput', n => n.endsWith('.test.js'));
 collect('app/pptoutput/designer', n => n.endsWith('.test.js'));
 collect('selftest', n => n.endsWith('.js'));

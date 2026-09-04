@@ -95,6 +95,20 @@ const TOOL_SCHEMAS = {
   rawRows: {
     description: '直查 PSI 底表原始行(未聚合：全维度+日期+SI/SO/INV)。聚合工具查不到/怀疑数据异常时下钻到最底层看记录；默认200行上限500，大范围请用聚合工具。',
     properties: { filters: FILTERS_SCHEMA, from: { type: 'string', description: 'YYYY-MM-DD' }, to: { type: 'string' }, limit: { type: 'number' } }, required: [] },
+  docSearch: {
+    description: '在用户上传的文档全文里搜索（大文件不截断：提示词只带开头，其余用它查）。多词=AND，返回命中行与上下文。docId 见【用户上传文档】标注。',
+    properties: { docId: { type: 'string' }, q: { type: 'string', description: '关键词，空格分隔多词' }, limit: { type: 'integer' }, context: { type: 'integer', description: '上下文行数 0-5' } }, required: ['docId', 'q'] },
+  docSlice: {
+    description: '按行号读取用户上传文档的一段原文（一次≤2000行）。配合 docSearch 的行号使用。',
+    properties: { docId: { type: 'string' }, from: { type: 'integer' }, to: { type: 'integer' } }, required: ['docId', 'from'] },
+  fsList: { description: '列出工作区文件夹内容（用户授权的本机目录）。path 用绝对路径。', properties: { dir: { type: 'string' }, depth: { type: 'integer', description: '1-3' } }, required: [] },
+  fsRead: { description: '读本机文件：xlsx 按工作表返回行（sheet/fromRow/rows 可分页）；pptx/docx 抽文本；其余按文本。只能读工作区内。', properties: { path: { type: 'string' }, sheet: { type: 'string' }, fromRow: { type: 'integer' }, rows: { type: 'integer' }, maxChars: { type: 'integer' } }, required: ['path'] },
+  fsWrite: { description: '写文本类文件(txt/md/csv/json/js/py…)到工作区，整文件覆盖，写前自动备份。用户会先确认。', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] },
+  excelEdit: {
+    description: '结构化修改本机 Excel(.xlsx)：ops 数组按序执行，每项必须带 op 字段。例：{"op":"setCell","sheet":"Sheet1","cell":"B2","value":199}；{"op":"setRange","sheet":"Sheet1","origin":"A5","rows":[["a",1],["b",2]]}；{"op":"appendRows","sheet":"Sheet1","rows":[["c",3]]}；{"op":"addSheet","sheet":"新表","rows":[["表头"]]}；{"op":"deleteSheet","sheet":"旧表"}。文件不存在则新建。写前自动备份 .bak；单元格样式/公式可能被简化。用户会先确认。',
+    properties: { path: { type: 'string' }, ops: { type: 'array', items: { type: 'object', properties: { op: { type: 'string', enum: ['setCell', 'setRange', 'appendRows', 'addSheet', 'deleteSheet'] }, sheet: { type: 'string' }, cell: { type: 'string' }, value: {}, origin: { type: 'string' }, rows: { type: 'array' } }, required: ['op'] } } }, required: ['path', 'ops'] },
+  pptEdit: { description: '修改本机 PPT(.pptx) 文字：replace 数组 [{find, replace}] 在所有文本框与表格里原位替换，版式不动。写前自动备份。用户会先确认。', properties: { path: { type: 'string' }, replace: { type: 'array', items: { type: 'object', properties: { find: { type: 'string' }, replace: { type: 'string' } }, required: ['find'] } } }, required: ['path', 'replace'] },
+  runCode: { description: '在工作区目录里运行一段脚本(node 或 python)，返回 stdout/stderr。适合复杂的数据处理/批量改文件；node 环境自带 xlsx、pptxgenjs 等库(require 可用)。用户会先确认。', properties: { lang: { type: 'string', enum: ['node', 'python'] }, code: { type: 'string' }, cwd: { type: 'string' }, timeoutMs: { type: 'integer' } }, required: ['code'] },
   roadmapUpsert: {
     description: '把产品信息写进路标管理(新建或更新)。用户用自然语言/文档描述产品(名称/上市时间/价格/编码/SKU/卖点/EOM等)时，抽取成结构化参数调本工具。白名单外的信息(如 VN1/VN2 编码)放 extras，会存进产品备注绝不丢。路标是用户规划数据，允许代填。',
     properties: {
@@ -160,7 +174,7 @@ function pickTools(names, question, max) {
   if (list.indexOf('query') >= 0) keep.push('query');
   // UI 落地工具常驻:makePpt/makeExcel 只在编排器判定意图命中时才进 names(见 orchestrate 的
   // uiExtra),进了名单就是本题的交付通道,绝不许被关键词打分挤掉(2026-09-01 D-轮1)
-  ['makePpt', 'makeExcel'].forEach(n => { if (list.indexOf(n) >= 0 && keep.indexOf(n) < 0) keep.push(n); });
+  ['makePpt', 'makeExcel', 'docSearch', 'docSlice', 'fsList', 'fsRead', 'excelEdit', 'pptEdit', 'fsWrite', 'runCode'].forEach(n => { if (list.indexOf(n) >= 0 && keep.indexOf(n) < 0) keep.push(n); });
   scored.filter(x => x.sc > 0 && keep.indexOf(x.n) < 0)
     .sort((a, b) => b.sc - a.sc || a.i - b.i)
     .forEach(x => { if (keep.length < lim) keep.push(x.n); });
@@ -526,6 +540,14 @@ const AIData = (function () {
       if (!api) return { error: 'API 不可用' };
       return await fn(args || {});
     };
+    // 写类本机工具的审批闸：Agent 对话看板注入 window.AgentApprove(tool,args)→Promise<boolean>；未注入(其它入口)一律拒绝
+    const gated = async (tool, a, run) => {
+      const ask = (typeof window !== 'undefined') ? window.AgentApprove : null;
+      if (typeof ask !== 'function') return { error: '本机写操作只能在「Agent 对话」看板里执行（需要用户确认）' };
+      let okA = false; try { okA = await ask(tool, a); } catch (e) { okA = false; }
+      if (!okA) return { error: '用户拒绝了本次操作(' + tool + ')，请按用户意愿调整或停止' };
+      return await run();
+    };
     /* —— Agent 的手(2026-08-31)：makePpt 直接在渲染层用 PptxGenJS（国家看板同款Acme红样式），
        saveFile 后主进程自动打开；openBoard 调全局 switchView。业务数据仍只读。 —— */
     async function toolMakePpt(a) {
@@ -764,6 +786,14 @@ const AIData = (function () {
       }),
       searchDim: wrap(async (a) => api.searchDim(a || {})),
       rawRows: wrap(async (a) => api.rawRows(a || {})),
+      docSearch: wrap(a => api.docSearch(String(a.docId || ''), String(a.q || ''), { limit: a.limit, context: a.context })),
+      docSlice: wrap(a => api.docSlice(String(a.docId || ''), a.from, a.to)),
+      fsList: wrap(a => api.fsList(a)),
+      fsRead: wrap(a => api.fsRead(a)),
+      fsWrite: wrap(a => gated('fsWrite', a, () => api.fsWrite(a))),
+      excelEdit: wrap(a => gated('excelEdit', a, () => api.excelEdit(a))),
+      pptEdit: wrap(a => gated('pptEdit', a, () => api.pptEdit(a))),
+      runCode: wrap(a => gated('runCode', a, () => api.runCode(a))),
       roadmapUpsert: wrap(async (a) => {
         if (!window.RoadmapAPI) return { error: '路标看板未初始化，请先打开一次路标管理视图' };
         return window.RoadmapAPI.upsert(a || {});

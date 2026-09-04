@@ -74,6 +74,19 @@ contextBridge.exposeInMainWorld('sb', {
   // 拖拽上传：Electron 33 移除了 File.path，取真实路径只能靠 preload 里的 webUtils
   pathForFile: (file)        => { try { return webUtils.getPathForFile(file); } catch (e) { return ''; } },
   readDocByPath: (p)         => ipcRenderer.invoke('readDocByPath', p),
+  // 文档全文索引（大文件不截断：主进程留全文，渲染层按需搜索/切片）
+  docSearch:   (id, q, opt)      => ipcRenderer.invoke('docSearch', id, q, opt),
+  docSlice:    (id, from, to)    => ipcRenderer.invoke('docSlice', id, from, to),
+  // 本机工具（工作区内：列目录/读/写/改Excel/改PPT/跑脚本），审批在渲染层
+  wsGet:       ()                => ipcRenderer.invoke('wsGet'),
+  wsSet:       (dirs)            => ipcRenderer.invoke('wsSet', dirs),
+  wsPick:      ()                => ipcRenderer.invoke('wsPick'),
+  fsList:      (a)               => ipcRenderer.invoke('fsList', a),
+  fsRead:      (a)               => ipcRenderer.invoke('fsRead', a),
+  fsWrite:     (a)               => ipcRenderer.invoke('fsWrite', a),
+  excelEdit:   (a)               => ipcRenderer.invoke('excelEdit', a),
+  pptEdit:     (a)               => ipcRenderer.invoke('pptEdit', a),
+  runCode:     (a)               => ipcRenderer.invoke('runCode', a),
   aiProxyInfo: (url)         => ipcRenderer.invoke('aiProxyInfo', url),
   aiListModels: (baseUrl, key) => ipcRenderer.invoke('aiListModels', baseUrl, key),
   lmStatus: (baseUrl) => ipcRenderer.invoke('lmStatus', baseUrl),

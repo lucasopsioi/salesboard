@@ -32,7 +32,7 @@
         let sessions = AC.sessions.map(s => ({
           id: s.id, title: s.title, histNote: s.histNote || '',
           agents: [...s.agents],
-          msgs: s.msgs.slice(-200),
+          msgs: s.msgs.filter(m => m.role !== 'approve').slice(-200),
           files: s.files.map(f => f.kind === 'image'
             ? { name: f.name, kind: 'image', content: '', dataUrl: '' }   // 图片重启后需重传
             : { name: f.name, content: f.content, srcPath: f.srcPath || '' }),
@@ -118,9 +118,10 @@
       s.files.push({ name: r.name, kind: 'image', dataUrl: r.dataUrl, content: '' });
       s.msgs.push({ role: 'sys', content: '🖼 已附加图片「' + r.name + '」——发送提问时先由当前模型识图转述（需多模态模型，如 deepseek v4-pro），转述文本供全体专家引用。' });
     } else {
-      s.files.push({ name: r.name, content: r.content, srcPath: r.srcPath || '' });
+      s.files.push({ name: r.name, content: r.content, srcPath: r.srcPath || '', docId: r.docId || '', totalLines: r.totalLines || 0, size: r.size || 0, summary: r.summary || '' });
       const pptHint = /\.pptx$/i.test(r.name) ? ' 想把它做成可刷新的数据模板？直接说「把这个PPT做成模板」。' : '';
-      s.msgs.push({ role: 'sys', content: '📎 已附加文档「' + r.name + '」（' + Math.round(r.content.length / 1000) + 'K 字符' + (r.truncated ? '，超长已截断' : '') + '）——本会话后续提问都能引用它。' + pptHint });
+      const big = r.truncated ? '（' + (r.totalLines || 0) + ' 行全文已建索引，AI 会按需搜索/读取，不受长度限制）' : '（' + Math.round(r.content.length / 1000) + 'K 字符）';
+      s.msgs.push({ role: 'sys', content: '📎 已附加「' + r.name + '」' + big + (r.summary ? ' 结构：' + r.summary.slice(0, 160) : '') + '——本会话后续提问都能引用它。' + pptHint });
     }
     renderChat(); renderTopbar();
     persist();
@@ -148,6 +149,50 @@
     return okN;
   }
   function toastSafe(t) { try { typeof toast === 'function' ? toast(t, 'err') : alert(t); } catch (e) {} }
+  // 文档注入块：大文件只带开头 + docId 标注（全文在主进程索引，模型用 docSearch/docSlice 读其余）
+  function docBlock(f) {
+    const head = '【用户上传文档：' + f.name + (f.docId ? '  docId=' + f.docId + '  全文 ' + (f.totalLines || '?') + ' 行' + (f.summary ? '  结构：' + f.summary.slice(0, 200) : '') : '') + '】';
+    const body = String(f.content || '');
+    const tail = (f.docId && f.totalLines && body.length >= 60000) ? '\n…（以下省略，全文已索引：用 docSearch({docId:"' + f.docId + '",q:"关键词"}) 搜索、docSlice 读原文）' : '';
+    return head + '\n' + body + tail;
+  }
+  /* ---------- 本机写操作审批闸（Claude Code 式）：写文件/改Excel/改PPT/跑脚本前弹卡片，用户点允许才执行 ---------- */
+  const APPROVE_LABEL = { fsWrite: '写入文件', excelEdit: '修改 Excel', pptEdit: '修改 PPT', runCode: '运行脚本' };
+  function describeOp(tool, a) {
+    a = a || {};
+    if (tool === 'excelEdit') return (a.path || '') + '\n' + (a.ops || []).slice(0, 12).map(o => '· ' + o.op + ' ' + (o.sheet ? o.sheet + '!' : '') + (o.cell || o.origin || '') + (o.value != null ? ' = ' + String(o.value).slice(0, 60) : '') + (o.rows ? ' (' + o.rows.length + ' 行)' : '')).join('\n') + ((a.ops || []).length > 12 ? '\n· …共 ' + a.ops.length + ' 步' : '');
+    if (tool === 'pptEdit') return (a.path || '') + '\n' + (a.replace || []).slice(0, 12).map(r => '· 「' + String(r.find).slice(0, 40) + '」→「' + String(r.replace == null ? '' : r.replace).slice(0, 40) + '」').join('\n');
+    if (tool === 'fsWrite') return (a.path || '') + '\n（' + String(a.content || '').length + ' 字符）\n' + String(a.content || '').slice(0, 400);
+    if (tool === 'runCode') return (a.lang || 'node') + ' @ ' + (a.cwd || '工作区') + '\n' + String(a.code || '').slice(0, 900);
+    return JSON.stringify(a).slice(0, 400);
+  }
+  window.AgentApprove = function (tool, args) {
+    const s = curS(); if (!s) return Promise.resolve(false);
+    if (s.autoAllow) { s.msgs.push({ role: 'sys', content: '⚡ 已按「本会话全部允许」自动执行：' + (APPROVE_LABEL[tool] || tool) + ' ' + String((args && args.path) || '') }); renderChat(); return Promise.resolve(true); }
+    return new Promise(resolve => {
+      s.msgs.push({ role: 'approve', tool, args, desc: describeOp(tool, args), resolve, decided: '' });
+      renderChat();
+      try { toast && toast('Agent 请求' + (APPROVE_LABEL[tool] || tool) + '，请在对话里确认', 'ok'); } catch (e) {}
+    });
+  };
+  function decideApprove(m, val, allSession) {
+    if (m.decided) return;
+    m.decided = val ? (allSession ? 'all' : 'yes') : 'no';
+    const s = curS(); if (allSession && s) s.autoAllow = true;
+    try { m.resolve(!!val); } catch (e) {}
+    renderChat();
+  }
+  async function pickWorkspace() {
+    try {
+      const cur = await window.sb.wsGet();
+      const dirs = (cur && cur.dirs) || [];
+      const r = await window.sb.wsPick();
+      const now = (r && r.dirs) || dirs;
+      const s = curS() || newSession();
+      s.msgs.push({ role: 'sys', content: '📁 工作区（Agent 允许读写的文件夹）：\n' + (now.length ? now.map(d => '· ' + d).join('\n') : '（空）') + '\n现在可以说「把 工作区里的 xxx.xlsx 的 B2 改成 199」这类话；每次写入前会弹卡片让你确认。' });
+      renderChat();
+    } catch (e) { toastSafe('工作区设置失败：' + String((e && e.message) || e)); }
+  }
 
   // Agent 总控分工逻辑在 chat-context-core.js（双端同源，连通性测试跑同一份）
   function masterPlan(q, files) { return window.ChatCtx && window.ChatCtx.masterPlan ? window.ChatCtx.masterPlan(q, files) : null; }
@@ -260,8 +305,8 @@
     // 组装完整问题：文档前缀 + 会话历史 + 当前问题（专家与综合器都可见；实体检索照常工作）
     let fullQ = hist ? hist + '【当前问题】' + q : q;
     if (s.files.length) {
-      const docs = s.files.map(f => '【用户上传文档：' + f.name + '】\n' + f.content).join('\n\n');
-      fullQ = docs.slice(0, 80000) + '\n\n' + hist + '【当前问题】' + q;
+      const docs = s.files.map(docBlock).join('\n\n');
+      fullQ = docs.slice(0, 120000) + '\n\n' + hist + '【当前问题】' + q;
     }
     const force = s.agents.size ? [...s.agents] : null;
     const sid = s.id;
@@ -302,8 +347,8 @@
       }
       // 文档重组装（图片转述后 content 才就位）
       if (s.files.length) {
-        const docs2 = s.files.map(f => '【用户上传文档：' + f.name + '】\n' + f.content).join('\n\n');
-        fullQ = docs2.slice(0, 80000) + '\n\n' + hist + '【当前问题】' + q;
+        const docs2 = s.files.map(docBlock).join('\n\n');
+        fullQ = docs2.slice(0, 120000) + '\n\n' + hist + '【当前问题】' + q;
       }
       // 总控分工：未手选专家且材料可拆（多 sheet/多文档）→ 并行派工；材料已拆进各任务，主问题不再重复注入全量文档
       let forceTasks = null, orchQ = fullQ;
@@ -385,7 +430,8 @@
         return '<span class="ac-ctx" title="会话上下文用量：满后旧对话自动压缩成摘要，不会失忆">' +
           '<i style="width:' + p + '%;background:' + col + '"></i><b>' + p + '%</b></span>';
       })() : '') +
-      '<button class="btn ghost" id="acDoc" title="上传本地文档(txt/md/csv/json/xlsx/pptx/docx，也可传 png/jpg 图片)">📎 附件</button>' +
+      '<button class="btn ghost" id="acDoc" title="上传本地文档(txt/md/csv/json/xlsx/pptx/docx，也可传 png/jpg 图片)——多大都行，全文建索引">📎 附件</button>' +
+      '<button class="btn ghost" id="acWs" title="选择允许 Agent 读写的本机文件夹（工作区）。之后可让它直接修改里面的 Excel/PPT/文本，每次写入前会弹卡片确认">📁 工作区</button>' +
       '<button class="btn ghost" id="acBoard" title="Agent 架构">🕸</button>';
     el.querySelector('#acModel').onchange = e => switchModel(e.target.value);
     el.querySelectorAll('.ac-chip').forEach(n => {
@@ -398,6 +444,7 @@
       };
     });
     el.querySelector('#acDoc').onclick = uploadDoc;
+    el.querySelector('#acWs').onclick = pickWorkspace;
     el.querySelector('#acBoard').onclick = () => { try { window.AgentBoard && window.AgentBoard.open(); } catch (e) {} };
   }
   function renderChat() {
@@ -407,6 +454,12 @@
     let h = s.msgs.map((m, mi) => {
       if (m.role === 'user') return '<div class="ac-b u">' + esc(m.content) + '</div>';
       if (m.role === 'sys') return '<div class="ac-b s">' + esc(m.content) + '</div>';
+      if (m.role === 'approve') {
+        const st = m.decided === 'no' ? '❌ 已拒绝' : m.decided ? '✅ 已允许' + (m.decided === 'all' ? '（本会话全部允许）' : '') : '';
+        return '<div class="ac-b ap" data-mi="' + mi + '"><div class="ap-h">🛡 Agent 请求：<b>' + esc(APPROVE_LABEL[m.tool] || m.tool) + '</b>' + (st ? '<span class="ap-st">' + st + '</span>' : '') + '</div>' +
+          '<pre class="ap-d">' + esc(m.desc || '') + '</pre>' +
+          (m.decided ? '' : '<div class="ap-btns"><button class="btn primary ap-yes">允许</button><button class="btn ghost ap-all">本会话全部允许</button><button class="btn ghost ap-no">拒绝</button></div>') + '</div>';
+      }
       if (m.role === 'file') {
         const base = String(m.file || '').split(/[\\/]/).pop();
         return '<div class="ac-b f" data-mi="' + mi + '"><span class="ac-fico">' + (/\.pptx?$/i.test(base) ? '📊' : /\.xlsx?$/i.test(base) ? '📗' : '📄') + '</span>' +
@@ -420,6 +473,13 @@
       h += '<div class="ac-b a ac-live"><div class="ac-flowlive">' + (s.flowLive.length ? s.flowLive.map(esc).join('<br>') : '正在规划…') + '</div></div>';
     }
     el.innerHTML = h || '<div class="ac-empty">选好专家（或用自动路由）直接提问。<br>可 📎 上传文档、让我出 PPT / Excel、多开会话并行跑。</div>';
+    el.querySelectorAll('.ac-b.ap').forEach(n => {
+      const m = s.msgs[+n.getAttribute('data-mi')]; if (!m) return;
+      const y = n.querySelector('.ap-yes'), a = n.querySelector('.ap-all'), x = n.querySelector('.ap-no');
+      if (y) y.onclick = () => decideApprove(m, true, false);
+      if (a) a.onclick = () => decideApprove(m, true, true);
+      if (x) x.onclick = () => decideApprove(m, false, false);
+    });
     el.querySelectorAll('.ac-b.f').forEach(n => {
       const m = s.msgs[+n.getAttribute('data-mi')]; if (!m) return;
       const open = n.querySelector('.ac-fopen'), rev = n.querySelector('.ac-freveal');
@@ -511,6 +571,10 @@
       '.ac-input{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}' +
       '.ac-input textarea{flex:1;resize:none;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--c-bg-elev);color:inherit;font-size:13px;font-family:inherit}' +
       '.ac-b.f{align-self:flex-start;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:8px 12px}' +
+      '.ac-b.ap{align-self:flex-start;max-width:86%;background:#FFF8E6;border:1px solid #E0A400;padding:10px 12px}' +
+      '.ap-h{font-size:12.5px;margin-bottom:6px}.ap-st{margin-left:10px;color:var(--ink3);font-size:11px}' +
+      '.ap-d{margin:0;white-space:pre-wrap;font:11.5px/1.5 Consolas,monospace;background:rgba(255,255,255,.6);border-radius:8px;padding:8px 10px;max-height:220px;overflow:auto}' +
+      '.ap-btns{display:flex;gap:8px;margin-top:8px}.ap-btns .btn{font-size:12px;padding:5px 12px}' +
       '.ac-fico{font-size:20px}' +
       '.ac-fname{font-size:12px;font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.ac-b.f .btn{font-size:11px;padding:3px 8px}' +
@@ -521,4 +585,6 @@
   }
 
   window.renderAgentChat = function () { build(); renderAll(); };
+  // 自动化测试钩子（与 📎/拖拽同一条入列链）：按路径附加文件到当前会话
+  window.AgentChat = { addFileByPath: async (p) => { const s = curS() || newSession(); return addFileRecord(s, await window.sb.readDocByPath(p)); }, cur: () => curS() };
 })();

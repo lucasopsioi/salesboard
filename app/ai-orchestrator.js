@@ -539,6 +539,9 @@
     const uiExtra = [];
     if (/(做|生成|整理|导出|弄|输出|给我|帮我).{0,12}(PPT|ppt|幻灯)/.test(task.subQuestion)) uiExtra.push('makePpt');
     if (/(做|生成|整理|导出|弄|输出|给我|帮我).{0,12}(excel|xlsx|表格文件)/i.test(task.subQuestion)) uiExtra.push('makeExcel');
+    // 上传了文档(提示词里有 docId 标注)→ 附加全文搜索/切片；提到本机文件/路径/编辑/运行 → 附加本机工具(写类走用户审批)
+    if (/docId=/.test(task.subQuestion)) uiExtra.push('docSearch', 'docSlice');
+    if (/([A-Za-z]:\\|[A-Za-z]:\/|\.xlsx|\.pptx|\.csv|\.docx|\.txt|\.md|工作区|本机|电脑上|文件夹|目录|(编辑|修改|改一?下|更新|写入|写进|另存|保存到|删掉|加一?行|加一?列|加一?页|批量).{0,12}(文件|表格|excel|ppt|xlsx|pptx|csv|单元格|工作表|sheet)|运行.{0,6}(脚本|代码)|python|node)/i.test(task.subQuestion)) uiExtra.push('fsList', 'fsRead', 'excelEdit', 'pptEdit', 'fsWrite', 'runCode');
     const baseTools = uiExtra.length ? a.tools.concat(uiExtra.filter(t => a.tools.indexOf(t) < 0)) : a.tools;
     const toolNames = !fast ? baseTools
       : (deps.pickTools ? deps.pickTools(baseTools, task.subQuestion, 4 + uiExtra.length) : baseTools.slice(0, 4));
@@ -635,6 +638,8 @@
     if (/逐月|逐周|月度|各月|分别|各占|每个月|每一个/.test(q)) g.push('用户要求逐项数据：必须把每个成员(每月/每处/每国)各自的数值一行一个完整列出，不许只给合计、只挑最大最小或用「等」省略；确无数据的项逐个标「数据未包含」。');
     if (/(上市|首销|发布)/.test(q) && /(什么时候|何时|哪个月|怎么回事|一点量|少量|很小)/.test(q)) g.push('判断上市时间：放量前1-2个月出现的极小销量(比放量月低一个数量级)通常是样机/演示机铺货，不算正式上市。回答必须把「样机期(小量)」与「正式上市(放量月)」分开说，上市时间以首个放量月为准。');
     if (/(做|生成|整理|导出|弄|输出).{0,8}(PPT|ppt|幻灯)/.test(q)) g.push('用户要 PPT：先用 query/report 取齐数据，再调 makePpt({fileName, slides:[{title,bullets,table}]}) 生成——每个主题一页，数字表格放 table（headers+rows），结论要点放 bullets；标题页写清口径与截至时间。生成后告知用户文件已保存并自动打开。');
+    if (/docId=/.test(q)) g.push('用户上传的文档已建全文索引：提示词里只带了开头部分。回答涉及文档细节/数字/后半部分内容时，必须用 docSearch({docId,q}) 搜索、docSlice({docId,from,to}) 读原文，不要凭开头臆断「文档里没有」。');
+    if (/([A-Za-z]:\\|[A-Za-z]:\/|\.xlsx|\.pptx).{0,40}(编辑|修改|改|更新|写|删|加)|(编辑|修改|改一?下|更新|写入|写进).{0,12}(文件|表格|excel|ppt|xlsx|pptx|单元格|工作表)/i.test(q)) g.push('用户要改本机文件：先 fsRead 看清现状（Excel 看表头与目标行列），再用 excelEdit(结构化 ops) / pptEdit(文字替换) / fsWrite(文本) 执行；复杂批量处理用 runCode 写脚本。每个写操作用户会先看到确认卡再执行——被拒绝就停下说明，不要换个工具偷偷再试。完成后把「改了什么、备份在哪」告诉用户。路径不在工作区会被拒绝：提示用户在 Agent 对话右上角「📁 工作区」添加文件夹。');
     if (/(做|生成|整理|导出|弄|输出|给我|帮我).{0,12}(excel|xlsx|表格文件)/i.test(q)) g.push('用户要 Excel 文件：先用 query/report 取齐数据，再调 makeExcel({fileName, sheets:[{name, rows}]}) 生成——rows 是二维数组且首行为表头；生成后告知用户文件已保存并自动打开。只在正文贴数字不调 makeExcel 视为任务未完成。');
     if (/(整理|做|输出|列|汇总)[成个张出]{0,2}(一[个张])?表格?(?!文件)/.test(q) && !/excel|xlsx|ppt/i.test(q)) g.push('用户要表格呈现：最终回答的主体必须是 markdown 表格（|表头|…| 语法，行=成员，列=指标），表格外只保留一句结论与口径说明，不许用分点叙述替代表格。');
     if (/(加到|录入|记到|写进|放进|更新到).{0,6}路标|路标.{0,8}(添加|录入|补充)|编码是|上市时间是/.test(q)) g.push('用户在口述产品信息要录入路标：从原文抽取 产品名/上市月/价格/编码/SKU/卖点/EOM 等，调 roadmapUpsert({name, fields, skus, sellingPoints, extras}) 写入——白名单外信息(VN编码等)放 extras 绝不丢弃；写完把「新建/更新了什么字段」列给用户确认。');

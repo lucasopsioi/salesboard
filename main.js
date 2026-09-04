@@ -370,7 +370,7 @@ function parseDocFile(p2) {
   try {
     if (!DOC_EXT_RE.test(p2)) return { error: '不支持的文件类型（支持 txt/md/csv/json/log/pptx/docx/xlsx/png/jpg/webp）: ' + path.basename(p2) };
     const st = fs.statSync(p2);
-    if (st.size > 8 * 1024 * 1024) return { error: '文件超过 8MB，请精简后再传: ' + path.basename(p2) };
+    if (st.size > 1024 * 1024 * 1024) return { error: '文件超过 1GB: ' + path.basename(p2) };   // 2026-09-02 用户「多大都行」：仅防极端值
     // 图片：返回 dataUrl，由渲染层先经多模态模型转述成文本再进编排链（主链保持纯文本）
     const imgExt = (p2.match(/\.(png|jpg|jpeg|webp)$/i) || [])[1];
     if (imgExt) {
@@ -384,9 +384,16 @@ function parseDocFile(p2) {
     } else {
       content = fs.readFileSync(p2, 'utf8');
     }
+    // 全文进索引库（docId），渲染层拿到的是开头 6 万字 + 行数；模型用 docSearch/docSlice 按需读其余部分
+    const docId = 'doc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const lines = LTC.docIndex(content);
+    DOC_STORE.set(docId, { name: path.basename(p2), lines, size: st.size, srcPath: p2 });
+    if (DOC_STORE.size > 12) { const first = DOC_STORE.keys().next().value; DOC_STORE.delete(first); }   // 最多留 12 份全文
     const truncated = content.length > 60000;
+    let summary = '';
+    if (/\.xlsx$/i.test(p2)) { try { summary = LTC.excelSummary(fs.readFileSync(p2), require('xlsx'), 4).map(sh => sh.sheet + '(' + sh.rows + '行×' + sh.cols + '列; 表头: ' + (sh.head[0] || []).join(' | ').slice(0, 120) + ')').join('；'); } catch (e) {} }
     if (truncated) content = content.slice(0, 60000);
-    return { name: path.basename(p2), content, truncated, srcPath: p2 };
+    return { name: path.basename(p2), content, truncated, srcPath: p2, docId, totalLines: lines.length, size: st.size, summary };
   } catch (e) { return { error: String((e && e.message) || e) }; }
 }
 /* ---- PPT 模板体系(2026-09-01)：上传 PPT → AI 识别数据字段做成可刷新模板 ----
@@ -455,6 +462,24 @@ ipcMain.handle('readLocalDoc', async () => {
   } catch (e) { return { error: String((e && e.message) || e) }; }
 });
 /* 拖拽上传：渲染层经 webUtils 拿到真实路径后走这里；仅接受白名单扩展名的既存文件 */
+const LTC = require(path.join(__dirname, 'app', 'local-tools-core.js'));
+const DOC_STORE = new Map();   // docId → {name, lines, size, srcPath}
+ipcMain.handle('docSearch', (_e, id, q, opt) => { const d = DOC_STORE.get(String(id)); if (!d) return { error: '文档不在索引里(可能已被新文档挤出或应用重启过)，请重新上传' }; const r = LTC.docSearch(d.lines, q, opt || {}); return Object.assign({ file: d.name, totalLines: d.lines.length }, r); });
+ipcMain.handle('docSlice', (_e, id, from, to) => { const d = DOC_STORE.get(String(id)); if (!d) return { error: '文档不在索引里，请重新上传' }; return Object.assign({ file: d.name }, LTC.docSlice(d.lines, from, to)); });
+/* ---- 工作区 + 本机工具(2026-09-02)：Claude Code 式本机操作。守卫=路径必须在用户指定的工作区内；写前自动备份 .bak ---- */
+function wsFile() { return path.join(ud(), 'workspace.json'); }
+function wsDirs() { try { const o = JSON.parse(fs.readFileSync(wsFile(), 'utf8')); return Array.isArray(o.dirs) ? o.dirs.filter(Boolean) : []; } catch (e) { return []; } }
+function wsGuard(p2) { const dirs = wsDirs(); if (!dirs.length) return '还没有设置工作区：在 Agent 对话右上角「📁 工作区」里选择允许操作的文件夹'; if (!LTC.inWorkspace(p2, dirs)) return '路径不在工作区内(' + dirs.join(' ; ') + ')：' + p2; return ''; }
+function backupFile(p2) { try { if (!fs.existsSync(p2)) return ''; const bak = p2 + '.' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.bak'; fs.copyFileSync(p2, bak); return bak; } catch (e) { return ''; } }
+ipcMain.handle('wsGet', () => ({ dirs: wsDirs() }));
+ipcMain.handle('wsSet', (_e, dirs) => { try { fs.writeFileSync(wsFile(), JSON.stringify({ dirs: (dirs || []).filter(Boolean) })); return { ok: true, dirs: wsDirs() }; } catch (e) { return { error: String(e) }; } });
+ipcMain.handle('wsPick', async () => { const r = await dialog.showOpenDialog(win, { title: '选择允许 Agent 操作的文件夹（工作区）', properties: ['openDirectory'] }); if (!r || r.canceled || !r.filePaths.length) return { canceled: true }; const dirs = wsDirs(); if (dirs.indexOf(r.filePaths[0]) < 0) dirs.push(r.filePaths[0]); fs.writeFileSync(wsFile(), JSON.stringify({ dirs })); return { ok: true, dirs }; });
+ipcMain.handle('fsList', (_e, a) => { try { a = a || {}; const dir = path.resolve(String(a.dir || wsDirs()[0] || '')); const g = wsGuard(dir); if (g) return { error: g }; const depth = Math.max(0, Math.min(3, +a.depth || 1)); const out = []; (function walk(d, lv) { let ents = []; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; } ents.forEach(en => { if (out.length >= 500) return; const p3 = path.join(d, en.name); if (en.isDirectory()) { out.push({ path: p3, dir: true }); if (lv < depth) walk(p3, lv + 1); } else { let sz = 0, mt = ''; try { const st = fs.statSync(p3); sz = st.size; mt = st.mtime.toISOString().slice(0, 16); } catch (e) {} out.push({ path: p3, size: sz, mtime: mt }); } }); })(dir, 1); return { dir, items: out, truncated: out.length >= 500 }; } catch (e) { return { error: String(e) }; } });
+ipcMain.handle('fsRead', (_e, a) => { try { a = a || {}; const p2 = path.resolve(String(a.path || '')); const g = wsGuard(p2); if (g) return { error: g }; if (!fs.existsSync(p2)) return { error: '文件不存在: ' + p2 }; const max = Math.max(1000, Math.min(200000, +a.maxChars || 40000)); if (/\.xlsx$/i.test(p2)) { const XLSX = require('xlsx'); const wb = XLSX.read(fs.readFileSync(p2), { type: 'buffer' }); const sheet = a.sheet || wb.SheetNames[0]; const ws = wb.Sheets[sheet]; if (!ws) return { error: '没有工作表 ' + sheet + '（现有: ' + wb.SheetNames.join('/') + '）' }; const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true }); const from = Math.max(0, +a.fromRow || 0); const lim = Math.max(1, Math.min(2000, +a.rows || 200)); return { path: p2, sheets: wb.SheetNames, sheet, totalRows: rows.length, fromRow: from, rows: rows.slice(from, from + lim) }; } if (/\.(pptx|docx)$/i.test(p2)) { const t = extractOfficeText(fs.readFileSync(p2)); return { path: p2, text: t.slice(0, max), truncated: t.length > max, totalChars: t.length }; } const t = fs.readFileSync(p2, 'utf8'); return { path: p2, text: t.slice(0, max), truncated: t.length > max, totalChars: t.length }; } catch (e) { return { error: String(e) }; } });
+ipcMain.handle('fsWrite', (_e, a) => { try { a = a || {}; const p2 = path.resolve(String(a.path || '')); const g = wsGuard(p2); if (g) return { error: g }; if (/\.(xlsx|pptx|docx|exe|dll|bat|cmd|ps1)$/i.test(p2)) return { error: 'fsWrite 只写文本类文件；Excel 用 excelEdit，PPT 用 pptEdit' }; fs.mkdirSync(path.dirname(p2), { recursive: true }); const bak = backupFile(p2); fs.writeFileSync(p2, String(a.content == null ? '' : a.content), 'utf8'); return { ok: true, path: p2, bytes: Buffer.byteLength(String(a.content || ''), 'utf8'), backup: bak }; } catch (e) { return { error: String(e) }; } });
+ipcMain.handle('excelEdit', (_e, a) => { try { a = a || {}; const p2 = path.resolve(String(a.path || '')); const g = wsGuard(p2); if (g) return { error: g }; if (!/\.xlsx$/i.test(p2)) return { error: '只支持 .xlsx' }; const XLSX = require('xlsx'); let buf; if (fs.existsSync(p2)) buf = fs.readFileSync(p2); else { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), 'Sheet1'); buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }); } const r = LTC.applyExcelOps(buf, a.ops || [], XLSX); const bak = backupFile(p2); fs.writeFileSync(p2, r.buf); return { ok: true, path: p2, applied: r.applied, sheets: r.sheets, backup: bak, note: '已写入；原文件已备份为 .bak。注意：单元格样式/公式可能被简化' }; } catch (e) { return { error: String((e && e.message) || e) }; } });
+ipcMain.handle('pptEdit', (_e, a) => { try { a = a || {}; const p2 = path.resolve(String(a.path || '')); const g = wsGuard(p2); if (g) return { error: g }; if (!/\.pptx$/i.test(p2) || !fs.existsSync(p2)) return { error: '需要一个存在的 .pptx' }; const r = LTC.pptReplaceText(fs.readFileSync(p2), a.replace || [], OSC); if (!r.hits) return { ok: false, hits: 0, note: '没有任何文本命中 find，文件未改' }; const bak = backupFile(p2); fs.writeFileSync(p2, r.buf); return { ok: true, path: p2, hits: r.hits, shapesChanged: r.changed, backup: bak }; } catch (e) { return { error: String((e && e.message) || e) }; } });
+ipcMain.handle('runCode', async (_e, a) => { try { a = a || {}; const cwd = path.resolve(String(a.cwd || wsDirs()[0] || '')); const g = wsGuard(cwd); if (g) return { error: g }; const lang = String(a.lang || 'node'); const code = String(a.code || ''); if (!code.trim()) return { error: 'code 为空' }; const { spawn } = require('child_process'); const tmp = path.join(cwd, '.sb-run-' + Date.now().toString(36) + (lang === 'python' ? '.py' : '.js')); fs.writeFileSync(tmp, code, 'utf8'); const env = Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1', PYTHONUTF8: '1' }); const cmd = lang === 'python' ? (process.platform === 'win32' ? 'py' : 'python3') : process.execPath; const args = lang === 'python' ? ['-3', tmp] : [tmp]; return await new Promise(res => { let out = '', err = ''; let child; try { child = spawn(cmd, args, { cwd, env, windowsHide: true, shell: false }); } catch (e) { try { fs.unlinkSync(tmp); } catch (e2) {} return res({ error: '启动失败: ' + e.message }); } const t = setTimeout(() => { try { child.kill(); } catch (e) {} }, Math.min(300000, Math.max(5000, +a.timeoutMs || 120000))); child.stdout.on('data', d => { out += d; if (out.length > 60000) out = out.slice(-60000); }); child.stderr.on('data', d => { err += d; if (err.length > 20000) err = err.slice(-20000); }); child.on('error', e => { clearTimeout(t); try { fs.unlinkSync(tmp); } catch (e2) {} res({ error: '运行失败: ' + e.message + (lang === 'python' ? '（本机可能没有 Python，用 node）' : '') }); }); child.on('close', code2 => { clearTimeout(t); try { fs.unlinkSync(tmp); } catch (e2) {} res({ ok: code2 === 0, exitCode: code2, stdout: out.slice(0, 20000), stderr: err.slice(0, 8000), cwd }); }); }); } catch (e) { return { error: String(e) }; } });
 ipcMain.handle('readDocByPath', async (_e, p2) => {
   try {
     p2 = String(p2 || '');

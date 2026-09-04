@@ -38,7 +38,7 @@ function extractOfficeText(buf) {
       Object.keys(files).filter(n => n.indexOf('xl/worksheets/') === 0).sort().forEach(nm => {
         const rows = [];
         const rre = /<row[^>]*>([\s\S]*?)<\/row>/g; let rm;
-        while ((rm = rre.exec(files[nm])) && rows.length < 400) {
+        while ((rm = rre.exec(files[nm])) && rows.length < 200000) {
           const cells = [];
           const cre = /<c([^>]*)>(?:[\s\S]*?<v>([\s\S]*?)<\/v>)?[\s\S]*?<\/c>|<c([^>]*)\/>/g; let cm;
           while ((cm = cre.exec(rm[1]))) {

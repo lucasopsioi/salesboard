@@ -69,6 +69,32 @@
     }
     return { min, max, y: (v) => (max === min ? 0.5 : (max - v) / (max - min)) };
   }
+  /* 自动纵向高度（2026-09-07 用户「一键导入后很多产品价位相近全叠在一起，宁愿滚轮上下看」）：
+     价格轴把所有产品压进固定高度 → 价位相近就重叠。这里算「刚好不重叠」的绘图高度：
+     两卡片仅当横向(时间)相近 AND 纵向(价格)相近才算撞；纵向撞随高度增大而消失（单调），二分找最小可行高。
+     同价同时间的卡片再高也分不开，故封顶 max，UI 侧靠滚轮 + 手动档兜住。纯布局函数，可单测。 */
+  function autoPlotHeight(pts, opt) {
+    opt = opt || {};
+    const W = opt.W || 900, padL = opt.padL || 60, padR = opt.padR || 14;
+    const cardW = opt.cardW || 120, cardH = opt.cardH || 50;
+    const base = opt.base || 468, max = opt.max || 3600;
+    const P = (pts || []).filter(p => p && !p.missing && p.y != null && !isNaN(+p.y));
+    if (P.length < 2) return base;
+    const xs = P.map(p => padL + (+p.x || 0) * (W - padL - padR));
+    const ys = P.map(p => +p.y || 0);
+    const collisions = (plotH) => {
+      let n = 0;
+      for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+        if (Math.abs(xs[i] - xs[j]) < cardW * 0.82 && Math.abs((ys[i] - ys[j]) * plotH) < cardH * 0.92) { if (++n > 800) return n; }
+      }
+      return n;
+    };
+    if (collisions(base) === 0) return base;      // 本就不挤
+    if (collisions(max) > 0) return max;          // 到顶仍挤（多为同价同时间）→ 封顶
+    let lo = base, hi = max;                        // 二分找最小的「不重叠」高度
+    for (let it = 0; it < 20 && hi - lo > 8; it++) { const mid = (lo + hi) / 2; if (collisions(mid) === 0) hi = mid; else lo = mid; }
+    return Math.round(hi);
+  }
   function productValue(p, mode, country) {
     if (mode === 'local') { const r = (p.pricing || []).find(x => x.country === country); return (r && r.rrpLocal != null && +r.rrpLocal) ? +r.rrpLocal : null; }
     return (p.compositeRrpUsd == null || isNaN(p.compositeRrpUsd)) ? null : +p.compositeRrpUsd;
@@ -336,5 +362,5 @@
     const vd = (products || []).map(p => p.shipLate).filter(d => ymNum(d) != null).sort((a, b) => ymNum(a) - ymNum(b));
     return { bands, boxes, lines, yTicks, xLabels: { minD: vd[0] || '', maxD: vd[vd.length - 1] || '' }, geom: { W, H, padL, padR, padT, padB } };
   }
-  return { fobEstimate, _fobNorm, ymNum, timeScale, priceScale, productValue, productPoints, samplePoints, seriesBands, successionLinks, orthoRoute, successionChain, explodeBySku, filterByYear, pptxRoadmap, skuPriceBoxes, resolveBoxStyle };
+  return { fobEstimate, _fobNorm, ymNum, timeScale, priceScale, productValue, productPoints, samplePoints, seriesBands, successionLinks, orthoRoute, successionChain, explodeBySku, filterByYear, pptxRoadmap, skuPriceBoxes, resolveBoxStyle, autoPlotHeight };
 });

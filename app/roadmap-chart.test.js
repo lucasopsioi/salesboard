@@ -129,4 +129,19 @@ ok('pptx lines 段间连续', prL.lines.slice(1).every((l, i) => Math.abs(l.x1 -
   okq('Y3 起止写反自动对调', swapped.min === 150 && swapped.max === 400);
   okq('Y4 系列色带 0~5000 不再撑大自动量程', inflated.max === auto.max && inflated.min === auto.min);
 }
+// —— autoPlotHeight：拥挤时长高，不挤时用基准（2026-09-07 路标叠加）——
+const AH = (pts, o) => RC.autoPlotHeight(pts, Object.assign({ W: 900, base: 468, max: 3600, cardW: 120, cardH: 50 }, o || {}));
+ok('H1 少于两点 → 基准高', AH([{ x: 0.5, y: 0.5 }]) === 468 && AH([]) === 468);
+ok('H2 横向岔开(时间不同)即使价近也不撞 → 基准高', AH([{ x: 0.05, y: 0.5 }, { x: 0.95, y: 0.5 }]) === 468);
+// 同一时间、价格挨得极近的 6 个产品 → 必须长高到基准之上
+const stacked = [0, 1, 2, 3, 4, 5].map(i => ({ x: 0.5, y: 0.50 + i * 0.012 }));
+ok('H3 同时间价位相近多产品 → 长高到基准以上', AH(stacked) > 468);
+// 价格拉开足够 → 回到基准（不浪费高度）
+ok('H4 价位拉开够远 → 仍用基准', AH([{ x: 0.5, y: 0.1 }, { x: 0.5, y: 0.9 }]) === 468);
+// 同价同时间无法分开 → 封顶而非无限长
+ok('H5 同价同时间无法分开 → 封顶 max', AH([{ x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }]) === 3600);
+ok('H6 缺价点不参与(missing 跳过)', AH([{ x: 0.5, y: 0.5, missing: true }, { x: 0.5, y: 0.5, missing: true }]) === 468);
+// 间距够宽、max 内能解开的一组 → 返回值该高度下确实不再重叠
+const resolvable = [0, 1, 2, 3].map(i => ({ x: 0.5, y: 0.35 + i * 0.03 }));
+ok('H7 能解开的拥挤组：返回高度下不再重叠且未封顶', (function () { const h = AH(resolvable); if (h >= 3600) return false; for (let i = 0; i < resolvable.length; i++) for (let j = i + 1; j < resolvable.length; j++) { if (Math.abs((resolvable[i].y - resolvable[j].y) * h) < 50 * 0.92 && Math.abs(resolvable[i].x - resolvable[j].x) * (900 - 74) < 120 * 0.82) return false; } return true; })());
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS'); process.exit(f ? 1 : 0);

@@ -10,7 +10,7 @@
     samples: [], sampleStyle: { color: '#E0A400', opacity: 0.85 },
     boxStyle: { fill: '#FFFFFF', opacity: 1, bold: true, fontSize: 12 },   // 全局框样式（默认=现观感，升级不改）
     launch: [], battle: [], loaded: false,
-    view: 'chart', chart: { mode: 'usd', country: '', year: '', explode: false, manualFrom: '', manualTo: '', category: '', showSamples: false, timeFrom: '', timeTo: '' },
+    view: 'chart', chart: { mode: 'usd', country: '', year: '', explode: false, manualFrom: '', manualTo: '', category: '', showSamples: false, timeFrom: '', timeTo: '', vzoom: 1 },
   };
   window.RM_STATE = state;
   /* FOB→RRP 推算配置(sb.roadmap.fob.v1):默认开,乘数可调(音频×3/平板×2.5) */
@@ -53,7 +53,7 @@
     try { const sm = JSON.parse(localStorage.getItem('sb.roadmap.samples.v1') || 'null'); if (sm && Array.isArray(sm.samples)) state.samples = sm.samples; } catch (e) {}
     try { const ss = JSON.parse(localStorage.getItem('sb.roadmap.samplestyle.v1') || 'null'); if (ss && typeof ss === 'object') state.sampleStyle = { color: ss.color || '#E0A400', opacity: ss.opacity == null ? 0.85 : ss.opacity }; } catch (e) {}
     try { const bs = JSON.parse(localStorage.getItem('sb.roadmap.boxstyle.v1') || 'null'); if (bs && typeof bs === 'object') state.boxStyle = normBoxStyle(bs); } catch (e) {}
-    try { const cr = JSON.parse(localStorage.getItem('sb.roadmap.chart.v1') || 'null'); if (cr && typeof cr === 'object') { state.chart.timeFrom = cr.timeFrom || ''; state.chart.timeTo = cr.timeTo || ''; state.chart.manualFrom = cr.manualFrom || ''; state.chart.manualTo = cr.manualTo || ''; } } catch (e) {}
+    try { const cr = JSON.parse(localStorage.getItem('sb.roadmap.chart.v1') || 'null'); if (cr && typeof cr === 'object') { state.chart.timeFrom = cr.timeFrom || ''; state.chart.timeTo = cr.timeTo || ''; state.chart.manualFrom = cr.manualFrom || ''; state.chart.manualTo = cr.manualTo || ''; if (cr.vzoom) state.chart.vzoom = +cr.vzoom || 1; } } catch (e) {}
     try { const ln = JSON.parse(localStorage.getItem(LKEY) || 'null'); if (ln && Array.isArray(ln.launch)) state.launch = ln.launch; } catch (e) {}
     try { const bt = JSON.parse(localStorage.getItem(BKEY) || 'null'); if (bt && Array.isArray(bt.battle)) state.battle = bt.battle; } catch (e) {}
     state.loaded = true;
@@ -69,7 +69,7 @@
   function saveSampleStyle() { try { localStorage.setItem('sb.roadmap.samplestyle.v1', JSON.stringify(state.sampleStyle)); } catch (e) {} }
   function normBoxStyle(bs) { bs = bs || {}; return { fill: /^#[0-9a-fA-F]{6}$/.test(bs.fill) ? bs.fill : '#FFFFFF', opacity: bs.opacity == null ? 1 : +bs.opacity, bold: bs.bold == null ? true : !!bs.bold, fontSize: bs.fontSize == null ? 12 : +bs.fontSize }; }
   function saveBoxStyle() { try { localStorage.setItem('sb.roadmap.boxstyle.v1', JSON.stringify(state.boxStyle)); } catch (e) {} }
-  function saveChartRange() { try { localStorage.setItem('sb.roadmap.chart.v1', JSON.stringify({ timeFrom: state.chart.timeFrom || '', timeTo: state.chart.timeTo || '', manualFrom: state.chart.manualFrom || '', manualTo: state.chart.manualTo || '' })); } catch (e) {} }
+  function saveChartRange() { try { localStorage.setItem('sb.roadmap.chart.v1', JSON.stringify({ timeFrom: state.chart.timeFrom || '', timeTo: state.chart.timeTo || '', manualFrom: state.chart.manualFrom || '', manualTo: state.chart.manualTo || '', vzoom: state.chart.vzoom || 1 })); } catch (e) {} }
   function saveLaunch() { try { localStorage.setItem(LKEY, JSON.stringify({ launch: state.launch })); } catch (e) {} }
   function saveBattle() { try { localStorage.setItem(BKEY, JSON.stringify({ battle: state.battle })); } catch (e) {} }
 
@@ -79,7 +79,8 @@
     if (root.dataset.built !== '1') {
       if (!document.getElementById('rm-style')) {
         const s = document.createElement('style'); s.id = 'rm-style';
-        s.textContent = '#rmChart{position:relative;border:1px solid var(--line);border-radius:var(--radius);background:var(--c-bg-elev);height:540px;overflow:hidden;box-shadow:var(--shadow)}' +
+        s.textContent = '#rmChart{position:relative;border:1px solid var(--line);border-radius:var(--radius);background:var(--c-bg-elev);height:540px;overflow-y:auto;overflow-x:hidden;box-shadow:var(--shadow);scroll-behavior:smooth}' +
+          '#rmChartInner{position:relative;width:100%}' +
           '.rmc-grid{position:absolute;left:60px;right:14px;height:1px;background:var(--c-line-soft);z-index:1}' +
           '.rmc-band{position:absolute;left:60px;right:14px}.rmc-band.fill{border-radius:7px}' +
           '.rmc-band .lab{position:absolute;right:6px;top:4px;font-size:11px;color:var(--ink2);font-weight:600;background:rgba(255,255,255,.82);padding:1px 6px;border-radius:5px;box-shadow:0 1px 2px rgba(16,24,40,.08)}' +
@@ -580,9 +581,17 @@
     const bandColors = isUsd ? state.seriesColors : Object.keys(state.seriesColors).reduce((m, k) => { const v = state.seriesColors[k] || {}; m[k] = { color: v.color, opacity: v.opacity }; return m; }, {});
     const bands = RoadmapChart.seriesBands(out.points, bandColors, out.pScale);
     const links = RoadmapChart.successionLinks(out.points);
-    const W = host.clientWidth || 900, H = 540, padL = 60, padR = 14, padT = 32, padB = 40;   // 上下留白避免最高/最低价产品方框被裁切
+    const W = host.clientWidth || 900, padL = 60, padR = 14, padT = 32, padB = 40;   // 上下留白避免最高/最低价产品方框被裁切
+    /* 纵向自动加高（2026-09-07 用户「一键导入后价位相近的产品全叠在一起，宁愿滚轮上下看」）：
+       视口固定 540（#rmChart 纵向可滚），绘图区高度按拥挤度长高到卡片不重叠，再乘手动「纵向」档位。 */
+    const VIEWPORT = 540, basePlot = VIEWPORT - padT - padB;
+    const vzoom = Math.max(1, Math.min(4, +state.chart.vzoom || 1));
+    // 卡尺寸按实际渲染取（4 行文字+EOM 约 72px 高、约 132px 宽），否则分开了真卡仍叠
+    const autoPlot = RoadmapChart.autoPlotHeight(out.points, { W, padL, padR, base: basePlot, max: 3600, cardW: 132, cardH: 72 });
+    const plotH = Math.round(autoPlot * vzoom);
+    const H = plotH + padT + padB;
     const px = (x) => padL + x * (W - padL - padR);
-    const py = (y) => padT + y * (H - padT - padB);
+    const py = (y) => padT + y * plotH;
     let h = '';
     // 色带
     bands.forEach(b => {
@@ -640,7 +649,10 @@
         '<div class="nm">' + esc(s.name) + ' <span style="font-size:9px;color:#7a4">' + esc(s.type) + '</span></div>' +
         '<div class="meta">' + esc(s.code) + '</div><div class="meta">' + esc(s.shipLate) + '</div></div>';
     });
-    host.innerHTML = h;
+    // 内层容器承载全部绝对定位内容，高度=绘图区实际高（可超视口），#rmChart 纵向滚动
+    const prevScroll = host.scrollTop;
+    host.innerHTML = '<div id="rmChartInner" style="height:' + H + 'px">' + h + '</div>';
+    if (H > VIEWPORT && prevScroll) host.scrollTop = Math.min(prevScroll, H - VIEWPORT);   // 重渲后保持滚动位置
     host.querySelectorAll('.rmc-box[data-rid]').forEach(b => b.addEventListener('click', () => { const prod = state.products.find(p => p.id === b.dataset.rid); if (prod) openDialog(prod); }));
     /* 水平拖拽 = 改上市时间(用户 2026-08-25:生成完的路标直接拖产品定上市时间)。
        位移<6px 视为点击(仍开编辑框);拖动中顶部浮出目标月份;松手写回 shipLate='YYYY/MM' 持久化。 */
@@ -663,7 +675,7 @@
               try { b.setPointerCapture(ev.pointerId); } catch (e3) { }
               b.style.zIndex = 99; b.style.opacity = .75; b.style.cursor = 'grabbing';
               tip = document.createElement('div');
-              tip.style.cssText = 'position:absolute;top:4px;padding:2px 10px;background:var(--c-brand);color:#fff;font-size:12px;border-radius:6px;z-index:100;pointer-events:none;white-space:nowrap';
+              tip.style.cssText = 'position:absolute;padding:2px 10px;background:var(--c-brand);color:#fff;font-size:12px;border-radius:6px;z-index:100;pointer-events:none;white-space:nowrap';
               host.appendChild(tip);
             }
             const mx = e2.clientX - rect0.left;
@@ -673,6 +685,7 @@
             b._dropYm = Math.floor((mo - 1) / 12) + '/' + String(((mo - 1) % 12) + 1).padStart(2, '0');
             tip.textContent = '上市 → ' + b._dropYm;
             tip.style.left = Math.min(mx, rect0.width - 120) + 'px';
+            tip.style.top = (host.scrollTop + 4) + 'px';   // 跟随滚动，始终停在可视区顶部
           };
           const up = () => {
             document.removeEventListener('pointermove', mv);
@@ -756,6 +769,8 @@
       '<input type="range" id="rmSampleOpacity" min="0" max="1" step="0.05" value="' + (state.sampleStyle.opacity == null ? 0.85 : state.sampleStyle.opacity) + '" title="样机框透明度" style="width:80px;vertical-align:middle">' +
       '<span style="font-size:12px;color:var(--ink2);margin-right:4px" title="价格轴显示范围：填起止价即可，只填一边另一边自动；空=自动">价格轴</span><input id="rmYFrom" placeholder="最低" title="价格轴最低值(美元)，空=自动" value="' + esc(c.manualFrom) + '" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-right:3px">~<input id="rmYTo" placeholder="最高" title="价格轴最高值(美元)，空=自动" value="' + esc(c.manualTo) + '" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-left:3px">' +
       '<button class="btn" id="rmYAuto" title="价格轴恢复自动" style="padding:4px 8px;margin-left:4px">自动</button>' +
+      '<span style="font-size:12px;color:var(--ink2);margin:0 4px 0 12px" title="产品上下太挤时把纵向拉高，用鼠标滚轮上下看，不再全叠在一起">纵向</span>' +
+      '<span class="rm-seg">' + [[1, '自动'], [1.5, '宽松'], [2, '更宽'], [3, '最宽']].map(o => '<button data-vz="' + o[0] + '" class="' + ((+c.vzoom || 1) === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</span>' +
       '<span style="font-size:12px;color:var(--ink2);margin:0 4px 0 12px">时间</span>' +
       '<input type="date" id="rmTimeFrom" value="' + toDateValue(c.timeFrom) + '" title="起始(空=自动)" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit">' +
       '<span style="margin:0 3px">~</span>' +
@@ -780,6 +795,7 @@
     el('rmYFrom').oninput = (e) => { c.manualFrom = e.target.value.trim(); saveChartRange(); rec(); };
     el('rmYTo').oninput = (e) => { c.manualTo = e.target.value.trim(); saveChartRange(); rec(); };
     el('rmYAuto').onclick = () => { c.manualFrom = ''; c.manualTo = ''; saveChartRange(); renderChartTools(); rec(); };
+    t.querySelectorAll('button[data-vz]').forEach(b => { b.onclick = () => { c.vzoom = +b.dataset.vz || 1; saveChartRange(); renderChartTools(); rec(); }; });
     el('rmTimeFrom').onchange = () => { c.timeFrom = dateRead('rmTimeFrom'); applyTimeRange(); };
     el('rmTimeTo').onchange = () => { c.timeTo = dateRead('rmTimeTo'); applyTimeRange(); };
     el('rmTimeReset').onclick = () => { c.timeFrom = ''; c.timeTo = ''; applyTimeRange(); };

@@ -686,6 +686,10 @@ table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-sp
 .fc-table td.met-inv,.fc-table td.met-dos{color:var(--ink3)}
 .fc-table tr.fc-r-dos td{border-bottom:2px solid var(--c-line)}
 .fc-table td.inv{color:var(--ink2);background:var(--c-table-zebra)}
+/* 历史实际 vs 推演：灰底只读 = 已发生；粗竖线右侧 = 可改的推演 */
+.fc-table th.hist,.fc-table td.hist{background:var(--c-bg-sunken);color:var(--ink2)}
+.fc-table th.hist .tag{display:block;font-size:9px;font-weight:400;color:var(--ink3);letter-spacing:1px}
+.fc-table th.fcstart,.fc-table td.fcstart{border-left:2px solid var(--c-brand)}
 .fc-table tr.fc-r-inv td.num,.fc-table tr.fc-r-dos td.num{background:var(--c-table-zebra)}
 .fc-table td.dim{color:var(--ink3)}
 .fc-exp{display:inline-block;width:14px;color:var(--ink3)}

@@ -106,7 +106,15 @@
       need -= h.length;
     }
     if (!got) return null;
-    return sum / W;
+    /* 分母用「实际覆盖到的天数」而不是死的 W：时间线开头回看不满 28 天时，
+       缺的那几天是**数据范围之外**（不是「那几天没卖」），除以 28 会低估日销 →
+       高估 DOS → 看起来库存很充裕，这是危险的方向（掩盖断货风险）。
+       窗口能填满时 need=0，分母就是 W，与原行为一致。
+       注意：左列「近28天日销」(dailyRunRate) 仍固定除以 28 —— 那里的缺口是
+       「近28天内确实没卖」，两者语义不同，不要统一。 */
+    const covered = W - Math.max(0, need);
+    if (covered <= 0) return null;
+    return sum / covered;
   }
 
   function dosOf(inv, rate) {
@@ -163,5 +171,44 @@
     return o;
   }
 
-  return { dailyRunRate, weeklyFromDaily, siShares, splitInt, rollInventory, trailingDailyRate, dosOf, simulate, simulateProduct, periodDays, equalShares };
+  /* 历史 + 推演拼成一条时间线（2026-09-07 用户：「需要历史数据来辅助判断」）。
+     histRows = 实际值 [{si,so,inv}]（inv 是该期真实期末库存，不再由我们滚）；
+     periods  = 推演期 [{si,so}]，期初库存接最后一期历史的实际 inv。
+     DOS 的「近28天日销」在整条时间线上回看，所以推演头几期会正确用到历史 SO，
+     不需要再单独喂 histDaily。 */
+  function simulateWithHistory(opt) {
+    opt = opt || {};
+    const gran = opt.gran;
+    const hist = (opt.histRows || []).map(r => ({
+      si: n0(r.si), so: n0(r.so), inv: n0(r.inv),
+      days: periodDays(gran, r.days), hist: true,
+    }));
+    const openInv = hist.length ? hist[hist.length - 1].inv : n0(opt.openInv);
+    const fc = rollInventory(openInv, opt.periods || [], gran);
+    const all = hist.concat(fc);
+    all.forEach((r, i) => {
+      r.rate = trailingDailyRate(all, i, null, 28);
+      r.dos = dosOf(r.inv, r.rate);
+    });
+    return { hist: all.slice(0, hist.length), forecast: all.slice(hist.length), all: all };
+  }
+
+  /* 产品级：历史照搬实际，未来按历史 SI 占比分摊。models[].histRows 为该型号的历史实际。 */
+  function simulateProductWithHistory(opt) {
+    opt = opt || {};
+    const models = opt.models || [];
+    const siMap = {}; models.forEach(m => { siMap[m.key] = n0(m.histSi) || 0; });
+    const shares = siShares(siMap) || equalShares(models.map(m => m.key));
+    const pps = opt.productPeriods || [];
+    const soSplit = pps.map(p => splitInt(n0(p.so) || 0, shares));
+    const siSplit = pps.map((p, i) => (n0(p.si) != null) ? splitInt(n0(p.si), shares) : soSplit[i]);
+    const byModel = {};
+    models.forEach(m => {
+      const periods = pps.map((p, i) => ({ so: soSplit[i][m.key] || 0, si: siSplit[i][m.key] || 0, days: p.days }));
+      byModel[m.key] = simulateWithHistory({ gran: opt.gran, histRows: m.histRows, openInv: m.openInv, periods: periods });
+    });
+    return { shares: shares, byModel: byModel };
+  }
+
+  return { dailyRunRate, weeklyFromDaily, siShares, splitInt, rollInventory, trailingDailyRate, dosOf, simulate, simulateProduct, simulateWithHistory, simulateProductWithHistory, periodDays, equalShares };
 });

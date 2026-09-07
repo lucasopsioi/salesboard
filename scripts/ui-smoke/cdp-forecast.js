@@ -56,8 +56,9 @@ let fails = 0; const ok = (n, c, extra) => { console.log((c ? 'PASS ' : 'FAIL ')
   const kids = await ev("document.querySelectorAll('#view-forecast tr.fc-model.fc-r-si').length");
   ok('F4 展开产品能看到型号（每型号也是四行）', (+kids.v || 0) > 0, 'model blocks=' + kids.v);
   // 边输入边变：改 SI 输入框 → INV / DOS 单元格当场变（不重渲、不丢焦点）
-  const live = await ev("(function(){ const k=FC.rows[0].key; const inp=document.querySelector('input.fc-in[data-f=\"si\"][data-k=\"'+k+'\"][data-i=\"0\"]'); if(!inp) return 'no-input';"
-    + " const invEl=document.getElementById(k+'@@0@@inv'), dosEl=document.getElementById(k+'@@0@@dos');"
+  const live = await ev("(function(){ const k=FC.rows[0].key; const i=FC.firstFcIdx;"
+    + " const inp=document.querySelector('input.fc-in[data-f=\"si\"][data-k=\"'+k+'\"][data-i=\"'+i+'\"]'); if(!inp) return 'no-input';"
+    + " const invEl=document.getElementById(k+'@@'+i+'@@inv'), dosEl=document.getElementById(k+'@@'+i+'@@dos');"
     + " const before={inv:invEl.textContent, dos:dosEl.textContent};"
     + " inp.value='99999'; inp.dispatchEvent(new Event('input',{bubbles:true}));"
     + " const focusKept = document.activeElement===inp || true;"
@@ -65,28 +66,53 @@ let fails = 0; const ok = (n, c, extra) => { console.log((c ? 'PASS ' : 'FAIL ')
   let LV = {}; try { LV = JSON.parse(live.v); } catch (e) {}
   ok('F4b 改 SI 时 INV 与 DOS 当场变（原地刷新）', LV.before && LV.after && LV.after.inv !== LV.before.inv && LV.after.dos !== LV.before.dos, JSON.stringify(LV));
   console.log('   SI 改动前后: ' + JSON.stringify(LV));
-  await ev("(function(){ const k=FC.rows[0].key; if(FC.edits[k]&&FC.edits[k][0]) delete FC.edits[k][0].si; fcRender(); return 1; })()"); await sleep(500);
+  await ev("(function(){ const k=FC.rows[0].key; const i=FC.firstFcIdx; if(FC.edits[k]&&FC.edits[k][i]) delete FC.edits[k][i].si; fcRender(); return 1; })()"); await sleep(500);
 
   // F5 产品行填 SO=1000 → 型号按历史 SI 占比分摊且和守恒
   const split = await ev("(function(){ const p=FC.rows.find(x=>x.expanded)||FC.rows[0]; p.expanded=true;"
-    + " FC.edits[p.key]={0:{so:1000}}; fcRender();"
-    + " const calc=fcComputeProduct(p); const kids=(p.kids||[]).map(k=>({m:k.model, si:k.histSi, so:calc.byModel[k.key][0].so}));"
+    + " const i=FC.firstFcIdx; FC.edits[p.key]={}; FC.edits[p.key][i]={so:1000}; fcRender();"
+    + " const calc=fcComputeProduct(p); const kids=(p.kids||[]).map(k=>({m:k.model, si:k.histSi, so:calc.byModel[k.key][i].so}));"
     + " const sum=kids.reduce((a,k)=>a+k.so,0);"
-    + " return JSON.stringify({product:p.product, total:calc.product[0].so, sum:sum, kids:kids.slice(0,4), shares:calc.shares}); })()");
+    + " return JSON.stringify({product:p.product, total:calc.product[i].so, sum:sum, kids:kids.slice(0,4), shares:calc.shares}); })()");
   let S = {}; try { S = JSON.parse(split.v); } catch (e) {}
   ok('F5 产品 SO=1000 分摊到型号且和恰好=1000', S.sum === 1000 && S.total === 1000, JSON.stringify(S));
   console.log('   分摊: ' + JSON.stringify(S.kids) + ' 占比=' + JSON.stringify(S.shares));
 
   // F6 DOS 随 SO 变化：SO 调大 → DOS 变小
   const dos = await ev("(function(){ const p=FC.rows.find(x=>x.expanded)||FC.rows[0];"
-    + " FC.edits[p.key]={0:{so:100}}; const a=fcComputeProduct(p).product[0].dos;"
-    + " FC.edits[p.key]={0:{so:5000}}; const b=fcComputeProduct(p).product[0].dos;"
+    + " const i=FC.firstFcIdx;"
+    + " FC.edits[p.key]={}; FC.edits[p.key][i]={so:100,si:0}; const a=fcComputeProduct(p).product[i].dos;"
+    + " FC.edits[p.key]={}; FC.edits[p.key][i]={so:5000,si:0}; const b=fcComputeProduct(p).product[i].dos;"
     + " return JSON.stringify({lowSo_dos:a, highSo_dos:b}); })()");
   let D = {}; try { D = JSON.parse(dos.v); } catch (e) {}
   ok('F6 SO 调大 → DOS 变小（DOS 跟着推演变）', D.lowSo_dos != null && D.highSo_dos != null && D.highSo_dos < D.lowSo_dos, JSON.stringify(D));
 
+  // F8 期次标签必须是真实日历，且历史在左、推演在右
+  const lab = await ev("(function(){ const ths=[...document.querySelectorAll('#view-forecast thead th.per')];"
+    + " return JSON.stringify({labels:ths.map(t=>t.textContent.replace('实际','').trim()),"
+    + " hist:ths.filter(t=>t.classList.contains('hist')).length, firstFc:FC.firstFcIdx, cutoff:FC.cutoff}); })()");
+  let L2 = {}; try { L2 = JSON.parse(lab.v); } catch (e) {}
+  ok('F8 没有 W+N 这种相对标签', !(L2.labels || []).some(x => /\+/.test(x)), JSON.stringify((L2.labels || []).slice(0, 4)));
+  ok('F8b 标签是真实日历（周 2026-Wxx / 月 2026-xx / 日 2026-xx-xx）',
+    (L2.labels || []).length > 0 && (L2.labels || []).every(x => /^\d{4}-(W\d{2}|\d{2}(-\d{2})?)$/.test(x)), JSON.stringify((L2.labels || []).slice(0, 4)));
+  ok('F8c 左侧有历史实际列', (L2.hist || 0) > 0 && L2.firstFc === L2.hist, JSON.stringify({hist:L2.hist, firstFc:L2.firstFc}));
+  console.log('   期次: ' + JSON.stringify((L2.labels || []).slice(0, 10)) + ' 历史=' + L2.hist + ' 截止=' + L2.cutoff);
+  // 历史列必须是只读实际值（没有输入框）
+  const ro = await ev("(function(){ const n=FC.firstFcIdx; const tr=document.querySelector('#view-forecast tr.fc-prod.fc-r-so');"
+    + " const tds=[...tr.querySelectorAll('td.num')]; const histHasInput=tds.slice(0,n).some(td=>td.querySelector('input'));"
+    + " const fcHasInput=tds.slice(n).every(td=>!!td.querySelector('input'));"
+    + " return JSON.stringify({histHasInput:histHasInput, fcAllEditable:fcHasInput}); })()");
+  let RO = {}; try { RO = JSON.parse(ro.v); } catch (e) {}
+  ok('F8d 历史列只读、推演列可改', RO.histHasInput === false && RO.fcAllEditable === true, JSON.stringify(RO));
+  // 推演起点必须在数据截止之后
+  const st2 = await ev("(function(){ const p=FC.periods[FC.firstFcIdx]; return JSON.stringify({first:p&&p.label, cutoff:FC.cutoff}); })()");
+  let ST = {}; try { ST = JSON.parse(st2.v); } catch (e) {}
+  ok('F8e 推演从数据截止之后开始', !!ST.first && String(ST.first) > String(ST.cutoff).slice(0, 7), JSON.stringify(ST));
+
   // F7 粒度切换
-  await ev("(function(){ const b=document.querySelector('#view-forecast [data-fcg=\"month\"]'); if(b) b.click(); return 1; })()"); await sleep(900);
+  await ev("(function(){ const b=document.querySelector('#view-forecast [data-fcg=\"month\"]'); if(b) b.click(); return 1; })()");
+  for (let i = 0; i < 40; i++) { const r = await ev("FC.loading===false && FC.loaded===true && FC.gran==='month'"); if (r.v === true) break; await sleep(1000); }
+  await sleep(800);
   const gm = await ev("JSON.stringify({gran:FC.gran, cols:document.querySelectorAll('#view-forecast thead th.per').length})");
   let G = {}; try { G = JSON.parse(gm.v); } catch (e) {}
   ok('F7 可切按月，期次列随之生成', G.gran === 'month' && (G.cols || 0) >= 1, JSON.stringify(G));

@@ -67,5 +67,32 @@ const pr2 = F.simulateProduct({ gran: 'month', productPeriods: [{ so: 1000, si: 
 ok('M5 给了产品级 SI 就按同一占比分摊', pr2.byModel.A1[0].si === 720 && pr2.byModel.A2[0].si === 480, pr2.totals);
 ok('M6 没有历史SI时退化为均分（不崩）', (() => { const r = F.simulateProduct({ productPeriods: [{ so: 10 }], models: [{ key: 'X', histSi: 0 }, { key: 'Y', histSi: 0 }] }); return r.byModel.X[0].so + r.byModel.Y[0].so === 10; })());
 
+// —— 历史 + 推演拼成一条时间线（用户：需要历史辅助判断）——
+const wh = F.simulateWithHistory({
+  gran: 'week',
+  histRows: [{ si: 100, so: 70, inv: 500 }, { si: 0, so: 70, inv: 430 }],
+  periods: [{ si: 0, so: 70 }, { si: 0, so: 70 }],
+});
+ok('H1 历史期照搬实际库存，不重算', wh.hist[0].inv === 500 && wh.hist[1].inv === 430, wh.hist.map(r => r.inv));
+ok('H2 推演期初库存接最后一期历史实际值', wh.forecast[0].inv === 360, wh.forecast.map(r => r.inv));
+ok('H3 历史期也算出 DOS', wh.hist[1].dos != null && wh.hist[1].dos > 0, wh.hist[1].dos);
+ok('H4 推演首期的近28天日销能回看到历史 SO', near(wh.forecast[0].rate, 10, 1e-6), wh.forecast[0].rate);
+// 窗口填满时分母就是 28（与原口径一致）；不满时按实际覆盖天数，避免低估日销/高估 DOS
+const long = F.simulateWithHistory({ gran: 'week', histRows: [70, 70, 70, 70].map(v => ({ si: 0, so: v, inv: 1000 })), periods: [{ si: 0, so: 70 }] });
+ok('H4b 回看满 28 天时日销 = 总量/28', near(long.forecast[0].rate, 10, 1e-6), long.forecast[0].rate);
+ok('H5 历史标记 hist=true、推演没有', wh.hist.every(r => r.hist === true) && wh.forecast.every(r => !r.hist));
+ok('H6 无历史时退回用 openInv', F.simulateWithHistory({ gran: 'week', histRows: [], openInv: 800, periods: [{ si: 0, so: 100 }] }).forecast[0].inv === 700);
+const pwh = F.simulateProductWithHistory({
+  gran: 'month',
+  productPeriods: [{ so: 1000 }],
+  models: [
+    { key: 'A1', histSi: 600, histRows: [{ si: 600, so: 500, inv: 2000 }] },
+    { key: 'A2', histSi: 400, histRows: [{ si: 400, so: 300, inv: 1500 }] },
+  ],
+});
+ok('H7 产品级带历史：未来仍按 60/40 分摊', pwh.byModel.A1.forecast[0].so === 600 && pwh.byModel.A2.forecast[0].so === 400);
+ok('H8 各型号推演接自己的历史期末库存', pwh.byModel.A1.forecast[0].inv === 2000 && pwh.byModel.A2.forecast[0].inv === 1500,
+  [pwh.byModel.A1.forecast[0].inv, pwh.byModel.A2.forecast[0].inv]);
+
 console.log(f ? (f + ' FAILED') : 'ALL PASS');
 process.exit(f ? 1 : 0);

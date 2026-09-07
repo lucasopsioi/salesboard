@@ -13,6 +13,7 @@ const FC = {
   view: 'product',          // product | model | country
   gran: 'week',             // day | week | month
   nPeriods: 12,
+  nHist: 6,                 // 左侧显示多少期历史实际值（辅助判断）
   country: '',
   loaded: false, loading: false,
   rows: [],                 // [{kind:'product'|'model', key, product, model, config, daily, weekly, openInv, histSi, histDaily, expanded}]
@@ -26,16 +27,46 @@ const fcEsc = t => String(t == null ? '' : t).replace(/[&<>"]/g, m => ({ '&': '&
 function fcNum(v, d) { return (v == null || !isFinite(v)) ? '—' : (+v).toLocaleString('en-US', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); }
 function fcDos(v) { return (v == null || !isFinite(v)) ? '—' : Math.round(v) + '天'; }
 
-/* 期标签：天=MM-DD、周=Wxx、月=YYYY-MM。以今天为起点向后推。 */
-function fcBuildPeriods(gran, n) {
-  const out = []; const now = new Date();
+/* 期次标签必须和引擎的桶标签**完全同格式**，否则历史与推演接不上：
+     月 2026-06 / 周 2026-W25 / 日 2026-06-15（已实测确认；注意 sosim-core.bucketOf 的月是 202606，不能用）。
+   推演从**数据截止日之后**开始，不是从「今天」——用户 2026-09-07 指出 W+1/W+2 这种相对标签没法用，
+   而且数据截止在 2026-06-15 时，起点就该是它之后的那一期。 */
+function fcIsoWeekLabel(d) {
+  const dd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = dd.getUTCDay() || 7; dd.setUTCDate(dd.getUTCDate() + 4 - day);      // 挪到本周周四
+  const ys = new Date(Date.UTC(dd.getUTCFullYear(), 0, 1));
+  const wk = Math.ceil((((dd - ys) / 86400000) + 1) / 7);
+  return dd.getUTCFullYear() + '-W' + String(wk).padStart(2, '0');
+}
+function fcYmd(d) { return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); }
+function fcParseYmd(ymd) {
+  const m = String(ymd || '').match(/^(\d{4})-?(\d{2})-?(\d{2})$/);
+  return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+}
+/* 从数据截止日往后生成 n 期真实标签 */
+function fcForecastPeriods(gran, n, cutoffYmd) {
+  const base = fcParseYmd(cutoffYmd) || new Date();
+  const out = [];
   for (let i = 1; i <= n; i++) {
-    const d = new Date(now.getTime());
-    if (gran === 'day') { d.setDate(d.getDate() + i); out.push({ label: (d.getMonth() + 1) + '/' + d.getDate(), days: 1 }); }
-    else if (gran === 'week') { d.setDate(d.getDate() + i * 7); out.push({ label: 'W+' + i, days: 7 }); }
-    else { d.setMonth(d.getMonth() + i); out.push({ label: (d.getFullYear()) + '-' + String(d.getMonth() + 1).padStart(2, '0'), days: new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() }); }
+    if (gran === 'day') {
+      const d = new Date(base.getTime() + i * 86400000);
+      out.push({ label: fcYmd(d), days: 1, hist: false });
+    } else if (gran === 'week') {
+      const d = new Date(base.getTime() + i * 7 * 86400000);
+      out.push({ label: fcIsoWeekLabel(d), days: 7, hist: false });
+    } else {
+      const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + i, 1));
+      const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+      out.push({ label: d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'), days: dim, hist: false });
+    }
   }
   return out;
+}
+function fcPeriodDaysOf(gran, label) {
+  if (gran === 'day') return 1;
+  if (gran === 'week') return 7;
+  const m = String(label).match(/^(\d{4})-(\d{2})$/);
+  return m ? new Date(Date.UTC(+m[1], +m[2], 0)).getUTCDate() : 30;
 }
 
 function fcFilters() { const f = {}; if (FC.country) f.country = [FC.country]; return f; }
@@ -48,15 +79,24 @@ async function fcLoad() {
   try {
     const filters = fcFilters();
     const to = state.to, from = state.from;
+    // 历史三件套：按当前粒度取 SI / SO / INV（桶标签由引擎给，保证和推演期同格式）
+    const q = (metric) => api.query({ metric: metric, gran: FC.gran, filters: filters, stackDim: 'model', from: from, to: to, limit: 400 });
+    const [hSi, hSo, hInv] = await Promise.all([q('sellIn'), q('sellOut'), q('inv')]);
+    // 产品×型号 的历史 SI（占比来源 + 树结构）
     const siMat = await api.agg({ measure: 'sellIn', filters: filters, cat: { field: 'product' }, legend: 'model' });
-    const invMat = await api.agg({ measure: 'inv', filters: filters, cat: { field: 'model' } });
-    // 近 28 天日销：按天取 SO，堆叠维度 = 型号
+    // 近 28 天按天 SO（左列「近28天日销」，与 DOS 口径同源）
     const d28from = fcShiftDays(to, -27);
     const soDaily = await api.query({ metric: 'sellOut', gran: 'day', filters: filters, stackDim: 'model', from: d28from, to: to, limit: 400 });
-    FC.rows = fcBuildRows(siMat, invMat, soDaily);
-    // 引擎对 series>20 会只留前 20，型号会被静默丢掉——本项目不接受静默丢数，明确告诉用户
+
+    const allBuckets = (hSo && hSo.buckets) || [];
+    const histBuckets = allBuckets.slice(-Math.max(0, FC.nHist));
+    FC.histBuckets = histBuckets;
+    FC.periods = histBuckets.map(b => ({ label: b, days: fcPeriodDaysOf(FC.gran, b), hist: true }))
+      .concat(fcForecastPeriods(FC.gran, FC.nPeriods, to));
+    FC.firstFcIdx = histBuckets.length;
+    FC.cutoff = to;
+    FC.rows = fcBuildRows(siMat, { hSi: hSi, hSo: hSo, hInv: hInv, buckets: histBuckets }, soDaily);
     FC.truncated = ((siMat && siMat.series) || []).length >= 20;
-    FC.periods = fcBuildPeriods(FC.gran, FC.nPeriods);
     FC.loaded = true;
     if (!FC.rows.length) FC.err = '当前筛选下没有产品数据（先在「数据源」挂载 PSI 文件夹，或放宽筛选）';
   } catch (e) {
@@ -100,31 +140,35 @@ function fcMatTotal(mat, cat) {
   return t;
 }
 
-function fcBuildRows(siMat, invMat, soDaily) {
+function fcSeriesOf(qres, model, buckets) {
+  const d = (qres && qres.data && qres.data[model]) || null;
+  return buckets.map(b => { if (!d) return null; const v = d[b]; return (v == null) ? null : +v; });
+}
+
+function fcBuildRows(siMat, hist, soDaily) {
   const cfgMap = fcConfigMap();
-  // 期初库存：按型号取（inv 是快照，agg 用 last 聚合）
-  const invByModel = {};
-  ((invMat && invMat.cats) || []).forEach(m => { invByModel[m] = fcMatTotal(invMat, m); });
-  // 近28天按天 SO → 各型号日销
+  const B = hist.buckets || [];
   const dailyByModel = {};
-  const buckets = (soDaily && soDaily.buckets) || [];
+  const dBuckets = (soDaily && soDaily.buckets) || [];
   Object.keys((soDaily && soDaily.data) || {}).forEach(mk => {
-    const series = buckets.map(b => { const v = soDaily.data[mk][b]; return (v == null) ? null : +v; });
-    dailyByModel[mk] = { series: series, rate: ForecastCore.dailyRunRate(series, 28) };
+    const series = dBuckets.map(b => { const v = soDaily.data[mk][b]; return (v == null) ? null : +v; });
+    dailyByModel[mk] = ForecastCore.dailyRunRate(series, 28);
   });
   const rows = [];
   ((siMat && siMat.cats) || []).forEach(prod => {
-    const perModel = fcMatBySeries(siMat, prod);                  // {型号: 历史SI}
+    const perModel = fcMatBySeries(siMat, prod);
     const models = Object.keys(perModel).filter(m => (perModel[m] || 0) > 0);
     if (!models.length) return;
     const kids = models.map(m => {
-      const dd = dailyByModel[m] || { series: [], rate: null };
+      const si = fcSeriesOf(hist.hSi, m, B), so = fcSeriesOf(hist.hSo, m, B), iv = fcSeriesOf(hist.hInv, m, B);
+      const rate = dailyByModel[m] == null ? null : dailyByModel[m];
       return {
         kind: 'model', key: prod + '||' + m, product: prod, model: m,
         config: cfgMap[String(m).trim()] || '—',
-        daily: dd.rate, weekly: ForecastCore.weeklyFromDaily(dd.rate),
-        openInv: (invByModel[m] == null ? null : +invByModel[m]),
-        histSi: perModel[m] || 0, histDaily: dd.series,
+        daily: rate, weekly: ForecastCore.weeklyFromDaily(rate),
+        histSi: perModel[m] || 0,
+        // 历史实际：库存是快照（照搬，不重算）
+        histRows: B.map((b, i) => ({ si: si[i], so: so[i], inv: iv[i], days: fcPeriodDaysOf(FC.gran, b) })),
       };
     });
     const anyRate = kids.some(k => k.daily != null);
@@ -132,7 +176,6 @@ function fcBuildRows(siMat, invMat, soDaily) {
     rows.push({
       kind: 'product', key: prod, product: prod, model: '（全部型号）', config: '—',
       daily: pDaily, weekly: ForecastCore.weeklyFromDaily(pDaily),
-      openInv: kids.reduce((a, k) => a + (k.openInv || 0), 0),
       histSi: kids.reduce((a, k) => a + (k.histSi || 0), 0),
       kids: kids, expanded: false,
     });
@@ -142,33 +185,51 @@ function fcBuildRows(siMat, invMat, soDaily) {
 }
 function fcFirstVal(mat, cat) { const d = (mat.data && mat.data[cat]) || {}; const k = Object.keys(d)[0]; return k ? d[k] : null; }
 
-/* 计算一行（产品或型号）在各期的推演结果 */
+/* 计算：历史期照搬实际，推演期按分摊/手填。返回 {product:[...], byModel:{...}}，
+   数组长度 = 全部期次（历史 + 推演），下标与 FC.periods 一一对应。 */
 function fcComputeProduct(p) {
+  const nH = FC.firstFcIdx || 0;
+  const fcPeriods = FC.periods.slice(nH);
   const ed = FC.edits[p.key] || {};
-  const productPeriods = FC.periods.map((pd, i) => ({
-    so: (ed[i] && ed[i].so != null) ? +ed[i].so : Math.round((p.weekly != null ? p.weekly : 0) * (pd.days / 7)),
-    si: (ed[i] && ed[i].si != null) ? +ed[i].si : null,
-    days: pd.days,
-  }));
-  const models = (p.kids || []).map(k => ({ key: k.key, openInv: k.openInv, histDaily: k.histDaily, histSi: k.histSi }));
-  const r = ForecastCore.simulateProduct({ gran: FC.gran, productPeriods: productPeriods, models: models });
-  // 型号行若被用户单独改过，用它自己的值覆盖（用户手填优先于分摊）
+  // 产品级推演输入：没手填就按平均周销折算到该期天数
+  const productPeriods = fcPeriods.map((pd, j) => {
+    const i = nH + j;
+    return {
+      so: (ed[i] && ed[i].so != null) ? +ed[i].so : Math.round((p.weekly != null ? p.weekly : 0) * (pd.days / 7)),
+      si: (ed[i] && ed[i].si != null) ? +ed[i].si : null,
+      days: pd.days,
+    };
+  });
+  const models = (p.kids || []).map(k => ({ key: k.key, histSi: k.histSi, histRows: k.histRows }));
+  const r = ForecastCore.simulateProductWithHistory({ gran: FC.gran, productPeriods: productPeriods, models: models });
+  // 型号手填优先：重跑该型号（历史不变）
   (p.kids || []).forEach(k => {
     const ke = FC.edits[k.key];
     if (!ke) return;
-    const periods = FC.periods.map((pd, i) => {
-      const base = r.byModel[k.key][i];
-      return { so: (ke[i] && ke[i].so != null) ? +ke[i].so : base.so, si: (ke[i] && ke[i].si != null) ? +ke[i].si : base.si, days: pd.days };
+    const base = r.byModel[k.key].forecast;
+    const periods = fcPeriods.map((pd, j) => {
+      const i = nH + j;
+      return { so: (ke[i] && ke[i].so != null) ? +ke[i].so : base[j].so, si: (ke[i] && ke[i].si != null) ? +ke[i].si : base[j].si, days: pd.days };
     });
-    r.byModel[k.key] = ForecastCore.simulate({ openInv: k.openInv, histDaily: k.histDaily, periods: periods, gran: FC.gran });
+    r.byModel[k.key] = ForecastCore.simulateWithHistory({ gran: FC.gran, histRows: k.histRows, periods: periods });
   });
-  // 产品级汇总 = 各型号之和（SO/SI 可加；库存同期可加；DOS 按合计库存÷合计日销重算，不平均）
-  const prod = FC.periods.map((pd, i) => {
-    let so = 0, si = 0, inv = 0, rate = 0, anyRate = false;
-    (p.kids || []).forEach(k => { const rr = r.byModel[k.key][i]; so += rr.so; si += rr.si; inv += rr.inv; if (rr.rate != null) { rate += rr.rate; anyRate = true; } });
-    return { so: so, si: si, inv: inv, rate: anyRate ? rate : null, dos: ForecastCore.dosOf(inv, anyRate ? rate : null) };
+  const byModel = {};
+  (p.kids || []).forEach(k => { byModel[k.key] = r.byModel[k.key].all; });
+  // 产品级 = 各型号逐期相加（SO/SI 可加、同期库存可加）；DOS 用合计库存 ÷ 合计日销重算，不平均
+  const product = FC.periods.map((pd, i) => {
+    let so = 0, si = 0, inv = 0, rate = 0, anyRate = false, anySi = false, anySo = false, anyInv = false;
+    (p.kids || []).forEach(k => {
+      const rr = byModel[k.key][i]; if (!rr) return;
+      if (rr.si != null) { si += rr.si; anySi = true; }
+      if (rr.so != null) { so += rr.so; anySo = true; }
+      if (rr.inv != null) { inv += rr.inv; anyInv = true; }
+      if (rr.rate != null) { rate += rr.rate; anyRate = true; }
+    });
+    const iv = anyInv ? inv : null;
+    return { si: anySi ? si : null, so: anySo ? so : null, inv: iv, rate: anyRate ? rate : null,
+      dos: ForecastCore.dosOf(iv, anyRate ? rate : null), hist: !!pd.hist };
   });
-  return { byModel: r.byModel, product: prod, shares: r.shares };
+  return { byModel: byModel, product: product, shares: r.shares };
 }
 
 function fcRender() {
@@ -179,7 +240,8 @@ function fcRender() {
     + '<div class="fc-tools">'
     + '<span class="fc-lab">视图</span>' + gseg('fcv', FC.view, [['product', '产品视图'], ['model', '型号视图'], ['country', '国家视图']])
     + '<span class="fc-lab">粒度</span>' + gseg('fcg', FC.gran, [['day', '按天'], ['week', '按周'], ['month', '按月']])
-    + '<span class="fc-lab">期数</span><input id="fcN" type="number" min="1" max="52" value="' + FC.nPeriods + '" style="width:56px">'
+    + '<span class="fc-lab">历史</span><input id="fcH" type="number" min="0" max="24" value="' + FC.nHist + '" title="左侧显示多少期历史实际值" style="width:52px">'
+    + '<span class="fc-lab">推演</span><input id="fcN" type="number" min="1" max="52" value="' + FC.nPeriods + '" style="width:52px">'
     + '<span class="fc-lab">国家</span><select id="fcCountry"><option value="">全部</option>' + countries.map(c => '<option' + (c === FC.country ? ' selected' : '') + '>' + fcEsc(c) + '</option>').join('') + '</select>'
     + '<button class="btn" id="fcReload">重新取数</button>'
     + '<button class="btn" id="fcClear" title="清空所有手填值，回到按平均周销推演">清空推演</button>'
@@ -207,7 +269,6 @@ const FC_ROWS = [['si', 'SI'], ['so', 'SO'], ['inv', 'INV'], ['dos', 'DOS']];
 function fcCellId(key, i, metric) { return key + '@@' + i + '@@' + metric; }
 
 function fcBlock(row, calc, isModel) {
-  // row: 产品或型号；calc: 该行各期 [{si,so,inv,dos}]
   const nP = FC.periods.length;
   let h = '';
   FC_ROWS.forEach(([m, lab], ri) => {
@@ -222,14 +283,20 @@ function fcBlock(row, calc, isModel) {
     h += '<td class="fz fz6 met met-' + m + '">' + lab + '</td>';
     for (let i = 0; i < nP; i++) {
       const c = calc[i] || {};
-      if (m === 'si' || m === 'so') {
+      const isHist = !!(FC.periods[i] && FC.periods[i].hist);
+      const cls = (isHist ? ' hist' : '') + (i === FC.firstFcIdx ? ' fcstart' : '');
+      if (isHist) {
+        // 历史列一律只读实际值（含 SI/SO）——实际发生的数不许在推演里被改掉
+        const v = (m === 'dos') ? fcDos(c.dos) : fcNum(c[m]);
+        h += '<td class="num' + cls + (m === 'dos' ? ' ' + fcDosCls(c.dos) : '') + '">' + v + '</td>';
+      } else if (m === 'si' || m === 'so') {
         const ed = (FC.edits[row.key] || {})[i] || {};
         const val = (ed[m] != null) ? ed[m] : Math.round(c[m] || 0);
-        h += '<td class="num"><input class="fc-in fc-' + m + '" data-k="' + fcEsc(row.key) + '" data-i="' + i + '" data-f="' + m + '" value="' + val + '"></td>';
+        h += '<td class="num' + cls + '"><input class="fc-in fc-' + m + '" data-k="' + fcEsc(row.key) + '" data-i="' + i + '" data-f="' + m + '" value="' + val + '"></td>';
       } else if (m === 'inv') {
-        h += '<td class="num inv" id="' + fcEsc(fcCellId(row.key, i, 'inv')) + '">' + fcNum(c.inv) + '</td>';
+        h += '<td class="num inv' + cls + '" id="' + fcEsc(fcCellId(row.key, i, 'inv')) + '">' + fcNum(c.inv) + '</td>';
       } else {
-        h += '<td class="num ' + fcDosCls(c.dos) + '" id="' + fcEsc(fcCellId(row.key, i, 'dos')) + '">' + fcDos(c.dos) + '</td>';
+        h += '<td class="num' + cls + ' ' + fcDosCls(c.dos) + '" id="' + fcEsc(fcCellId(row.key, i, 'dos')) + '">' + fcDos(c.dos) + '</td>';
       }
     }
     h += '</tr>';
@@ -242,7 +309,10 @@ function fcTable() {
   let h = '<div class="fc-scroll"><table class="fc-table"><thead><tr>'
     + '<th class="fz fz1">产品名</th><th class="fz fz2">产品型号</th><th class="fz fz3">产品配置</th>'
     + '<th class="fz fz4 num">近28天日销</th><th class="fz fz5 num">平均周销</th><th class="fz fz6">指标</th>';
-  P.forEach(p => { h += '<th class="num per">' + fcEsc(p.label) + '</th>'; });
+  P.forEach((p, i) => {
+    const first = (i === FC.firstFcIdx);
+    h += '<th class="num per' + (p.hist ? ' hist' : '') + (first ? ' fcstart' : '') + '">' + fcEsc(p.label) + (p.hist ? '<span class="tag">实际</span>' : '') + '</th>';
+  });
   h += '</tr></thead><tbody>';
   FC.rows.forEach(p => {
     const calc = fcComputeProduct(p);
@@ -290,8 +360,14 @@ function fcOwnerOf(key) {
 function fcBind() {
   const host = document.getElementById('view-forecast'); if (!host) return;
   host.querySelectorAll('[data-fcv]').forEach(b => { b.onclick = () => { FC.view = b.dataset.fcv; fcRender(); }; });
-  host.querySelectorAll('[data-fcg]').forEach(b => { b.onclick = () => { FC.gran = b.dataset.fcg; FC.periods = fcBuildPeriods(FC.gran, FC.nPeriods); FC.edits = {}; fcRender(); }; });
-  const n = host.querySelector('#fcN'); if (n) n.onchange = () => { FC.nPeriods = Math.max(1, Math.min(52, +n.value || 12)); FC.periods = fcBuildPeriods(FC.gran, FC.nPeriods); fcRender(); };
+  host.querySelectorAll('[data-fcg]').forEach(b => { b.onclick = () => { FC.gran = b.dataset.fcg; FC.edits = {}; fcLoad(); }; });
+  const n = host.querySelector('#fcN'); if (n) n.onchange = () => {
+    FC.nPeriods = Math.max(1, Math.min(52, +n.value || 12));
+    FC.periods = (FC.histBuckets || []).map(b2 => ({ label: b2, days: fcPeriodDaysOf(FC.gran, b2), hist: true }))
+      .concat(fcForecastPeriods(FC.gran, FC.nPeriods, FC.cutoff));
+    fcRender();
+  };
+  const hh = host.querySelector('#fcH'); if (hh) hh.onchange = () => { FC.nHist = Math.max(0, Math.min(24, +hh.value || 0)); fcLoad(); };
   const c = host.querySelector('#fcCountry'); if (c) c.onchange = () => { FC.country = c.value; fcLoad(); };
   const rl = host.querySelector('#fcReload'); if (rl) rl.onclick = fcLoad;
   const cl = host.querySelector('#fcClear'); if (cl) cl.onclick = () => { FC.edits = {}; fcRender(); };

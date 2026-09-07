@@ -86,6 +86,7 @@ function buildShell(root){
     '    <button class="pd-tb-btn" id="pdBtnNew" title="新建空白模板">新建</button>'+
     '    <button class="pd-tb-btn" id="pdBtnWeekly" title="一键生成内置产业周报模板（7页，数据自动灌入）">产业周报</button>'+
     '    <button class="pd-tb-btn" id="pdBtnOpen" title="打开已存模板">打开</button>'+
+    '    <button class="pd-tb-btn" id="pdBtnOpenLocal" title="打开电脑上的 .pptx，解析成可编辑的设计稿并实时预览">打开本地 PPT</button>'+
     '    <button class="pd-tb-btn" id="pdBtnSave" title="另存为命名模板">另存为</button>'+
     '    <button class="pd-tb-btn primary" id="pdBtnExport" title="导出为 PowerPoint (.pptx)">导出 PPTX</button>'+
     '  </div>'+
@@ -119,6 +120,16 @@ function buildShell(root){
     '    <div class="pd-right">'+
     '      <div class="pd-sec" id="pdPropHead">属性</div>'+
     '      <div id="pdProp" class="pd-prop-empty">未选中元素</div>'+
+    '      <div class="pd-sec">AI 修改</div>'+
+    '      <div id="pdAiBox" style="padding:8px 10px">'+
+    '        <div id="pdAiScope" style="font-size:11px;color:var(--ink3);margin-bottom:6px">未选中元素 · 将改整页</div>'+
+    '        <textarea id="pdAiInput" rows="3" placeholder="说一句要改成什么，例如：标题改成Acme红、字号大一点；把这个框往右移一点" style="width:100%;border:1px solid var(--c-line);border-radius:8px;padding:6px 8px;font:12px/1.6 inherit;resize:vertical"></textarea>'+
+    '        <div style="margin-top:6px;display:flex;gap:6px;align-items:center">'+
+    '          <button class="pd-tb-btn primary" id="pdAiRun">让 AI 改</button>'+
+    '          <span id="pdAiFlow" style="font-size:11px;color:var(--ink3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'+
+    '        </div>'+
+    '        <div id="pdAiLog" style="margin-top:6px;font-size:11px;color:var(--ink2);line-height:1.7;max-height:150px;overflow:auto"></div>'+
+    '      </div>'+
     '    </div>'+
     '  </div>'+
     '  <div class="pd-thumbs" id="pdThumbs"></div>'+
@@ -133,6 +144,8 @@ function buildShell(root){
   bind('pdBtnNew', pdNewDoc);
   bind('pdBtnWeekly', pdLoadWeeklyDoc);
   bind('pdBtnOpen', pdOpenTplModal);
+  bind('pdBtnOpenLocal', pdOpenLocalPptx);
+  bind('pdAiRun', pdAiRun);
   bind('pdBtnSave', pdOpenTplModal);
   bind('pdBtnExport', pdExport);
   pdBindTplModal();
@@ -453,6 +466,7 @@ function pdRenderElement(el){
 // 选中/取消选中：更新 selId(anchor)，同步多选集合 PD.sel（单选=清空后加；若元素属组则整组并入，anchor 仍为点击者），刷新画布高亮，更新右侧属性面板。
 function pdSelect(id){
   PD.selId = id;
+  setTimeout(function(){ try{ pdAiSyncScope(); }catch(e){} }, 0);   // AI 区跟着选中变（改谁一目了然）
   // 单选：集合重置为 {id}（+整组成员）。取消选中：清空。
   PD.sel = new Set();
   if(id){
@@ -2572,3 +2586,89 @@ function pdTplDelete(id){
 }
 
 function initPptOutputView(){ /* 事件均在 render 时绑定 */ }
+
+/* ---------------- 打开本地 PPT + 对话式改图（2026-09-07 用户需求） ----------------
+   打开：pickPptx → pptStructure(深解析) → PptConvert.convert(版式装配+数据识别) → 载入设计器。
+         设计器画布本身就是实时预览，载入完即可见。
+   改图：选中元素 → 说一句 → 模型只返回结构化补丁 → PptAiEdit 校验夹取 → updateElement → 重渲。
+         每一步都往「进展」里写一行，用户看得见在干什么，而不是干等。 */
+function pdAiFlow(t){ const e=$('#pdAiFlow'); if(e) e.textContent = t||''; }
+function pdAiLog(t, cls){
+  const box=$('#pdAiLog'); if(!box) return;
+  const d=document.createElement('div');
+  if(cls==='err') d.style.color='var(--c-bad)';
+  else if(cls==='warn') d.style.color='var(--c-warn-text,#8A6D00)';
+  else if(cls==='ok') d.style.color='var(--c-good)';
+  d.textContent=t; box.appendChild(d); box.scrollTop=box.scrollHeight;
+}
+// 选中态同步到 AI 区（pdSelect 末尾调用）
+function pdAiSyncScope(){
+  const e=$('#pdAiScope'); if(!e) return;
+  const n = PD.sel ? PD.sel.size : 0;
+  if(n===1){ const sl=pdSlide(); const el=sl&&sl.elements.find(x=>x.id===PD.selId);
+    e.textContent = el ? ('已选中：'+(el.type||'元素')+(el.text?('「'+String(el.text).slice(0,14)+'」'):'')+' · 只改它') : '已选中 1 个元素'; }
+  else if(n>1) e.textContent = '已选中 '+n+' 个元素 · 只改这些';
+  else e.textContent = '未选中元素 · 将改整页（点画布上的元素可只改它）';
+}
+async function pdOpenLocalPptx(){
+  if(!window.PptConvert){ toast('转换核心未加载','err'); return; }
+  let pick; try{ pick = await api.pickPptx(); }catch(e){ pick=null; }
+  if(!pick || !pick.path) return;
+  pdAiLog('打开 '+String(pick.path).split(/[\/]/).pop());
+  showLoading && showLoading('正在解析 PPT…');
+  try{
+    const struct = await api.pptStructure(pick.path);
+    if(!struct || struct.error){ throw new Error((struct&&struct.error)||'解析失败'); }
+    pdAiFlow('解析完成，正在装配版式…');
+    const deps = (window.AIPanel && window.AIPanel.makeOrchDeps) ? window.AIPanel.makeOrchDeps(window.AIPanel.loadCfg(), function(){}) : null;
+    const name = String(pick.path).split(/[\/]/).pop().replace(/\.pptx$/i,'');
+    const conv = await window.PptConvert.convert(deps, struct, { name: name, onFlow: t=>{ pdAiFlow(t); } });
+    if(!conv || !conv.doc){ throw new Error('未能生成设计稿'); }
+    PD.doc = conv.doc; PD.curSlide = 0;
+    pdHistInit(); pdRenderCanvas(); pdRenderThumbs && pdRenderThumbs(); pdSelect(null);
+    const nm=$('#pdDocName'); if(nm) nm.textContent = PD.doc.name || name;
+    const st = conv.stats||{};
+    pdAiLog('已载入：'+(st.pages||0)+' 页 / '+(st.shapes||0)+' 个元素'+(st.dataBindings?('，'+st.dataBindings+' 处数据绑定'):''), 'ok');
+    pdAiFlow('打开完成');
+    toast('已打开并转换为可编辑设计稿','ok');
+  }catch(e){
+    pdAiLog('打开失败：'+((e&&e.message)||e), 'err'); pdAiFlow('');
+    toast('打开失败：'+((e&&e.message)||e),'err');
+  }finally{ hideLoading && hideLoading(); }
+}
+async function pdAiRun(){
+  const AE = window.PptAiEdit;
+  if(!AE){ toast('AI 改图核心未加载','err'); return; }
+  const ta=$('#pdAiInput'); const instruction=(ta&&ta.value||'').trim();
+  if(!instruction){ toast('先说一句要改成什么','err'); return; }
+  const sl = pdSlide(); if(!sl){ toast('当前没有页面','err'); return; }
+  const P = (window.AIPanel && window.AIPanel.makeOrchDeps) ? window.AIPanel.makeOrchDeps(window.AIPanel.loadCfg(), function(){}) : null;
+  const chat = P && P.chat;
+  if(!chat){ toast('AI 通道不可用：请先在 AI 问答面板的设置里填好模型 Key','err'); return; }
+  const btn=$('#pdAiRun'); const old=btn?btn.textContent:''; if(btn){ btn.textContent='改中…'; btn.disabled=true; }
+  try{
+    pdAiFlow('① 读取选中元素…');
+    const ids = PD.sel && PD.sel.size ? [...PD.sel] : [];
+    const slideEls = AE.describeSlide(sl);
+    const one = (ids.length===1) ? AE.describeElement(sl.elements.find(x=>x.id===ids[0])) : null;
+    const scopeEls = ids.length ? slideEls.filter(e=>ids.indexOf(e.id)>=0) : slideEls;
+    pdAiLog('› '+instruction);
+    pdAiFlow('② 请求模型…');
+    const msgs = AE.buildMessages({ page: PD.doc.page, element: one, slideElements: one?slideEls:scopeEls, instruction: instruction });
+    const r = await chat({ system: msgs[0].content, messages: [msgs[1]], maxTokens: 1200 });
+    if(!r || r.error){ throw new Error((r&&r.error)||'模型没有返回'); }
+    pdAiFlow('③ 校验补丁…');
+    const plan = AE.planFrom(String(r.content||''), sl, PD.doc.page);
+    (plan.rejected||[]).forEach(x=> pdAiLog('· '+x, 'warn'));
+    if(!plan.ops.length){ pdAiLog('没有可应用的改动（可换个说法再试）','err'); pdAiFlow(''); return; }
+    pdAiFlow('④ 应用中…');
+    let n=0;
+    plan.ops.forEach(op=>{ if(PptDoc.updateElement(PD.doc, PD.curSlide, op.id, op.set)) n++; });
+    pdMarkDirty(); pdRenderCanvas(); if(PD.selId) pdSelect(PD.selId);
+    pdAiLog('✓ 已应用 '+n+' 处改动'+(plan.note?('：'+plan.note):'')+'（Ctrl+Z 可撤销）','ok');
+    pdAiFlow('完成');
+    if(ta) ta.value='';
+  }catch(e){
+    pdAiLog('失败：'+((e&&e.message)||e),'err'); pdAiFlow('');
+  }finally{ if(btn){ btn.textContent=old; btn.disabled=false; } }
+}

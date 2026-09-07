@@ -96,9 +96,16 @@ function boardStateSave(key, getState, delay){ clearTimeout(_boardStateTimers[ke
 /* ---------- 数据单位：单台 / 千台K / 万台W ---------- */
 const UNIT_OPT={one:{div:1,suf:''},k:{div:1000,suf:'K'},w:{div:10000,suf:'W'}};
 const unitInfo=()=>UNIT_OPT[state.unit]||UNIT_OPT.one;
-function unitFmt(v){ const u=unitInfo(); if(v==null||isNaN(v)) return '0';
+/* 显示格式化（只用于图上标签/坐标轴/tooltip，导出数值走 unitVal 不受影响）。
+   两条「不许说谎」的规矩（2026-09-07 复盘 PSI 图被 0W 糊满）：
+   ① 无数据(null/NaN) 显「—」，绝不显 0 —— 全局口径 6「缺数不补零」，0 和「没录」是两回事；
+   ② 非零值绝不显示成 0 —— 万台档下 499 台曾显示为「0W」，一根有货的柱子写着 0 是错的，
+      小到显示不出就写「<0.1W」，宁可粗但不能错。真正的 0 仍照常显示 0。 */
+function unitFmt(v){ const u=unitInfo(); if(v==null||isNaN(v)) return '—';
   if(u.div===1) return Math.round(v).toLocaleString('en-US');
-  const x=v/u.div; return (Math.abs(x)>=100?Math.round(x).toLocaleString('en-US'):(+x.toFixed(1)))+u.suf; }
+  const x=v/u.div;
+  if(v!==0 && Math.abs(x)<0.05) return (x<0?'>-0.1':'<0.1')+u.suf;   // 非零但小于显示精度：明说「不足 0.1」而不是谎称 0
+  return (Math.abs(x)>=100?Math.round(x).toLocaleString('en-US'):(+x.toFixed(1)))+u.suf; }
 function unitVal(v){ const u=unitInfo(); return u.div===1?Math.round(v||0):+(((v||0)/u.div).toFixed(3)); }
 /* ---------- 图例位置：顶部居中(默认)/底部/左/右 ---------- */
 const LEGEND_POS={

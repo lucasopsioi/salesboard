@@ -187,7 +187,15 @@ function drawChart(){
   if(!chart){ chart=echarts.init($('#psiChart')); window.addEventListener('resize',()=>chart&&chart.resize());
     chart.on('click',p=>{ if(p&&p.seriesName&&p.seriesName!=='__total') openColorPop(p.seriesName, p.event&&p.event.event); }); }
   const order=state.stackOrder, buckets=res.buckets, data=res.data, type=state.chartType, op=state.opacity;
+  /* DOS 是「天」不是「台」（2026-09-07 复盘：图上 288 个 0W）。左侧统计卡本来就按天显示，
+     图表层却把天数丢进单位换算（11天 ÷ 10000 → 0W），三条后果一并修：
+       ① 显示不做单位换算、带「天」后缀；② 算不出的 DOS 保持 null（||0 会画成 0 天，读起来像马上断货）；
+       ③ DOS 是比率不可相加，tooltip 合计与 ∑ 顶标一律不出（与统计卡「DOS为比率,合计需按库存÷日均SO重算」同规）。
+     只动显示层，聚合公式一行不改。 */
+  const isDosChart=state.metric==='dos';
+  const fmtV=v=>(v==null||isNaN(v))?'—':(isDosChart?((+(+v).toFixed(1))+'天'):unitFmt(v));
   const val=(name,b)=>+((data[name]&&data[name][b])||0).toFixed(2);
+  const rawVal=(name,b)=>{ const r=data[name]&&data[name][b]; return (r==null||isNaN(r))?null:+(+r).toFixed(2); };
   const stacked=(type==='area'||type==='stackBar'||type==='pctBar');
   let totals=null;
   if(type==='pctBar') totals=buckets.map(b=>order.reduce((s,n)=>s+val(n,b),0));
@@ -196,45 +204,50 @@ function drawChart(){
   const seriesOrder = stacked ? order.slice().reverse() : order.slice();
   // 标签：深色字+白描边，任何背景都清晰；折线/面积用 top(inside对折线系列常不渲染)，柱内用 inside
   const lstyle=PsiChart.labelStyle(state);
-  const lab={show:state.labels,fontFamily:YH,fontSize:lstyle.size,fontWeight:'bold',color:lstyle.color||undefined,formatter:p=> type==='pctBar'?(p.value?Math.round(p.value)+'%':''):unitFmt(p.value)};
+  const lab={show:state.labels,fontFamily:YH,fontSize:lstyle.size,fontWeight:'bold',color:lstyle.color||undefined,formatter:p=> type==='pctBar'?(p.value?Math.round(p.value)+'%':''):(p.value==null?'':fmtV(p.value))};
   const ec=seriesOrder.map(name=>{
-    const dat=buckets.map((b,bi)=>cellVal(name,b,bi));
+    // DOS 用 rawVal 保留 null：ECharts 遇 null 断线/不画柱，而 ||0 会画出一条贴地的「0 天」假线
+    const dat=buckets.map((b,bi)=>isDosChart?rawVal(name,b):cellVal(name,b,bi));
     if(type==='line') return {name,type:'line',smooth:state.smooth,symbol:'none',lineStyle:{width:2,color:colorCss(name)},itemStyle:{color:colorCss(name)},emphasis:{focus:'series'},label:{show:false},data:dat};
     if(type==='area') return {name,type:'line',stack:'psi',smooth:state.smooth,symbol:'none',lineStyle:{width:1,color:'#fff',opacity:.6},areaStyle:{color:colorRgba(name,op)},itemStyle:{color:colorCss(name)},emphasis:{focus:'series'},label:{show:false},data:dat};
     // bars：分组柱用原生顶部标签(对齐每根柱)；堆积柱/占比柱关掉原生标签，改用下方散点覆盖层(保证薄段也显示)
     const isGroup=(type==='groupBar');
-    return {name,type:'bar',stack:(type==='stackBar'||type==='pctBar')?'psi':undefined,itemStyle:{color:colorRgba(name,op),borderColor:'#fff',borderWidth:0.4},emphasis:{focus:'series'},label: isGroup?Object.assign({},lab,{position:'top',color:'#1A1A1A',textBorderWidth:0}):{show:false},data:dat};
+    return {name,type:'bar',stack:(type==='stackBar'||type==='pctBar')?'psi':undefined,itemStyle:{color:colorRgba(name,op),borderColor:'#fff',borderWidth:0.4},emphasis:{focus:'series'},labelLayout:{hideOverlap:true},label: isGroup?Object.assign({},lab,{position:'top',color:'#1A1A1A',textBorderWidth:0}):{show:false},data:dat};
   });
   // 数据标签覆盖层(散点的标签一定渲染)：堆叠类画在每段中点(白字)、折线画在每个点上方(深字)，全部平铺、不会被盖住、薄段也显示
   if(state.labels && (stacked || type==='line')){
     const pts=[];
-    if(stacked){ buckets.forEach((b,bi)=>{ let cum=0; seriesOrder.forEach(name=>{ const cv=cellVal(name,b,bi); if(cv>0){ pts.push({value:[bi, cum+cv/2], lbl: type==='pctBar'? (Math.round(cv)+'%') : unitFmt(val(name,b)) }); } cum+=cv; }); }); }
-    else { buckets.forEach((b,bi)=>{ seriesOrder.forEach(name=>{ pts.push({value:[bi, val(name,b)], lbl: unitFmt(val(name,b)) }); }); }); }
+    if(stacked){ buckets.forEach((b,bi)=>{ let cum=0; seriesOrder.forEach(name=>{ const cv=cellVal(name,b,bi); if(cv>0){ pts.push({value:[bi, cum+cv/2], lbl: type==='pctBar'? (Math.round(cv)+'%') : fmtV(val(name,b)) }); } cum+=cv; }); }); }
+    else { buckets.forEach((b,bi)=>{ seriesOrder.forEach(name=>{ const rv=isDosChart?rawVal(name,b):val(name,b); if(rv==null) return; pts.push({value:[bi, rv], lbl: fmtV(rv) }); }); }); }
     ec.push({type:'scatter',data:pts,symbolSize:1,itemStyle:{color:'transparent'},silent:true,tooltip:{show:false},legendHoverLink:false,z:28,
+      labelLayout:{hideOverlap:true},   // 密集时自动丢掉压叠的标签（48期×6系列≈288个标签会糊成一片）
       label:{show:true,position:stacked?'inside':'top',color:lstyle.color||(stacked?'#fff':'#1A1A1A'),fontFamily:YH,fontSize:lstyle.size,fontWeight:'bold',textBorderWidth:0,formatter:p=>p.data.lbl}});
   }
   // 合计标签：堆叠图(面积/堆积柱)在每个时间点顶部显示总数；给 Y 轴留余量，标签不被图顶裁掉
   let yMax = type==='pctBar'?100:null;
   let yMin = type==='pctBar'?0:null;   // 与 yMax 成对：钉了 max 就必须钉 min，否则 ECharts 会反推出负的 min
-  if(state.labels && (type==='area'||type==='stackBar')){
+  if(state.labels && !isDosChart && (type==='area'||type==='stackBar')){   // DOS 不可相加，不出 ∑ 顶标
     const tot=PsiChart.bucketTotals(order,buckets,(n,b)=>val(n,b));
     const hm=PsiChart.yAxisMax(tot); if(hm!=null){ yMax=hm; yMin=PsiChart.yAxisMin(tot); }
     ec.push({name:'__total',type:'line',symbol:'none',lineStyle:{opacity:0},areaStyle:undefined,silent:true,tooltip:{show:false},legendHoverLink:false,
-      label:{show:true,position:'top',distance:7,color:lstyle.color||'#1A1A1A',fontFamily:YH,fontSize:lstyle.size+0.5,fontWeight:'bold',formatter:p=>'∑ '+unitFmt(tot[p.dataIndex])},
+      label:{show:true,position:'top',distance:7,color:lstyle.color||'#1A1A1A',fontFamily:YH,fontSize:lstyle.size+0.5,fontWeight:'bold',formatter:p=>'∑ '+fmtV(tot[p.dataIndex])},
       data:tot, z:30});
   }
   chart.setOption({
     textStyle:{fontFamily:YH}, color:order.map(colorCss),
     tooltip:{trigger:'axis',backgroundColor:'rgba(26,26,26,.92)',borderWidth:0,textStyle:{color:'#fff',fontFamily:YH,fontSize:12},
       formatter:ps=>{ps=ps.filter(p=>!String(p.seriesName).startsWith('__')); if(!ps.length) return ''; const bi=buckets.indexOf(ps[0].axisValue);let s='<b>'+ps[0].axisValue+'</b>';
-        if(type!=='pctBar'){let tot=0;ps.forEach(p=>tot+=p.value||0);s+='　合计 '+fmt(tot);}
-        s+='<br>'; ps.slice().reverse().forEach(p=>{ const raw=type==='pctBar'?val(p.seriesName,buckets[bi]):p.value; s+=p.marker+p.seriesName+'：<b>'+fmt(raw)+'</b>'+(type==='pctBar'?('（'+Math.round(p.value)+'%）'):'')+'<br>'; }); return s;}},
+        // DOS 是比率，跨系列相加无意义（与左侧统计卡同规：显示「—」并说明需按库存÷日均SO重算）
+        if(type!=='pctBar'){ if(isDosChart) s+='　合计 —（DOS为比率，需按库存÷日均SO重算）'; else {let tot=0;ps.forEach(p=>tot+=p.value||0);s+='　合计 '+fmt(tot);} }
+        s+='<br>'; ps.slice().reverse().forEach(p=>{ const raw=type==='pctBar'?val(p.seriesName,buckets[bi]):p.value; s+=p.marker+p.seriesName+'：<b>'+(type==='pctBar'?fmt(raw):fmtV(raw))+'</b>'+(type==='pctBar'?('（'+Math.round(p.value)+'%）'):'')+'<br>'; }); return s;}},
     legend:Object.assign({data:order,type:'scroll',textStyle:{fontFamily:YH,fontSize:11,color:'#5A5F66'},itemWidth:13,itemHeight:9,icon:'roundRect'},
       LEGEND_POS[state.legendPos]||LEGEND_POS.top),
     dataZoom:[{type:'inside',zoomOnMouseWheel:'ctrl',moveOnMouseMove:false,moveOnMouseWheel:false,filterMode:'none'}],
     grid:legendGrid(state.legendPos),
     xAxis:{type:'category',data:buckets,boundaryGap:(type!=='line'&&type!=='area'),axisLabel:{fontFamily:YH,color:'#8A9099',fontSize:11},axisLine:{lineStyle:{color:'#E6E8EB'}},axisTick:{show:false}},
-    yAxis:{type:'value',min:yMin,max:yMax,axisLabel:{fontFamily:YH,color:CT().ink3(),fontSize:11,formatter:v=>type==='pctBar'?v+'%':unitFmt(v)},splitLine:{lineStyle:{color:CT().lineSoft()}}},
+    // 轴名把单位摆明（'万台 W' / '天'），「0W」这类事故在轴上就能被看穿
+    yAxis:{type:'value',name:type==='pctBar'?'%':(isDosChart?'天':({one:'台',k:'千台 K',w:'万台 W'}[state.unit]||'台')),nameTextStyle:{fontFamily:YH,color:CT().ink3(),fontSize:11,align:'left'},nameGap:12,
+      min:yMin,max:yMax,axisLabel:{fontFamily:YH,color:CT().ink3(),fontSize:11,formatter:v=>type==='pctBar'?v+'%':fmtV(v)},splitLine:{lineStyle:{color:CT().lineSoft()}}},
     animationDuration:350, series:ec,
   },true);
   const note = res.capped? ('（'+res.total+'个系列，仅显示前'+(MAX_SERIES-1)+'大，其余归「其他」）'):'';

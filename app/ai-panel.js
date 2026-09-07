@@ -234,7 +234,7 @@
       '</aside>';
     document.body.appendChild(root);
 
-    root.querySelector('#aiMask').onclick = close;
+    // 非模态后不再有遮罩：点看板是正常操作，不该把对话关掉（关闭走 ✕ 或 Esc）
     root.querySelector('#aiClose').onclick = close;
     root.querySelector('#aiClear').onclick = clearChat;
     root.querySelector('#aiSettings').onclick = openSettings;
@@ -244,7 +244,9 @@
     ta.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }
     });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.open) close(); });
+    document.addEventListener('keydown', e => {   // 非模态：只有焦点在面板内才吃 Esc，否则会误关
+      if (e.key === 'Escape' && st.open && root && root.contains(document.activeElement)) close();
+    });
     return root;
   }
 
@@ -259,7 +261,15 @@
   function renderMessages() {
     const box = root.querySelector('#aiMsgs');
     if (!st.messages.length) {
-      box.innerHTML = '<div class="ai-empty">向 AI 提问，回答基于当前看板数据。<br>点 ⚙ 选择提供方（MiniMax 在线 / LM Studio 本机服务器 / 内置本地模型）。</div>';
+      // 文案跟着实际配置走（原来写死 MiniMax/LM Studio/内置本地，而默认早已是 DeepSeek，等于开屏就给错信息）
+      var _c = loadCfg();
+      var _p = _c.provider === 'deepseek' ? ('DeepSeek ' + (_c.dsModel || '')) :
+        _c.provider === 'minimax' ? ('MiniMax ' + (_c.model || '')) :
+        _c.provider === 'anthropic' ? ('Claude ' + (_c.anModel || '')) :
+        _c.provider === 'openai' ? ('OpenAI ' + (_c.oaModel || '')) :
+        _c.provider === 'lmstudio' ? ('LM Studio ' + (_c.lmModel || '')) :
+        _c.provider === 'corplink' ? 'CorpLink CLI' : '内置本地模型';
+      box.innerHTML = '<div class="ai-empty">向 AI 提问，回答基于<b>当前看板</b>的数据。<br>现在用 ' + esc(_p) + '（点 ⚙ 换提供方或填 Key）。</div>';
       return;
     }
     const bubble = (cls, html) => '<div class="ai-bubble ' + cls + '">' + html + '</div>';
@@ -287,6 +297,8 @@
     st.boardId = boardId || null;
     st.open = true;
     root.classList.remove('hidden');
+    document.body.classList.add('ai-docked');
+    setTimeout(() => { try { window.dispatchEvent(new Event('resize')); } catch (e) {} }, 220);   // 推挤后让各看板图表自己缩
     const label = st.boardId ? (AIData() ? AIData().labelOf(st.boardId) : st.boardId) : null;
     const cfgT = loadCfg();
     const modelTag = cfgT.provider === 'deepseek' ? ('DeepSeek ' + (cfgT.dsModel || '')) :
@@ -375,7 +387,9 @@
     } catch (e) { }
   }
 
-  function close() { if (!root) return; st.open = false; root.classList.add('hidden'); stopLmBar(); }
+  function close() { if (!root) return; st.open = false; root.classList.add('hidden'); stopLmBar();
+    document.body.classList.remove('ai-docked');
+    setTimeout(() => { try { window.dispatchEvent(new Event('resize')); } catch (e) {} }, 60); }
   function clearChat() { st.messages = []; renderMessages(); }
 
   /* ---------- 发送 + 工具循环 ---------- */
@@ -1002,10 +1016,14 @@
     const css =
       '.ai-fab{position:absolute;top:10px;right:14px;z-index:40;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow);font-size:17px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;padding:0}' +
       '.ai-fab:hover{border-color:var(--red);box-shadow:var(--shadow-l);transform:scale(1.06)}' +
-      '.ai-root{position:fixed;inset:0;z-index:1300}' +
+      /* 非模态（2026-09-07 复盘）：原来 .ai-root 铺满全屏 + 35% 遮罩把看板压暗、还拦截点击，
+         等于「要问 AI 就先别看数据」——而 AI 的价值全建立在「对着这张图问」上。
+         改成只占右侧一条、事件穿透，并给 .main 加右边距做推挤，看板自己缩窄而不是被盖住。 */
+      '.ai-root{position:fixed;top:0;right:0;bottom:0;width:min(440px,92vw);z-index:1300;pointer-events:none}' +
       '.ai-root.hidden{display:none}' +
-      '.ai-mask{position:absolute;inset:0;background:rgba(20,23,28,.35)}' +
-      '.ai-panel{position:absolute;top:0;right:0;height:100%;width:min(440px,92vw);background:#fff;box-shadow:var(--shadow-l);display:flex;flex-direction:column;animation:aiSlide .18s ease-out}' +
+      '.ai-mask{display:none}' +
+      '.ai-panel{position:absolute;top:0;right:0;height:100%;width:100%;background:var(--c-bg-elev,#fff);border-left:1px solid var(--line);box-shadow:var(--shadow-l);display:flex;flex-direction:column;pointer-events:auto;animation:aiSlide .18s ease-out}' +
+      'body.ai-docked .main{margin-right:min(440px,92vw)}' +
       '@keyframes aiSlide{from{transform:translateX(100%)}to{transform:translateX(0)}}' +
       '.ai-flow{font:11px/1.7 Consolas,monospace;color:var(--ink2,#555);margin:2px 0 6px;max-height:180px;overflow-y:auto}' +
       '.ai-flow-row{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +

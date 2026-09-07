@@ -7,7 +7,7 @@ OUT="scripts/ui-smoke/${SCRIPT%.js}.out"
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -eq 'electron.exe' -and $_.CommandLine -like '*test-main.js*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }" 2>/dev/null
 for i in $(seq 1 10); do node -e "fetch('http://127.0.0.1:9224/json/version').then(()=>process.exit(1)).catch(()=>process.exit(0))" 2>/dev/null && break; sleep 1; done
 node "scripts/ui-smoke/$SCRIPT" --prep >/dev/null 2>&1
-rm -rf "$LOCALAPPDATA/Temp/sb-ui-test-userdata" 2>/dev/null
+# userData 由 test-main.js 每次新建，无需清理（固定目录+rm 在 Windows 会静默失败，导致测到旧缓存）
 ./node_modules/electron/dist/electron.exe scripts/ui-smoke/test-main.js >/dev/null 2>&1 &
 for i in $(seq 1 25); do
   node -e "fetch('http://127.0.0.1:9224/json/version').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null && break

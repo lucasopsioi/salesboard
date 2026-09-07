@@ -159,7 +159,28 @@ function applyNav(){
   if(!DEFAULT_NAV.length) DEFAULT_NAV = navItems().map(n=>n.dataset.view);
   const { order, hidden } = NavOrder.reconcileNav(readNavArr(NAV_ORDER_KEY), readNavArr(NAV_HIDDEN_KEY), DEFAULT_NAV);
   const byView={}; navItems().forEach(n=>byView[n.dataset.view]=n);
-  order.forEach(v=>{ const el=byView[v]; if(el){ el.style.display = hidden.has(v)?'none':''; nav.insertBefore(el, restore); } });
+  /* 侧栏分组（2026-09-07 复盘）：原来分组标签是静态节点、不参与搬运，全被挤到列表最顶上，
+     17 个入口退化成一条无分组长列表（截图里「分析」「助手」两个标题紧挨着、下面一个条目都没有）。
+     修法不是「把标签插到组内第一项前」——那样一旦用户拖过顺序（或 archive 里存着旧顺序），
+     成员就会散落到别的组标题下。**改成按组决定渲染顺序，保存的顺序只在组内生效**：
+     分组永远自洽，组内仍尊重用户拖拽；不在任何组里的（将来新增看板）原样接在最后。 */
+  const GROUPS=[['navLabWatch',['psi','industry','country','report','inventory','finance']],
+                ['navLabPlan', ['roadmap','pricing','pricinglib','fob']],
+                ['navLabMake', ['audio','pptoutput','textout','custom','designer']],
+                ['navLabData', ['source']],
+                ['navLabAI',   ['agentchat']]];
+  const rank=v=>{ const i=order.indexOf(v); return i<0?9999:i; };
+  const grouped=[]; const seen=new Set();
+  GROUPS.forEach(([,vs])=>{ vs.filter(v=>byView[v]).sort((a,b)=>rank(a)-rank(b)).forEach(v=>{ grouped.push(v); seen.add(v); }); });
+  order.forEach(v=>{ if(byView[v] && !seen.has(v)){ grouped.push(v); seen.add(v); } });
+  grouped.forEach(v=>{ const el=byView[v]; el.style.display = hidden.has(v)?'none':''; nav.insertBefore(el, restore); });
+  GROUPS.forEach(([id,vs])=>{ const lab=document.getElementById(id); if(!lab) return;
+    const first=grouped.find(v=>vs.indexOf(v)>=0 && !hidden.has(v));
+    if(first && byView[first]){ lab.hidden=false; lab.style.display=''; nav.insertBefore(lab, byView[first]); }
+    else { lab.hidden=true; lab.style.display='none'; } });
+  // 「AI 问答」没有 data-view，不参与排序搬运，会飘在最顶上——把它按到「助手」组里 agentchat 后面
+  const aiEntry=document.getElementById('navAiEntry');
+  if(aiEntry){ const ac=byView['agentchat']; if(ac && !hidden.has('agentchat')) nav.insertBefore(aiEntry, ac.nextSibling); else nav.insertBefore(aiEntry, restore); }
   renderRestore(hidden);
   bindNavDnD(); bindNavMenu();
   $('#navRestore').onclick = ()=> $('#navHiddenList').classList.toggle('hidden');
@@ -257,6 +278,9 @@ async function init(){
       const t=new Date(d.ts||Date.now()).toLocaleTimeString('zh-CN',{hour12:false});
       if(d.fromSnapshot) showTP(100,'✅ 就绪(快照) · '+(d.records||0).toLocaleString()+' 条',true);
       else showTP(100,'✅ 已更新 · '+t+' · '+(d.records||0).toLocaleString()+' 条'+(d.parsedCount?(' · 重解'+d.parsedCount+'个文件'):''),true);
+      // 跑完就收起：原来 done 分支只 showTP 不隐藏，一条 100% 的绿条永久占着顶栏（条数/时间 dataBar 已经有了）
+      clearTimeout(window.__tpHideT);
+      window.__tpHideT = setTimeout(()=>{ const tp=$('#topProg'); if(tp) tp.classList.add('hidden'); }, 4000);
     }
   });
   setupCtrlZoom();

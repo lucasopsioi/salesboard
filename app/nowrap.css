@@ -18,7 +18,10 @@ h1, h2, h3, h4 { white-space: nowrap; }
 .rmc-box .nm, .rmc-box .meta { white-space: nowrap; }
 
 /* 说明类短文本：单行 + 省略号 */
-.ux-card .d, .ux-step > div > div:last-child, .inv-card h4, .ac-sess-t, .pd-tpl-row .nm, .db-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ux-step > div > div:last-child, .inv-card h4, .ac-sess-t, .pd-tpl-row .nm, .db-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 首页任务卡描述例外（2026-09-07 复盘）：单行截断把 12 张卡全砍成半句「…按月按周，…」，
+   卡片存在的意义就是不用记看板名，说不完就废了。改两行封顶——既不会出现三四行软文，又能把话说完。 */
+.ux-card .d { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .inv-card h4 { min-width: 0; }
 .fob-bar button, .fob-bar label { white-space: nowrap; }
 .ux-nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

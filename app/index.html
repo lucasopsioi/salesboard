@@ -665,24 +665,27 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
   <aside class="sidebar">
     <div class="brand"><div class="logo">G</div><div><div class="t">Salesboard</div><div class="s"></div></div></div>
     <nav class="nav">
-      <div class="nav-label">分析</div>
+      <div class="nav-label" id="navLabWatch">看数据</div>
       <div class="nav-item active" data-view="psi"><span class="ic" data-icon="psi"></span>PSI 数据分析</div>
       <div class="nav-item" data-view="industry"><span class="ic" data-icon="industry"></span>产业看板</div>
-      <div class="nav-item" data-view="finance"><span class="ic" data-icon="finance"></span>经营分析</div>
       <div class="nav-item" data-view="country"><span class="ic" data-icon="country"></span>国家看板</div>
       <div class="nav-item" data-view="report"><span class="ic" data-icon="report"></span>汇总表</div>
+      <div class="nav-item" data-view="inventory"><span class="ic" data-icon="inventory"></span>库存管理</div>
+      <div class="nav-item" data-view="finance"><span class="ic" data-icon="finance"></span>经营分析</div>
+      <div class="nav-item" data-view="roadmap"><span class="ic" data-icon="roadmap"></span>路标管理</div>
+      <div class="nav-item" data-view="pricing"><span class="ic" data-icon="pricing"></span>定价测算</div>
+      <div class="nav-item" data-view="pricinglib"><span class="ic" data-icon="pricinglib"></span>产品定价库</div>
+      <div class="nav-item" data-view="fob"><span class="ic" data-icon="finance"></span>Floor FOB</div>
+      <div class="nav-item" data-view="audio"><span class="ic" data-icon="audio"></span>产业周报</div>
+      <div class="nav-item" data-view="pptoutput"><span class="ic" data-icon="pptoutput"></span>PPT output</div>
+      <div class="nav-item" data-view="textout"><span class="ic" data-icon="textout"></span>文字输出</div>
       <div class="nav-item" data-view="custom"><span class="ic" data-icon="custom"></span>自定义图表</div>
       <div class="nav-item" data-view="designer"><span class="ic" data-icon="designer"></span>看板设计器</div>
       <div class="nav-item" data-view="source"><span class="ic" data-icon="source"></span>数据源</div>
-      <div class="nav-item" data-view="pricing"><span class="ic" data-icon="pricing"></span>定价测算</div>
-      <div class="nav-item" data-view="pricinglib"><span class="ic" data-icon="pricinglib"></span>产品定价库</div>
-      <div class="nav-item" data-view="roadmap"><span class="ic" data-icon="roadmap"></span>路标管理</div>
-      <div class="nav-item" data-view="pptoutput"><span class="ic" data-icon="pptoutput"></span>PPT output</div>
-      <div class="nav-item" data-view="inventory"><span class="ic" data-icon="inventory"></span>库存管理</div>
-      <div class="nav-item" data-view="textout"><span class="ic" data-icon="textout"></span>文字输出</div>
-      <div class="nav-item" data-view="audio"><span class="ic" data-icon="audio"></span>产业周报</div>
-      <div class="nav-item" data-view="fob"><span class="ic" data-icon="finance"></span>Floor FOB</div>
-      <div class="nav-label">助手</div>
+      <div class="nav-label" id="navLabPlan" hidden>做规划</div>
+      <div class="nav-label" id="navLabMake" hidden>出材料</div>
+      <div class="nav-label" id="navLabData" hidden>数据源</div>
+      <div class="nav-label" id="navLabAI">助手</div>
       <div class="nav-item" data-view="agentchat"><span class="ic" data-icon="ai"></span>Agent 对话</div>
       <div class="nav-item" id="navAiEntry"><span class="ic" data-icon="ai"></span>AI 问答</div>
       <div id="navRestore" class="hidden"><span class="ic" data-icon="eye"></span><span id="navRestoreTxt"></span></div>

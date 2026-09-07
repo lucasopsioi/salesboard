@@ -104,6 +104,24 @@ const TOOL_SCHEMAS = {
   fsList: { description: '列出工作区文件夹内容（用户授权的本机目录）。path 用绝对路径。', properties: { dir: { type: 'string' }, depth: { type: 'integer', description: '1-3' } }, required: [] },
   fsRead: { description: '读本机文件：xlsx 按工作表返回行（sheet/fromRow/rows 可分页）；pptx/docx 抽文本；其余按文本。只能读工作区内。', properties: { path: { type: 'string' }, sheet: { type: 'string' }, fromRow: { type: 'integer' }, rows: { type: 'integer' }, maxChars: { type: 'integer' } }, required: ['path'] },
   fsWrite: { description: '写文本类文件(txt/md/csv/json/js/py…)到工作区，整文件覆盖，写前自动备份。用户会先确认。', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] },
+  tableProfile: {
+    description: '【大表首选·先做这步】流式体检本机表格(.xlsx/.csv/.tsv，50MB+ 也秒回)：返回工作表清单、数据行数、每列的名字/类型/取值范围/样例值、前几行。任何针对表格的统计或查找前，先用它看清列名与工作表名。',
+    properties: { path: { type: 'string' }, sheet: { type: 'string', description: '工作表名，不填取第一个' }, headerRow: { type: 'integer', description: '表头在第几行，默认1' }, sample: { type: 'integer' } }, required: ['path'] },
+  tableQuery: {
+    description: '【大表统计·数字由代码算，绝不会错】对本机表格做筛选+分组+聚合，流式全表扫描，不受行数限制。求和/计数/均值/最大最小/去重计数一律用它，严禁自己写脚本或凭预览心算。例：某国销量合计 → {path,filters:[{col:"country",op:"eq",value:"Peru"}],metrics:[{fn:"sum",col:"units"}]}；按月分组 → {groupBy:[{col:"date",as:"month"}]}。',
+    properties: {
+      path: { type: 'string' }, sheet: { type: 'string' }, headerRow: { type: 'integer' },
+      filters: { type: 'array', description: '[{col,op,value}]；op: eq/ieq/ne/contains/notContains/gt/gte/lt/lte/in/notIn/empty/notEmpty', items: { type: 'object' } },
+      groupBy: { type: 'array', description: '列名数组；按日期分组用 {col:"日期列",as:"month"|"quarter"|"year"|"date"}', items: {} },
+      metrics: { type: 'array', description: '[{fn,col,as}]；fn: sum/count/avg/min/max/countDistinct（count 不需要 col）', items: { type: 'object' } },
+      sort: { type: 'object' }, limit: { type: 'integer' },
+    }, required: ['path'] },
+  tableValues: {
+    description: '列出表格某一列的**精确取值**与各自行数（按出现次数排序）。筛选前必用：直接猜"墨西哥"还是"Mexico"会静默返回空结果，先用它拿到原文写法。',
+    properties: { path: { type: 'string' }, col: { type: 'string' }, sheet: { type: 'string' }, headerRow: { type: 'integer' }, limit: { type: 'integer' } }, required: ['path', 'col'] },
+  tableFind: {
+    description: '在本机表格里按条件找出原始行（定位用，不做统计）。filters 同 tableQuery；也可只给 contains 做全行关键词搜索。返回命中行号与单元格。',
+    properties: { path: { type: 'string' }, sheet: { type: 'string' }, headerRow: { type: 'integer' }, filters: { type: 'array', items: { type: 'object' } }, contains: { type: 'string' }, limit: { type: 'integer' }, countAll: { type: 'boolean' } }, required: ['path'] },
   excelEdit: {
     description: '结构化修改本机 Excel(.xlsx)：ops 数组按序执行，每项必须带 op 字段。例：{"op":"setCell","sheet":"Sheet1","cell":"B2","value":199}；{"op":"setRange","sheet":"Sheet1","origin":"A5","rows":[["a",1],["b",2]]}；{"op":"appendRows","sheet":"Sheet1","rows":[["c",3]]}；{"op":"addSheet","sheet":"新表","rows":[["表头"]]}；{"op":"deleteSheet","sheet":"旧表"}。文件不存在则新建。写前自动备份 .bak；单元格样式/公式可能被简化。用户会先确认。',
     properties: { path: { type: 'string' }, ops: { type: 'array', items: { type: 'object', properties: { op: { type: 'string', enum: ['setCell', 'setRange', 'appendRows', 'addSheet', 'deleteSheet'] }, sheet: { type: 'string' }, cell: { type: 'string' }, value: {}, origin: { type: 'string' }, rows: { type: 'array' } }, required: ['op'] } } }, required: ['path', 'ops'] },
@@ -174,7 +192,8 @@ function pickTools(names, question, max) {
   if (list.indexOf('query') >= 0) keep.push('query');
   // UI 落地工具常驻:makePpt/makeExcel 只在编排器判定意图命中时才进 names(见 orchestrate 的
   // uiExtra),进了名单就是本题的交付通道,绝不许被关键词打分挤掉(2026-09-01 D-轮1)
-  ['makePpt', 'makeExcel', 'docSearch', 'docSlice', 'fsList', 'fsRead', 'excelEdit', 'pptEdit', 'fsWrite', 'runCode'].forEach(n => { if (list.indexOf(n) >= 0 && keep.indexOf(n) < 0) keep.push(n); });
+  ['makePpt', 'makeExcel', 'docSearch', 'docSlice', 'fsList', 'fsRead', 'excelEdit', 'pptEdit', 'fsWrite', 'runCode',
+    'tableProfile', 'tableQuery', 'tableValues', 'tableFind'].forEach(n => { if (list.indexOf(n) >= 0 && keep.indexOf(n) < 0) keep.push(n); });
   scored.filter(x => x.sc > 0 && keep.indexOf(x.n) < 0)
     .sort((a, b) => b.sc - a.sc || a.i - b.i)
     .forEach(x => { if (keep.length < lim) keep.push(x.n); });
@@ -184,7 +203,8 @@ function pickTools(names, question, max) {
 
 // 生成 OpenAI function-calling 规格（只给注册表里真实存在的工具）
 function buildToolSpecs(names) {
-  return (names || []).filter(n => TOOL_SCHEMAS[n]).map(n => {
+  // 去重兜底：工具名重复会让 DeepSeek 直接 400「Tool names must be unique」，整轮取数失败。
+  return [...new Set(names || [])].filter(n => TOOL_SCHEMAS[n]).map(n => {
     const s = TOOL_SCHEMAS[n];
     return { type: 'function', function: { name: n, description: s.description, parameters: { type: 'object', properties: s.properties, required: s.required || [], additionalProperties: false } } };
   });
@@ -790,6 +810,10 @@ const AIData = (function () {
       docSlice: wrap(a => api.docSlice(String(a.docId || ''), a.from, a.to)),
       fsList: wrap(a => api.fsList(a)),
       fsRead: wrap(a => api.fsRead(a)),
+      tableProfile: wrap(a => api.tableProfile(a)),
+      tableQuery: wrap(a => api.tableQuery(a)),
+      tableValues: wrap(a => api.tableValues(a)),
+      tableFind: wrap(a => api.tableFind(a)),
       fsWrite: wrap(a => gated('fsWrite', a, () => api.fsWrite(a))),
       excelEdit: wrap(a => gated('excelEdit', a, () => api.excelEdit(a))),
       pptEdit: wrap(a => gated('pptEdit', a, () => api.pptEdit(a))),

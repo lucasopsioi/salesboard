@@ -290,6 +290,22 @@ async function main() {
   const out4 = await O.orchestrate('收入多少', 'finance', deps4);
   ok('A58 模型不可用时不抛异常,回可读结果', !!out4 && typeof out4.answer === 'string' && out4.results.every(r => r.error));
 
+  // —— 溯源门禁：日期数字不被误伤（2026-09-04 S5 实测 docx 日期被抹）——
+  const tt = ['psi 工具返回：数据源为空 0 行'];   // 有失败工具调用 → 门禁生效（否则 no-op）
+  const gp = (ans, corpus) => O.enforceProvenance(ans, tt, corpus || '', { placeholder: '(未取到)' });
+  // ISO 日期：连字符被 NUM 切成 -11/-18，Math.abs 豁免后不该被抹（代号 KOALA-77 的 77 由文档语料兜住）
+  const p1 = gp('交付日期：2026-11-18，代号 KOALA-77', '【brief.docx】交付日期 2026-11-18，项目代号 KOALA-77');
+  ok('A59 ISO 日期不被溯源门禁抹掉', p1.answer.indexOf('2026-11-18') >= 0 && p1.answer.indexOf('KOALA-77') >= 0 && p1.blocked.length === 0, JSON.stringify(p1));
+  // 中文日期同样安全
+  const p2 = gp('交付日期：2026 年 11 月 18 日');
+  ok('A60 中文日期不被抹', /11 月 18 日/.test(p2.answer) && p2.blocked.length === 0);
+  // 但真正无出处的大额业务数字仍要拦（门禁没被削废）
+  const p3 = gp('Acme份额 8347 台');
+  ok('A61 无出处大额数字仍被拦', /\(未取到\)/.test(p3.answer) && p3.blocked.indexOf('8347') >= 0, JSON.stringify(p3));
+  // 上传文档正文进语料 → 文档里的目标值不被拦
+  const p4 = gp('秘鲁目标 12500 台', '【brief.docx】秘鲁 Andina Retail 首发目标 12500 台');
+  ok('A62 provCorpus 里的文档数字不被拦', p4.answer.indexOf('12500') >= 0 && p4.blocked.length === 0, JSON.stringify(p4));
+
   await speed();
   trim();
 

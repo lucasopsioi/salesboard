@@ -363,10 +363,10 @@ ipcMain.handle('aiProxyInfo', async (_e, url) => {
    支持纯文本类(txt/md/csv/json/log)；超长截断(60K 字符)。只读不写。 */
 /* Office 文本抽取(2026-09-01)：pptx/docx 都是 zip，手写 central directory 解析 +
    zlib.inflateRawSync 解压 slide/document XML，抽 <a:t>/<w:t> 文本——零依赖。 */
-const { extractOfficeText } = require(require('path').join(__dirname, 'app', 'office-text-core.js'));
+const { extractOfficeText, extractOfficeImages: officeImages, imageDataUrl: officeImgUrl } = require(require('path').join(__dirname, 'app', 'office-text-core.js'));
 /* 单文件解析（📎 对话框与拖拽共用）：图片→dataUrl；office→抽文本；其余按 utf8 文本 */
 const DOC_EXT_RE = /\.(txt|md|csv|json|log|pptx|docx|xlsx|png|jpg|jpeg|webp)$/i;
-function parseDocFile(p2) {
+async function parseDocFile(p2) {
   try {
     if (!DOC_EXT_RE.test(p2)) return { error: '不支持的文件类型（支持 txt/md/csv/json/log/pptx/docx/xlsx/png/jpg/webp）: ' + path.basename(p2) };
     const st = fs.statSync(p2);
@@ -377,10 +377,41 @@ function parseDocFile(p2) {
       const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' }[imgExt.toLowerCase()];
       return { name: path.basename(p2), kind: 'image', dataUrl: 'data:' + mime + ';base64,' + fs.readFileSync(p2).toString('base64') };
     }
-    let content;
-    if (/\.(pptx|docx|xlsx)$/i.test(p2)) {
-      content = extractOfficeText(fs.readFileSync(p2));
-      if (!content) return { error: '未能从该 Office 文件抽出文本(可能加密、xls 老格式或内容为空): ' + path.basename(p2) };
+    /* 表格(xlsx/csv/tsv)：走流式大表引擎，只取「表结构 + 少量样例」进提示词。
+       绝不再整表读进内存——旧路径 61MB 文件吃 325MB 且在 20 万行处静默截断，模型据此求和必错。
+       真要统计/查找，模型用 tableQuery/tableFind 直接读原文件（代码算，数字不会错）。 */
+    if (/\.(xlsx|csv|tsv)$/i.test(p2)) {
+      const prof = await BT.tableProfile(p2, { sample: 8 });
+      const head = (prof.columns || []).map(c => c.col).join(' | ');
+      const lines = [
+        '【表格：' + path.basename(p2) + '】',
+        prof.sheets && prof.sheets.length > 1 ? '工作表：' + prof.sheets.join(' / ') + '（当前：' + prof.sheet + '）' : (prof.sheet ? '工作表：' + prof.sheet : ''),
+        '数据行数：' + prof.dataRows + '　列数：' + (prof.columns || []).length,
+        '列（名｜类型｜样例值）：',
+        ...(prof.columns || []).map(c => '  · ' + c.col + ' ｜ ' + c.type + (c.type === '数值' && c.min != null ? '（' + c.min + ' ~ ' + c.max + '）' : '') + ' ｜ ' + (c.samples || []).slice(0, 5).join('、')),
+        '前几行：', head,
+        ...(prof.sampleRows || []).map(r => r.map(x => x == null ? '' : String(x)).join(' | ')),
+      ].filter(Boolean);
+      const content2 = lines.join('\n');
+      const docId2 = 'doc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      DOC_STORE.set(docId2, { name: path.basename(p2), lines: LTC.docIndex(content2), size: st.size, srcPath: p2 });
+      UPLOADED.add(path.resolve(p2));
+      if (DOC_STORE.size > 12) { const first = DOC_STORE.keys().next().value; DOC_STORE.delete(first); }
+      return { name: path.basename(p2), content: content2, truncated: false, srcPath: p2, docId: docId2,
+        totalLines: prof.dataRows, size: st.size, kind: 'table', sheets: prof.sheets, sheet: prof.sheet,
+        summary: (prof.sheet ? prof.sheet + ' ' : '') + prof.dataRows + ' 行 × ' + (prof.columns || []).length + ' 列；列：' + head.slice(0, 200) };
+    }
+    let content, embeddedImages;
+    if (/\.(pptx|docx)$/i.test(p2)) {
+      const raw = fs.readFileSync(p2);
+      content = extractOfficeText(raw);
+      // PPT/Word 里的内嵌图（图表截图、照片）也要能读——抽出来，渲染层逐张走视觉模型转述后并入正文
+      try {
+        const imgs = officeImages(raw, { max: 12 });
+        if (imgs.length) embeddedImages = imgs.map(im => ({ name: im.name, dataUrl: officeImgUrl(im) }));
+      } catch (e) {}
+      if (!content && !(embeddedImages && embeddedImages.length)) return { error: '未能从该 Office 文件抽出文本或图片(可能加密、xls 老格式或内容为空): ' + path.basename(p2) };
+      if (!content) content = '（' + path.basename(p2) + '：未抽到文字，仅含图片，见下方图片转述）';
     } else {
       content = fs.readFileSync(p2, 'utf8');
     }
@@ -392,9 +423,8 @@ function parseDocFile(p2) {
     if (DOC_STORE.size > 12) { const first = DOC_STORE.keys().next().value; DOC_STORE.delete(first); }   // 最多留 12 份全文
     const truncated = content.length > 60000;
     let summary = '';
-    if (/\.xlsx$/i.test(p2)) { try { summary = LTC.excelSummary(fs.readFileSync(p2), require('xlsx'), 4).map(sh => sh.sheet + '(' + sh.rows + '行×' + sh.cols + '列; 表头: ' + (sh.head[0] || []).join(' | ').slice(0, 120) + ')').join('；'); } catch (e) {} }
     if (truncated) content = content.slice(0, 60000);
-    return { name: path.basename(p2), content, truncated, srcPath: p2, docId, totalLines: lines.length, size: st.size, summary };
+    return { name: path.basename(p2), content, truncated, srcPath: p2, docId, totalLines: lines.length, size: st.size, summary, embeddedImages: embeddedImages || undefined };
   } catch (e) { return { error: String((e && e.message) || e) }; }
 }
 /* ---- PPT 模板体系(2026-09-01)：上传 PPT → AI 识别数据字段做成可刷新模板 ----
@@ -487,6 +517,15 @@ ipcMain.handle('pptEdit', (_e, a) => { try { a = a || {}; const p2 = path.resolv
 ipcMain.handle('runCode', async (_e, a) => { try { a = a || {}; const cwd = path.resolve(String(a.cwd || wsDirs()[0] || '')); const g = wsGuard(cwd); if (g) return { error: g }; const lang = String(a.lang || 'node'); const code = String(a.code || ''); if (!code.trim()) return { error: 'code 为空' }; const { spawn } = require('child_process'); const tmp = path.join(cwd, '.sb-run-' + Date.now().toString(36) + (lang === 'python' ? '.py' : '.js')); fs.writeFileSync(tmp, code, 'utf8'); /* 脚本能 require 软件自带的库(xlsx 等)：NODE_PATH 指向 app 的 node_modules；打包后 xlsx 走 asarUnpack 真实目录 */
       const nmDirs = [path.join(__dirname, 'node_modules'), path.join(__dirname.replace(/app\.asar$/, 'app.asar.unpacked'), 'node_modules')].filter((d, i, arr) => arr.indexOf(d) === i);
       const env = Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1', PYTHONUTF8: '1', NODE_PATH: nmDirs.join(path.delimiter) + (process.env.NODE_PATH ? path.delimiter + process.env.NODE_PATH : '') }); const cmd = lang === 'python' ? (process.platform === 'win32' ? 'py' : 'python3') : process.execPath; const args = lang === 'python' ? ['-3', tmp] : [tmp]; return await new Promise(res => { let out = '', err = ''; let child; try { child = spawn(cmd, args, { cwd, env, windowsHide: true, shell: false }); } catch (e) { try { fs.unlinkSync(tmp); } catch (e2) {} return res({ error: '启动失败: ' + e.message }); } const t = setTimeout(() => { try { child.kill(); } catch (e) {} }, Math.min(300000, Math.max(5000, +a.timeoutMs || 120000))); child.stdout.on('data', d => { out += d; if (out.length > 60000) out = out.slice(-60000); }); child.stderr.on('data', d => { err += d; if (err.length > 20000) err = err.slice(-20000); }); child.on('error', e => { clearTimeout(t); try { fs.unlinkSync(tmp); } catch (e2) {} res({ error: '运行失败: ' + e.message + (lang === 'python' ? '（本机可能没有 Python，用 node）' : '') }); }); child.on('close', code2 => { clearTimeout(t); try { fs.unlinkSync(tmp); } catch (e2) {} res({ ok: code2 === 0, exitCode: code2, stdout: out.slice(0, 20000), stderr: err.slice(0, 8000), cwd }); }); }); } catch (e) { return { error: String(e) }; } });
+/* ---- 大表工具（2026-09-04 用户：底表都 50MB 以上）：流式读取 + 统计由代码算 ----
+   只读，不改文件，所以不走审批闸；路径仍过 wsGuard（工作区内或用户上传过的文件）。
+   模型只负责挑表/挑列/给筛选条件，求和分组一律代码算——杜绝「模型自己写脚本把 208 万算成 1234」。 */
+const BT = require(path.join(__dirname, 'app', 'bigtable-core.js'));
+function btGuard(a) { const p2 = path.resolve(String((a && a.path) || '')); const g = wsGuard(p2); return g ? { error: g } : { path: p2 }; }
+ipcMain.handle('tableProfile', async (_e, a) => { try { const g = btGuard(a); if (g.error) return g; return await BT.tableProfile(g.path, a || {}); } catch (e) { return { error: String((e && e.message) || e) }; } });
+ipcMain.handle('tableQuery', async (_e, a) => { try { const g = btGuard(a); if (g.error) return g; return await BT.tableQuery(g.path, a || {}); } catch (e) { return { error: String((e && e.message) || e) }; } });
+ipcMain.handle('tableValues', async (_e, a) => { try { const g = btGuard(a); if (g.error) return g; return await BT.tableDistinct(g.path, a || {}); } catch (e) { return { error: String((e && e.message) || e) }; } });
+ipcMain.handle('tableFind', async (_e, a) => { try { const g = btGuard(a); if (g.error) return g; return await BT.tableFind(g.path, a || {}); } catch (e) { return { error: String((e && e.message) || e) }; } });
 /* ---- 本机接收（2026-09-04 用户：这台电脑网页上传功能坏了、一上传就崩，要从手机/另一台设备把文件传进来）----
    本机开一个 http 服务，另一台同 Wi-Fi 的设备扫码/开链接，把文件「发送」过来，流式落到 文档\销售团队-AI输出\接收\，
    直接出现在软件里。接收端是 Node http 服务，跟这台电脑那套会崩的浏览器上传毫无关系。

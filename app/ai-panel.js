@@ -15,6 +15,20 @@
      ——超 MiniMax-M2.5 的 80.0% 且最快最便宜;deepseek-v4-pro 93.1% 最准但 p50 68s(深度分析用)。 */
   const DS_BASE = 'https://api.deepseek.com/v1/chat/completions';
   const DS_MODELS = ['deepseek-chat', 'deepseek-v4-pro'];
+  /* 视觉模型(2026-09-04 实测):DeepSeek 的 deepseek-chat/v4-pro 是纯文本——收下 image_url 但看不到图(HTTP200
+     却答"图片未显示")。真能看图的是 deepseek-v4-flash-vision-exp(实测准确识别),但它是推理模型,
+     max_tokens 给小了会被 reasoning 吃光返空 → 识图统一走它并给足 token。Claude/GPT 本身多模态则直接用。 */
+  const DS_VISION = 'deepseek-v4-flash-vision-exp';
+  // 挑一个「能看图」的端点：优先当前 provider 若本就多模态(Claude/GPT)，否则用 DeepSeek 视觉模型，再否则任何可用多模态 key
+  function pickVisionEndpoint(cfg) {
+    cfg = cfg || {};
+    if (cfg.provider === 'anthropic' && cfg.anKey) return { key: cfg.anKey, baseUrl: AN_BASE, model: cfg.anModel || AN_MODELS[0], apiFormat: 'anthropic', label: 'Claude ' + (cfg.anModel || AN_MODELS[0]) };
+    if (cfg.provider === 'openai' && cfg.oaKey) return { key: cfg.oaKey, baseUrl: OA_BASE, model: cfg.oaModel || OA_MODELS[0], label: 'OpenAI ' + (cfg.oaModel || OA_MODELS[0]) };
+    if (cfg.dsKey) return { key: cfg.dsKey, baseUrl: DS_BASE, model: DS_VISION, label: 'DeepSeek 视觉(' + DS_VISION + ')' };
+    if (cfg.anKey) return { key: cfg.anKey, baseUrl: AN_BASE, model: cfg.anModel || AN_MODELS[0], apiFormat: 'anthropic', label: 'Claude ' + (cfg.anModel || AN_MODELS[0]) };
+    if (cfg.oaKey) return { key: cfg.oaKey, baseUrl: OA_BASE, model: cfg.oaModel || OA_MODELS[0], label: 'OpenAI ' + (cfg.oaModel || OA_MODELS[0]) };
+    return null;   // 无任何多模态可用（如只配了 MiniMax/LM Studio/CorpLink 且无 DeepSeek key）
+  }
   /* Claude/OpenAI(2026-08-31 用户点名):Claude=表格问答最强档(调研结论),走 anthropic 格式适配;
      OpenAI 走现成 OpenAI 兼容通道。模型名可下拉可手输(厂商迭代快,别写死)。 */
   const AN_BASE = 'https://api.anthropic.com/v1/messages';
@@ -1078,7 +1092,15 @@
       catalogDirect: async () => { try { return await api().psiCatalog(); } catch (e) { return null; } },
       provRetry: true,
       onProgress: onProgress || (() => {}),
+      visionEndpoint: () => pickVisionEndpoint(cfg),
       chat: async p => {
+        if (p.forceEndpoint) {
+          const fe = p.forceEndpoint; let mt = p.maxTokens;
+          if (/vision|pro|reasoner|thinking/i.test(String(fe.model || '')) && (!mt || mt < 3000)) mt = 3000;   // 视觉/推理模型 token 给足否则返空
+          const fpayload = { key: fe.key, baseUrl: fe.baseUrl, model: fe.model, apiFormat: fe.apiFormat, timeoutMs: 120000, messages: p.messages, maxTokens: mt, temperature: 0 };
+          if (p.system) fpayload.messages = [{ role: 'system', content: p.system }].concat(p.messages || []);
+          return api().aiChat(fpayload);
+        }
         if (cfg.provider === 'corplink') return cliChat(cfg, p);
         const mdlName = cfg.provider === 'deepseek' ? (cfg.dsModel || '') : cfg.provider === 'minimax' ? (cfg.model || '') : cfg.provider === 'anthropic' ? (cfg.anModel || '') : cfg.provider === 'openai' ? (cfg.oaModel || '') : '';
         if (/pro|reasoner|thinking|r1|m3/i.test(mdlName) && (!p.maxTokens || p.maxTokens < 16000)) p = Object.assign({}, p, { maxTokens: 16000 });
@@ -1094,7 +1116,7 @@
       },
     };
   }
-  window.AIPanel = { init, open, close, injectButtons, openSettings, makeOrchDeps, loadCfg, saveCfg, md };
+  window.AIPanel = { init, open, close, injectButtons, openSettings, makeOrchDeps, loadCfg, saveCfg, md, pickVisionEndpoint };
 
   // 自启：DOM 就绪即初始化（app.js 的 init 在其后运行，nav 点击处理也在此挂）
   if (typeof document !== 'undefined') {

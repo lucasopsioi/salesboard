@@ -541,10 +541,14 @@
     if (/(做|生成|整理|导出|弄|输出|给我|帮我).{0,12}(excel|xlsx|表格文件)/i.test(task.subQuestion)) uiExtra.push('makeExcel');
     // 上传了文档(提示词里有 docId 标注)→ 附加全文搜索/切片；提到本机文件/路径/编辑/运行 → 附加本机工具(写类走用户审批)
     if (/docId=/.test(task.subQuestion)) uiExtra.push('docSearch', 'docSlice', 'fsRead', 'runCode');   // 上传的文件还可整份计算(runCode 读原路径)
+    if (/docId=|\.xlsx|\.csv|\.tsv|表格|底表|工作表|sheet/i.test(task.subQuestion)) uiExtra.push('tableProfile', 'tableQuery', 'tableValues', 'tableFind');
     if (/([A-Za-z]:\\|[A-Za-z]:\/|\.xlsx|\.pptx|\.csv|\.docx|\.txt|\.md|工作区|本机|电脑上|文件夹|目录|(编辑|修改|改一?下|更新|写入|写进|另存|保存到|删掉|加一?行|加一?列|加一?页|批量).{0,12}(文件|表格|excel|ppt|xlsx|pptx|csv|单元格|工作表|sheet)|运行.{0,6}(脚本|代码)|python|node)/i.test(task.subQuestion)) uiExtra.push('fsList', 'fsRead', 'excelEdit', 'pptEdit', 'fsWrite', 'runCode');
-    const baseTools = uiExtra.length ? a.tools.concat(uiExtra.filter(t => a.tools.indexOf(t) < 0)) : a.tools;
+    // uiExtra 内部可能重复（如 docId 分支与文件意图分支都推 fsRead/runCode）→ 先去重，
+    // 否则工具名重复，DeepSeek 直接 400「Tool names must be unique」，整轮取数失败(2026-09-04 实测 S3/S6/识图V2)。
+    const uiUniq = [...new Set(uiExtra)];
+    const baseTools = uiUniq.length ? [...new Set(a.tools.concat(uiUniq))] : a.tools.slice();
     const toolNames = !fast ? baseTools
-      : (deps.pickTools ? deps.pickTools(baseTools, task.subQuestion, 4 + uiExtra.length) : baseTools.slice(0, 4));
+      : (deps.pickTools ? deps.pickTools(baseTools, task.subQuestion, 4 + uiUniq.length) : baseTools.slice(0, 4));
     const specs = (deps.buildToolSpecs ? deps.buildToolSpecs(toolNames) : []);
     const messages = [];
     if (ctxMsg) messages.push({ role: 'user', content: ctxMsg });
@@ -638,6 +642,7 @@
     if (/逐月|逐周|月度|各月|分别|各占|每个月|每一个/.test(q)) g.push('用户要求逐项数据：必须把每个成员(每月/每处/每国)各自的数值一行一个完整列出，不许只给合计、只挑最大最小或用「等」省略；确无数据的项逐个标「数据未包含」。');
     if (/(上市|首销|发布)/.test(q) && /(什么时候|何时|哪个月|怎么回事|一点量|少量|很小)/.test(q)) g.push('判断上市时间：放量前1-2个月出现的极小销量(比放量月低一个数量级)通常是样机/演示机铺货，不算正式上市。回答必须把「样机期(小量)」与「正式上市(放量月)」分开说，上市时间以首个放量月为准。');
     if (/(做|生成|整理|导出|弄|输出).{0,8}(PPT|ppt|幻灯)/.test(q)) g.push('用户要 PPT：先用 query/report 取齐数据，再调 makePpt({fileName, slides:[{title,bullets,table}]}) 生成——每个主题一页，数字表格放 table（headers+rows），结论要点放 bullets；标题页写清口径与截至时间。生成后告知用户文件已保存并自动打开。');
+    if (/(【表格：|\.xlsx|\.csv|\.tsv)/i.test(q)) g.push('涉及本机表格(Excel/CSV)时的铁律：①先 tableProfile 看清工作表名与列名；②筛选前先 tableValues 拿该列的精确取值（猜「墨西哥」还是「Mexico」会静默返回空）；③**任何求和/计数/均值/占比一律用 tableQuery，由代码算**——严禁自己写 runCode 脚本算、严禁拿提示词里那几行样例心算或外推（提示词里只有表结构和几行样例，不是全表）；④定位具体某几行用 tableFind。这套工具是流式全表扫描，50MB、上百万行都能算准，不受长度限制。');
     if (/docId=/.test(q)) g.push('用户上传的文档已建全文索引：提示词里只带了开头部分。回答涉及文档细节/数字/后半部分内容时，必须用 docSearch({docId,q}) 搜索、docSlice({docId,from,to}) 读原文，不要凭开头臆断「文档里没有」。要对整份文件做统计/求和/汇总/透视时，别逐段读——用 runCode(lang:"node") 写脚本直接读文档头里的「路径=」原文件（脚本可 require("xlsx") 读 Excel、用 fs 读文本/CSV），把结果 console.log 出来再作答；Python 也可以(lang:"python")，但本机不一定装了第三方库，node 更稳。');
     if (/([A-Za-z]:\\|[A-Za-z]:\/|\.xlsx|\.pptx).{0,40}(编辑|修改|改|更新|写|删|加)|(编辑|修改|改一?下|更新|写入|写进).{0,12}(文件|表格|excel|ppt|xlsx|pptx|单元格|工作表)/i.test(q)) g.push('用户要改本机文件：先 fsRead 看清现状（Excel 看表头与目标行列），再用 excelEdit(结构化 ops) / pptEdit(文字替换) / fsWrite(文本) 执行；复杂批量处理用 runCode 写脚本。每个写操作用户会先看到确认卡再执行——被拒绝就停下说明，不要换个工具偷偷再试。完成后把「改了什么、备份在哪」告诉用户。路径不在工作区会被拒绝：提示用户在 Agent 对话右上角「📁 工作区」添加文件夹。');
     if (/(做|生成|整理|导出|弄|输出|给我|帮我).{0,12}(excel|xlsx|表格文件)/i.test(q)) g.push('用户要 Excel 文件：先用 query/report 取齐数据，再调 makeExcel({fileName, sheets:[{name, rows}]}) 生成——rows 是二维数组且首行为表头；生成后告知用户文件已保存并自动打开。只在正文贴数字不调 makeExcel 视为任务未完成。');
@@ -721,9 +726,11 @@
     const out = text.replace(NUM, (m, offset, str) => {
       const v = parseFloat(m.replace(/,/g, ''));
       if (!isFinite(v)) return m;
-      // 小整数/年份豁免（日期语境）；但紧跟 % 的是比率不是日期，不豁免（C6-02 的"8%"类）
+      // 小整数/年份豁免（日期语境）；但紧跟 % 的是比率不是日期，不豁免（C6-02 的"8%"类）。
+      // 用 Math.abs：ISO 日期"2026-11-18"被 NUM 的 -? 前缀切成 -11/-18，负号是连字符不是真负数
+      // （2026-09-04 实测 docx"2026-11-18"整段被抹成"2026(未取到)(未取到)"），与第 692 行求和序列同源。
       const isPct = str[offset + m.length] === '%' || str[offset + m.length] === '％';
-      if (!isPct && Number.isInteger(v) && ((v >= 0 && v <= 31) || (v >= 1900 && v <= 2100))) return m;
+      if (!isPct && Number.isInteger(v) && (Math.abs(v) <= 31 || (v >= 1900 && v <= 2100))) return m;
       if (backed(v)) return m;
       blocked.push(m);
       return DETECT_ONLY ? m : PLACEHOLDER;
@@ -886,7 +893,10 @@
     }
     tasks.forEach(t => { t.mode = mode; t.guards = guards; });
     // 门禁题面(2026-09-01 场景F验尸): forceTasks 的材料在子任务里,不拼进题面会被溯源门禁全拦,专家被逼答「无法回答」
-    const provQ = (opt && Array.isArray(opt.forceTasks) && opt.forceTasks.length) ? question + String.fromCharCode(10) + tasks.map(t => t.subQuestion).join(String.fromCharCode(10)) : question;
+    // 上传文档/材料里的数字是合法出处（用户给的题面数据），必须进溯源语料，否则会被门禁当成「编造」抹掉
+    // （2026-09-04 实测：docx 里"2026年11月18日"的 11、18 被标成"(未取到)"）。provCorpus 显式携带文档正文。
+    let provQ = (opt && Array.isArray(opt.forceTasks) && opt.forceTasks.length) ? question + String.fromCharCode(10) + tasks.map(t => t.subQuestion).join(String.fromCharCode(10)) : question;
+    if (opt && opt.provCorpus) provQ += String.fromCharCode(10) + String(opt.provCorpus).slice(0, 200000);
     if (deps.onProgress) deps.onProgress({ type: 'plan', tasks: tasks.map(t => t.agent.name) });
 
     /* 并行执行(2026-09-01 总控需求)：多任务分批并发跑(批4)，快4倍量级；

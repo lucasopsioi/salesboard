@@ -64,4 +64,70 @@ function extractOfficeText(buf) {
     return parts.join('\n\n');
   } catch (e) { return ''; }
 }
-module.exports = { extractOfficeText };
+/* 读图片像素尺寸（只看文件头，不解码整图）——用于过滤小图标，比按字节数靠谱
+   （2026-09-04 实测：一张 711 字节的正经柱状图被 minBytes:3000 误杀）。认不出尺寸返回 null。 */
+function imageSize(buf, ext) {
+  try {
+    if (!buf || buf.length < 24) return null;
+    if (ext === 'png' || (buf[0] === 0x89 && buf[1] === 0x50)) { if (buf.toString('ascii', 12, 16) === 'IHDR') return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) }; return null; }
+    if (ext === 'gif' || buf.toString('ascii', 0, 3) === 'GIF') return { w: buf.readUInt16LE(6), h: buf.readUInt16LE(8) };
+    if (ext === 'bmp' || (buf[0] === 0x42 && buf[1] === 0x4D)) return { w: buf.readInt32LE(18), h: Math.abs(buf.readInt32LE(22)) };
+    if (ext === 'jpg' || ext === 'jpeg' || (buf[0] === 0xFF && buf[1] === 0xD8)) {
+      let o = 2;
+      while (o + 9 < buf.length) {
+        if (buf[o] !== 0xFF) { o++; continue; }
+        const m = buf[o + 1];
+        if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) return { h: buf.readUInt16BE(o + 5), w: buf.readUInt16BE(o + 7) };
+        if (m === 0xD8 || m === 0xD9 || (m >= 0xD0 && m <= 0xD7)) { o += 2; continue; }
+        o += 2 + buf.readUInt16BE(o + 2);
+      }
+      return null;
+    }
+    return null;
+  } catch (e) { return null; }
+}
+/* 抽 Office 内嵌图片（2026-09-04 用户：PPT 里的图也要能读）——ppt/word/xl 的 media 目录。
+   返回 [{name, ext, data:Buffer, w, h}]，按像素面积倒序（大图通常是图表/照片，小图多是图标）。
+   过滤：尺寸能读到就按像素过滤（宽或高 < minSide 视为图标跳过），读不到再退回字节数兜底。
+   opt: {max 默认10, minSide 默认48, minBytes 默认1200, maxBytes 默认8MB} */
+function extractOfficeImages(buf, opt) {
+  opt = opt || {};
+  const max = opt.max || 10, minSide = opt.minSide == null ? 48 : opt.minSide, minB = opt.minBytes == null ? 1200 : opt.minBytes, maxB = opt.maxBytes || 8 * 1024 * 1024;
+  try {
+    const zlib = require('zlib');
+    const out = [];
+    let i = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    if (i < 0) return [];
+    const cdOff = buf.readUInt32LE(i + 16), cdN = buf.readUInt16LE(i + 10);
+    let o = cdOff;
+    for (let k = 0; k < cdN; k++) {
+      if (buf.readUInt32LE(o) !== 0x02014b50) break;
+      const method = buf.readUInt16LE(o + 10), csize = buf.readUInt32LE(o + 20);
+      const nlen = buf.readUInt16LE(o + 28), elen = buf.readUInt16LE(o + 30), clen = buf.readUInt16LE(o + 32);
+      const lho = buf.readUInt32LE(o + 42);
+      const nm = buf.toString('utf8', o + 46, o + 46 + nlen);
+      const em = nm.match(/^(?:ppt|word|xl)\/media\/[^/]+\.(png|jpe?g|gif|bmp|webp)$/i);
+      if (em && csize <= maxB) {
+        const lnlen = buf.readUInt16LE(lho + 26), lelen = buf.readUInt16LE(lho + 28);
+        const dstart = lho + 30 + lnlen + lelen;
+        const raw = buf.slice(dstart, dstart + csize);
+        try {
+          const data = method === 8 ? zlib.inflateRawSync(raw) : raw;
+          if (data.length > maxB) continue;
+          const ext = em[1].toLowerCase();
+          const sz = imageSize(data, ext);
+          // 尺寸读得到：宽或高任一 < minSide 视为图标跳过；读不到(webp 等)：退回字节数兜底
+          if (sz) { if (sz.w < minSide || sz.h < minSide) continue; }
+          else if (data.length < minB) continue;
+          out.push({ name: nm.replace(/^.*\//, ''), ext, data, w: sz ? sz.w : 0, h: sz ? sz.h : 0 });
+        } catch (e) {}
+      }
+      o += 46 + nlen + elen + clen;
+    }
+    out.sort((a, b) => (b.w * b.h || b.data.length) - (a.w * a.h || a.data.length));
+    return out.slice(0, max);
+  } catch (e) { return []; }
+}
+const IMG_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp' };
+function imageDataUrl(img) { return 'data:' + (IMG_MIME[img.ext] || 'image/png') + ';base64,' + img.data.toString('base64'); }
+module.exports = { extractOfficeText, extractOfficeImages, imageDataUrl, imageSize };

@@ -35,7 +35,7 @@
           msgs: s.msgs.filter(m => m.role !== 'approve').slice(-200),
           files: s.files.map(f => f.kind === 'image'
             ? { name: f.name, kind: 'image', content: '', dataUrl: '' }   // 图片重启后需重传
-            : { name: f.name, content: f.content, srcPath: f.srcPath || '' }),
+            : { name: f.name, content: f.content, srcPath: f.srcPath || '', docId: f.docId || '', totalLines: f.totalLines || 0, kind: f.kind || undefined, imagesDone: f.imagesDone || false }),   // 内嵌图 dataUrl 不落盘（大；转述已并入 content）
           pendingTpl: null,   // 转换半成品含整个 doc(可能内嵌图片 dataUrl),不落盘——重启后重新转换即可
         }));
         let json = JSON.stringify({ seq: AC.seq, cur: AC.cur, sessions });
@@ -116,12 +116,15 @@
     if (r.error) { toastSafe('上传失败：' + r.error); return false; }
     if (r.kind === 'image') {
       s.files.push({ name: r.name, kind: 'image', dataUrl: r.dataUrl, content: '' });
-      s.msgs.push({ role: 'sys', content: '🖼 已附加图片「' + r.name + '」——发送提问时先由当前模型识图转述（需多模态模型，如 deepseek v4-pro），转述文本供全体专家引用。' });
+      s.msgs.push({ role: 'sys', content: '🖼 已附加图片「' + r.name + '」——发送提问时自动用视觉模型识图转述（DeepSeek 会自动切到视觉模型，无需手动换；也支持 Claude / GPT），转述文本供全体专家引用。' });
     } else {
-      s.files.push({ name: r.name, content: r.content, srcPath: r.srcPath || '', docId: r.docId || '', totalLines: r.totalLines || 0, size: r.size || 0, summary: r.summary || '' });
+      const embN = (r.embeddedImages && r.embeddedImages.length) || 0;
+      s.files.push({ name: r.name, content: r.content, srcPath: r.srcPath || '', docId: r.docId || '', totalLines: r.totalLines || 0, size: r.size || 0, summary: r.summary || '', embeddedImages: r.embeddedImages || null, kind: r.kind || undefined });
       const pptHint = /\.pptx$/i.test(r.name) ? ' 想把它做成可刷新的数据模板？直接说「把这个PPT做成模板」。' : '';
-      const big = r.truncated ? '（' + (r.totalLines || 0) + ' 行全文已建索引，AI 会按需搜索/读取，不受长度限制）' : '（' + Math.round(r.content.length / 1000) + 'K 字符）';
-      s.msgs.push({ role: 'sys', content: '📎 已附加「' + r.name + '」' + big + (r.summary ? ' 结构：' + r.summary.slice(0, 160) : '') + '——本会话后续提问都能引用它。' + pptHint });
+      const big = r.kind === 'table' ? '（' + (r.totalLines || 0) + ' 行 × 表；AI 用大表工具直接算，不受行数限制）'
+        : r.truncated ? '（' + (r.totalLines || 0) + ' 行全文已建索引，AI 会按需搜索/读取，不受长度限制）' : '（' + Math.round((r.content || '').length / 1000) + 'K 字符）';
+      const embHint = embN ? ' 含 ' + embN + ' 张内嵌图，提问时会自动识图并入内容。' : '';
+      s.msgs.push({ role: 'sys', content: '📎 已附加「' + r.name + '」' + big + (r.summary ? ' 结构：' + r.summary.slice(0, 160) : '') + '——本会话后续提问都能引用它。' + pptHint + embHint });
     }
     renderChat(); renderTopbar();
     persist();
@@ -332,21 +335,37 @@
     };
     try {
       const deps = window.AIPanel.makeOrchDeps(c, onProg);
-      // 图片附件：先经当前模型识图转述成文本（缓存进 f.content，同图不重复转述），主链保持纯文本
+      // 识图：统一走「能看图」的端点（DeepSeek 视觉模型 / 或用户已选的 Claude、GPT），与主对话模型解耦。
+      // 直接上传的图片 + PPT/Word 里的内嵌图都转述成文本并入正文；同图缓存不重复转述。
+      const visEndp = (deps.visionEndpoint && deps.visionEndpoint()) || null;
+      const VIS_SYS = '你是图片转述员：把图片里的全部信息如实转成文本供数据分析——表格逐格转写(markdown表格)，数字精确抄录，文字全文抄录，图表说明坐标轴/系列/数量级与趋势与各数据点数值。不要评论，不要遗漏任何数字。';
+      const transcribe = async (dataUrl, label) => {
+        if (!visEndp) return { error: '当前没有可用的识图模型：请在设置里填 DeepSeek Key（会自动用其视觉模型），或切换到 Claude / GPT' };
+        return deps.chat({ forceEndpoint: visEndp, system: VIS_SYS, maxTokens: 3000,
+          messages: [{ role: 'user', content: [{ type: 'text', text: '请完整转述这张图片（' + label + '）的内容：' }, { type: 'image_url', image_url: { url: dataUrl } }] }] });
+      };
+      const flow0 = (t) => { const ss0 = AC.sessions.find(x => x.id === sid); if (ss0) { ss0.flowLive.push(t); if (AC.cur === sid) renderChat(); } };
       for (const f of s.files) {
-        if (f.kind !== 'image' || f.content) continue;
-        const ss0 = AC.sessions.find(x => x.id === sid);
-        if (ss0) { ss0.flowLive.push('🖼 识图转述「' + f.name + '」…'); if (AC.cur === sid) renderChat(); }
-        const vr = await deps.chat({
-          system: '你是图片转述员：把图片里的全部信息如实转成文本供数据分析——表格逐格转写(markdown表格)，数字精确抄录，文字全文抄录，图表说明坐标轴/系列/数量级与趋势。不要评论，不要遗漏数字。',
-          messages: [{ role: 'user', content: [
-            { type: 'text', text: '请完整转述这张图片的内容：' },
-            { type: 'image_url', image_url: { url: f.dataUrl } },
-          ] }],
-          maxTokens: 2000,
-        });
-        if (vr && !vr.error && String(vr.content || '').trim()) f.content = '（以下为图片「' + f.name + '」的AI转述）\n' + vr.content;
-        else f.content = '（图片「' + f.name + '」转述失败：' + ((vr && vr.error) || '当前模型可能不支持图片输入，请切换多模态模型后重传') + '）';
+        // ① 直接上传的图片
+        if (f.kind === 'image' && !f.content) {
+          flow0('🖼 识图转述「' + f.name + '」' + (visEndp ? '（' + visEndp.label + '）' : '') + '…');
+          const vr = await transcribe(f.dataUrl, f.name);
+          f.content = (vr && !vr.error && String(vr.content || '').trim())
+            ? '（以下为图片「' + f.name + '」的AI转述）\n' + vr.content
+            : '（图片「' + f.name + '」转述失败：' + ((vr && vr.error) || '模型没返回内容，可能不支持图片，请在设置填 DeepSeek Key 或换 Claude/GPT') + '）';
+        }
+        // ② PPT/Word 内嵌图（上传时抽出，逐张转述后追加到该文档正文，只做一次）
+        if (f.embeddedImages && f.embeddedImages.length && !f.imagesDone) {
+          const parts = [];
+          for (let i = 0; i < f.embeddedImages.length; i++) {
+            const im = f.embeddedImages[i];
+            flow0('🖼 转述「' + f.name + '」内嵌图 ' + (i + 1) + '/' + f.embeddedImages.length + '…');
+            const vr = await transcribe(im.dataUrl, f.name + ' 图' + (i + 1));
+            if (vr && !vr.error && String(vr.content || '').trim()) parts.push('［' + f.name + ' 内嵌图' + (i + 1) + '（' + im.name + '）］\n' + vr.content);
+          }
+          if (parts.length) f.content = String(f.content || '') + '\n\n【本文件内嵌图片的AI转述】\n' + parts.join('\n\n');
+          f.imagesDone = true;
+        }
       }
       // 文档重组装（图片转述后 content 才就位）
       if (s.files.length) {
@@ -365,7 +384,9 @@
         }
       }
       try { window.AgentBoard && window.AgentBoard.feed({ type: 'ask', q }); } catch (e) {}
-      const out = await window.AIOrch.orchestrate(orchQ, null, deps, { mode: forceTasks ? 'deep' : (force && force.length > 1 ? 'deep' : 'fast'), forceAgents: force, forceTasks });
+      // 上传文档/图片转述正文进溯源语料——文档里的数字（日期、目标台数等）是合法出处，别被门禁抹成「(未取到)」
+      const provCorpus = s.files.length ? s.files.map(f => f.content || '').filter(Boolean).join('\n').slice(0, 200000) : '';
+      const out = await window.AIOrch.orchestrate(orchQ, null, deps, { mode: forceTasks ? 'deep' : (force && force.length > 1 ? 'deep' : 'fast'), forceAgents: force, forceTasks, provCorpus });
       try { window.AgentBoard && window.AgentBoard.feed({ type: 'done' }); } catch (e) {}
       const ss = AC.sessions.find(x => x.id === sid); if (!ss) return;
       ss.msgs.push({ role: 'ai', content: out.answer || '(空回复)', flow: ss.flowLive.slice() });

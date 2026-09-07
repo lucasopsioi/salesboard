@@ -679,7 +679,14 @@ table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-sp
 .fc-table .fz2{left:150px;min-width:130px}
 .fc-table .fz3{left:280px;min-width:90px}
 .fc-table .fz4{left:370px;min-width:90px}
-.fc-table .fz5{left:460px;min-width:90px;box-shadow:1px 0 0 var(--c-line)}
+.fc-table .fz5{left:460px;min-width:90px}
+.fc-table .fz6{left:550px;min-width:52px;box-shadow:1px 0 0 var(--c-line);font-size:11px;font-weight:600;color:var(--ink2);text-align:center}
+/* 四行一组：SI/SO 可输入，INV/DOS 是算出来的 —— 用底色区分「我填的」和「算出来的」 */
+.fc-table td.met-si,.fc-table td.met-so{color:var(--c-brand)}
+.fc-table td.met-inv,.fc-table td.met-dos{color:var(--ink3)}
+.fc-table tr.fc-r-dos td{border-bottom:2px solid var(--c-line)}
+.fc-table td.inv{color:var(--ink2);background:var(--c-table-zebra)}
+.fc-table tr.fc-r-inv td.num,.fc-table tr.fc-r-dos td.num{background:var(--c-table-zebra)}
 .fc-table td.dim{color:var(--ink3)}
 .fc-exp{display:inline-block;width:14px;color:var(--ink3)}
 .fc-prod td{font-weight:600}

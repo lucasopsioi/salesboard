@@ -198,47 +198,94 @@ function fcCountryOpts() {
   try { const o = (state.filterOpts && state.filterOpts.country) || []; return o.slice(0, 200); } catch (e) { return []; }
 }
 
+/* 表体：每个产品 4 行 —— SI / SO / INV / DOS，期次做列（用户 2026-09-07：
+   「每个产品四行，一眼能看到 SISOINVDOS，输入 SI 或 SO 时能看到 INV 在变、DOS 也在变」）。
+   左侧 5 列用 rowspan=4 跨这四行、保持冻结；第 6 列是指标名。
+   SI/SO 可输入；INV/DOS 是算出来的，带 data-cell 便于原地刷新（不整表重渲，输入焦点不丢）。 */
+const FC_ROWS = [['si', 'SI'], ['so', 'SO'], ['inv', 'INV'], ['dos', 'DOS']];
+
+function fcCellId(key, i, metric) { return key + '@@' + i + '@@' + metric; }
+
+function fcBlock(row, calc, isModel) {
+  // row: 产品或型号；calc: 该行各期 [{si,so,inv,dos}]
+  const nP = FC.periods.length;
+  let h = '';
+  FC_ROWS.forEach(([m, lab], ri) => {
+    h += '<tr class="' + (isModel ? 'fc-model' : 'fc-prod') + ' fc-r-' + m + '" data-k="' + fcEsc(row.key) + '" data-m="' + m + '">';
+    if (ri === 0) {
+      h += '<td class="fz fz1" rowspan="4">' + (isModel ? '' : '<span class="fc-exp">' + (row.expanded ? '▾' : '▸') + '</span>') + fcEsc(isModel ? '' : row.product) + '</td>'
+        + '<td class="fz fz2" rowspan="4">' + fcEsc(isModel ? row.model : '（全部型号）') + '</td>'
+        + '<td class="fz fz3 dim" rowspan="4">' + fcEsc(row.config || '—') + '</td>'
+        + '<td class="fz fz4 num" rowspan="4">' + fcNum(row.daily, 1) + '</td>'
+        + '<td class="fz fz5 num" rowspan="4">' + fcNum(row.weekly, 0) + '</td>';
+    }
+    h += '<td class="fz fz6 met met-' + m + '">' + lab + '</td>';
+    for (let i = 0; i < nP; i++) {
+      const c = calc[i] || {};
+      if (m === 'si' || m === 'so') {
+        const ed = (FC.edits[row.key] || {})[i] || {};
+        const val = (ed[m] != null) ? ed[m] : Math.round(c[m] || 0);
+        h += '<td class="num"><input class="fc-in fc-' + m + '" data-k="' + fcEsc(row.key) + '" data-i="' + i + '" data-f="' + m + '" value="' + val + '"></td>';
+      } else if (m === 'inv') {
+        h += '<td class="num inv" id="' + fcEsc(fcCellId(row.key, i, 'inv')) + '">' + fcNum(c.inv) + '</td>';
+      } else {
+        h += '<td class="num ' + fcDosCls(c.dos) + '" id="' + fcEsc(fcCellId(row.key, i, 'dos')) + '">' + fcDos(c.dos) + '</td>';
+      }
+    }
+    h += '</tr>';
+  });
+  return h;
+}
+
 function fcTable() {
   const P = FC.periods;
   let h = '<div class="fc-scroll"><table class="fc-table"><thead><tr>'
     + '<th class="fz fz1">产品名</th><th class="fz fz2">产品型号</th><th class="fz fz3">产品配置</th>'
-    + '<th class="fz fz4 num">近28天日销</th><th class="fz fz5 num">平均周销</th>';
-  P.forEach(p => { h += '<th class="num per" colspan="3">' + fcEsc(p.label) + '</th>'; });
-  h += '</tr><tr>'
-    + '<th class="fz fz1 sub"></th><th class="fz fz2 sub"></th><th class="fz fz3 sub"></th><th class="fz fz4 sub"></th><th class="fz fz5 sub"></th>';
-  P.forEach(() => { h += '<th class="num sub">SO</th><th class="num sub">SI</th><th class="num sub">DOS</th>'; });
+    + '<th class="fz fz4 num">近28天日销</th><th class="fz fz5 num">平均周销</th><th class="fz fz6">指标</th>';
+  P.forEach(p => { h += '<th class="num per">' + fcEsc(p.label) + '</th>'; });
   h += '</tr></thead><tbody>';
   FC.rows.forEach(p => {
     const calc = fcComputeProduct(p);
-    h += '<tr class="fc-prod" data-k="' + fcEsc(p.key) + '">'
-      + '<td class="fz fz1"><span class="fc-exp">' + (p.expanded ? '▾' : '▸') + '</span>' + fcEsc(p.product) + '</td>'
-      + '<td class="fz fz2 dim">' + fcEsc(p.model) + '</td><td class="fz fz3 dim">' + fcEsc(p.config) + '</td>'
-      + '<td class="fz fz4 num">' + fcNum(p.daily, 1) + '</td><td class="fz fz5 num">' + fcNum(p.weekly, 0) + '</td>';
-    calc.product.forEach((c, i) => {
-      const ed = (FC.edits[p.key] || {})[i] || {};
-      h += '<td class="num"><input class="fc-in" data-k="' + fcEsc(p.key) + '" data-i="' + i + '" data-f="so" value="' + (ed.so != null ? ed.so : c.so) + '"></td>'
-        + '<td class="num dim">' + fcNum(c.si) + '</td>'
-        + '<td class="num ' + fcDosCls(c.dos) + '">' + fcDos(c.dos) + '</td>';
-    });
-    h += '</tr>';
-    if (p.expanded) (p.kids || []).forEach(k => {
-      const rows = calc.byModel[k.key] || [];
-      h += '<tr class="fc-model" data-k="' + fcEsc(k.key) + '">'
-        + '<td class="fz fz1 dim"></td><td class="fz fz2">' + fcEsc(k.model) + '</td><td class="fz fz3 dim">' + fcEsc(k.config) + '</td>'
-        + '<td class="fz fz4 num">' + fcNum(k.daily, 1) + '</td><td class="fz fz5 num">' + fcNum(k.weekly, 0) + '</td>';
-      rows.forEach((c, i) => {
-        const ed = (FC.edits[k.key] || {})[i] || {};
-        h += '<td class="num"><input class="fc-in" data-k="' + fcEsc(k.key) + '" data-i="' + i + '" data-f="so" value="' + (ed.so != null ? ed.so : c.so) + '"></td>'
-          + '<td class="num"><input class="fc-in si" data-k="' + fcEsc(k.key) + '" data-i="' + i + '" data-f="si" value="' + (ed.si != null ? ed.si : c.si) + '"></td>'
-          + '<td class="num ' + fcDosCls(c.dos) + '">' + fcDos(c.dos) + '</td>';
-      });
-      h += '</tr>';
-    });
+    h += fcBlock(p, calc.product, false);
+    if (p.expanded) (p.kids || []).forEach(k => { h += fcBlock(k, calc.byModel[k.key] || [], true); });
   });
   h += '</tbody></table></div>';
   return h;
 }
 function fcDosCls(d) { if (d == null) return 'dim'; if (d > 120) return 'dos-hi'; if (d < 14) return 'dos-lo'; return ''; }
+
+/* 原地刷新一个产品块（产品 4 行 + 其型号 4 行）的 INV / DOS 单元格。
+   只改文本、不重建 DOM —— 这样一边打字一边能看到 INV/DOS 变，输入框焦点不会丢。 */
+function fcRefreshProduct(p) {
+  const calc = fcComputeProduct(p);
+  const put = (key, rows) => {
+    rows.forEach((c, i) => {
+      const iv = document.getElementById(fcCellId(key, i, 'inv'));
+      if (iv) iv.textContent = fcNum(c.inv);
+      const dv = document.getElementById(fcCellId(key, i, 'dos'));
+      if (dv) { dv.textContent = fcDos(c.dos); dv.className = 'num ' + fcDosCls(c.dos); }
+    });
+  };
+  put(p.key, calc.product);
+  (p.kids || []).forEach(k => {
+    put(k.key, calc.byModel[k.key] || []);
+    // 产品级 SO 改动会重新分摊到型号 → 型号的 SI/SO 输入框也要跟着更新（除非用户手填过）
+    (calc.byModel[k.key] || []).forEach((c, i) => {
+      ['si', 'so'].forEach(f => {
+        const ke = (FC.edits[k.key] || {})[i] || {};
+        if (ke[f] != null) return;                       // 手填优先，不覆盖
+        const inp = document.querySelector('input.fc-in[data-k="' + CSS.escape(k.key) + '"][data-i="' + i + '"][data-f="' + f + '"]');
+        if (inp && document.activeElement !== inp) inp.value = Math.round(c[f] || 0);
+      });
+    });
+  });
+}
+
+function fcOwnerOf(key) {
+  const p = FC.rows.find(x => x.key === key);
+  if (p) return p;
+  return FC.rows.find(x => (x.kids || []).some(k => k.key === key)) || null;
+}
 
 function fcBind() {
   const host = document.getElementById('view-forecast'); if (!host) return;
@@ -248,17 +295,22 @@ function fcBind() {
   const c = host.querySelector('#fcCountry'); if (c) c.onchange = () => { FC.country = c.value; fcLoad(); };
   const rl = host.querySelector('#fcReload'); if (rl) rl.onclick = fcLoad;
   const cl = host.querySelector('#fcClear'); if (cl) cl.onclick = () => { FC.edits = {}; fcRender(); };
-  host.querySelectorAll('tr.fc-prod .fz1').forEach(td => {
+  // 展开/收起：点产品名那一格
+  host.querySelectorAll('tr.fc-prod td.fz1').forEach(td => {
     td.onclick = () => { const k = td.parentNode.dataset.k; const p = FC.rows.find(x => x.key === k); if (p) { p.expanded = !p.expanded; fcRender(); } };
   });
+  // 输入：input 事件即时算（边打边看），blur/change 时再整表重渲一次让分摊完全落定
   host.querySelectorAll('input.fc-in').forEach(inp => {
-    inp.onchange = () => {
+    const apply = () => {
       const k = inp.dataset.k, i = +inp.dataset.i, fld = inp.dataset.f;
       const v = inp.value.trim();
       FC.edits[k] = FC.edits[k] || {}; FC.edits[k][i] = FC.edits[k][i] || {};
       if (v === '') delete FC.edits[k][i][fld]; else FC.edits[k][i][fld] = Math.max(0, Math.round(+v || 0));
-      fcRender();
+      const owner = fcOwnerOf(k);
+      if (owner) fcRefreshProduct(owner);
     };
+    inp.addEventListener('input', apply);
+    inp.addEventListener('change', apply);
   });
 }
 

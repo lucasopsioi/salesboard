@@ -22,10 +22,12 @@ const eng=new E.Engine(fs.mkdtempSync(path.join(os.tmpdir(),'finu-')));
 eng._buildFin(rows);
 ok('hasFin', eng.hasFin);
 
-// 不传 finUnits(默认不缩放) -> 复现 ×1e6 bug: 20,000,000 / 25 = 800000
+// 不传 finUnits(默认不缩放) -> 实际 20,000,000 USD 对 BP 25 MUSD，未归一时比值 800000(=8000万%)。
+// 2026-09-07 起分母守卫会判掉这种塌缩比值，返回 null(界面显「—」)——单位没对齐时**明确报不出来**，
+// 而不是照直显示一个 8000 万% 的假达成率。守卫存在与否，都证明「不传 finUnits 就是错的」。
 const bad=eng.financeBPBoard({});
 const badTot=(bad.revByFamily||[]).find(x=>x.key==='total');
-ok('默认(无单位)复现×1e6 bug(=800000)', badTot && Math.round(badTot.attain)===800000, {attain:badTot&&badTot.attain});
+ok('默认(无单位)时达成率被守卫判掉为 null(不再显示 8000万%)', badTot && badTot.attain===null, {attain:badTot&&badTot.attain});
 
 // 传 finUnits 实际=USD / BP=MUSD -> 归一后达成率 = 0.8
 const U={finUnits:{actual:'USD',forecast:'MUSD',bp:'MUSD'}};

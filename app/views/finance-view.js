@@ -654,12 +654,17 @@ function finExpBlockAoa(firstLabel, block, colKeys, isSeries, colSrc, secId){
   let rows=(block&&block.rows||[]).slice();
   if(isSeries && typeof faSortSeries==='function') rows=faSortSeries(rows);
   rows=finRowsPipeline(rows,secId);   // 导出与界面同筛同序(用户 2026-08-24:所见即所出)
-  const aoa=[head]; const dataRowIdxs=[];
-  if(block&&block.total){ dataRowIdxs.push(aoa.length); aoa.push(line(block.total,'合计')); }
-  rows.forEach(o=>{ dataRowIdxs.push(aoa.length); aoa.push(line(o)); });
+  /* PPT 是静态图，必须「所见即所出」：复用各列自带的屏幕格式化器(finFmtAmt/finRate/finFmtNsip…)，
+     于是单位(MUSD/千/USD)、小数位 fin.dp、NSIP 恒 USD、null 显「—」全部与看板一致。
+     原 aoa 仍写引擎原值——Excel 那条路要靠它挂活公式，不能动。(2026-09-07 用户：导出PPT还是明细数据) */
+  const plain=h=>String(h==null?'':h).replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();
+  const textLine=(o,name)=>[name!=null?name:o.key].concat(cols.map(c=>c.fmt?plain(c.fmt(o)):plain(o[c.key])));
+  const aoa=[head]; const aoaText=[head.slice()]; const dataRowIdxs=[];
+  if(block&&block.total){ dataRowIdxs.push(aoa.length); aoa.push(line(block.total,'合计')); aoaText.push(textLine(block.total,'合计')); }
+  rows.forEach(o=>{ dataRowIdxs.push(aoa.length); aoa.push(line(o)); aoaText.push(textLine(o)); });
   // 百分号列的 0-based 列号(含名称列偏移 +1)。
   const pctCols=cols.map((c,i)=>FIN_EXP_PCT_KEYS[c.key]?i+1:-1).filter(i=>i>=0);
-  return {aoa, dataRowIdxs, pctCols, colCount:cols.length+1, colKeys:cols.map(c=>c.key)};
+  return {aoa, aoaText, dataRowIdxs, pctCols, colCount:cols.length+1, colKeys:cols.map(c=>c.key)};
 }
 // 自定义看板块(metrics 动态)→ {aoa, pctCols}。列=行维度 + 各选中指标(中文label);
 // 比率类指标(gmr/bpAttain/fcAttain)写原始分数 + 百分号格式,金额/数量原值。
@@ -668,11 +673,19 @@ function finExpCustomAoa(dimLabel, metrics, r){
   const head=[dimLabel].concat(metrics.map(m=>FIN_CUST_METRIC_LABEL[m]||m));
   const nz=v=>(v==null||!isFinite(v))?'':v;
   const line=(o,name)=>[name!=null?name:o.key].concat(metrics.map(m=>nz(o[m])));
-  const aoa=[head]; const dataRowIdxs=[];
-  if(r&&r.total){ dataRowIdxs.push(aoa.length); aoa.push(line(r.total,'合计')); }
-  (r&&r.rows||[]).forEach(o=>{ dataRowIdxs.push(aoa.length); aoa.push(line(o)); });
+  // PPT 用的屏幕格式：比率→fin.dp 百分比；NSIP→恒 USD；数量→台；其余金额→按 fin.unit 换算
+  const QTY={sellIn:1,sellOut:1};
+  const cellText=(o,m)=>{ const v=o[m];
+    if(PCT[m]) return String(finRate(v)).replace(/<[^>]*>/g,'');
+    if(m==='nsip') return String(finFmtNsip(v)).replace(/<[^>]*>/g,'');
+    if(QTY[m]) return String(finFmtQty(v)).replace(/<[^>]*>/g,'');
+    return String(finFmtAmt(v)).replace(/<[^>]*>/g,''); };
+  const textLine=(o,name)=>[name!=null?name:o.key].concat(metrics.map(m=>cellText(o,m)));
+  const aoa=[head]; const aoaText=[head.slice()]; const dataRowIdxs=[];
+  if(r&&r.total){ dataRowIdxs.push(aoa.length); aoa.push(line(r.total,'合计')); aoaText.push(textLine(r.total,'合计')); }
+  (r&&r.rows||[]).forEach(o=>{ dataRowIdxs.push(aoa.length); aoa.push(line(o)); aoaText.push(textLine(o)); });
   const pctCols=metrics.map((m,i)=>PCT[m]?i+1:-1).filter(i=>i>=0);
-  return {aoa, dataRowIdxs, pctCols};
+  return {aoa, aoaText, dataRowIdxs, pctCols};
 }
 // 总看板(5 张指标卡)→ 小表 AOA + 活公式计划。renderOverview 不是 fa-table,故单独构建。
 // 列(8)：指标 | 去年 | 实际 | 同比 | 全年BP | BP完成率 | 全年预测 | 预测完成率。
@@ -818,9 +831,11 @@ async function exportFinDashboardPpt(){
     const s=pptx.addSlide();
     s.addText(title,{x:0.35,y:0.22,w:12.6,h:0.4,fontFace:'微软雅黑',fontSize:16,bold:true,color:'C7000B'});
     const pct=new Set(spec.pctCols||[]);
-    const data=spec.aoa.map((row,ri)=>row.map((v,ci)=>{
+    const src=spec.aoaText||spec.aoa;           // aoaText 已是屏幕文本(带单位/小数位)，直接用
+    const asText=!!spec.aoaText;
+    const data=src.map((row,ri)=>row.map((v,ci)=>{
       if(ri===0) return cl(v,{bold:true,color:'FFFFFF',fill:{color:'C7000B'},align:ci===0?'left':'center',fontSize:7.5});
-      const txt=ci===0?String(v):(pct.has(ci)?fmtPct(v):fmtNum(v));
+      const txt=(ci===0||asText)?String(v==null?'':v):(pct.has(ci)?fmtPct(v):fmtNum(v));
       return cl(txt,{align:ci===0?'left':'center'});
     }));
     s.addTable(data,{x:0.35,y:0.85,w:12.63,border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true,valign:'middle'});
@@ -883,9 +898,11 @@ function finPptAddTable(pptx, title, spec, pctCells){
   const fmtNum=v=>(v===''||v==null)?'':(typeof v==='number'?Math.round(v).toLocaleString('en-US'):String(v));
   const pct=new Set(spec.pctCols||[]);
   const isPct=(ri,ci)=>pctCells?pctCells.has(ri+','+ci):pct.has(ci);
-  const rows=spec.aoa.map((row,ri)=>row.map((v,ci)=>{
+  // 单表导出同样「所见即所出」：优先用带屏幕格式(单位/小数位)的 aoaText
+  const src=spec.aoaText||spec.aoa; const asText=!!spec.aoaText;
+  const rows=src.map((row,ri)=>row.map((v,ci)=>{
     if(ri===0) return cl(v,{bold:true,color:'FFFFFF',fill:{color:'C7000B'},align:ci===0?'left':'center',fontSize:7.5});
-    const txt=ci===0?String(v):(isPct(ri,ci)?fmtPct(v):fmtNum(v));
+    const txt=(ci===0||asText)?String(v==null?'':v):(isPct(ri,ci)?fmtPct(v):fmtNum(v));
     return cl(txt,{align:ci===0?'left':'center'});
   }));
   s.addTable(rows,{x:0.3,y:0.9,w:12.7,border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true,valign:'middle'});

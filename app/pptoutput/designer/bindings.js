@@ -140,7 +140,7 @@
         sellOut: { value: t.cumCur || 0, yoy: (t.yoy == null ? null : t.yoy) },
         sellIn:  { value: t.siCur || 0,  yoy: (t.siYoy == null ? null : t.siYoy) },
         inv:     { value: t.inv || 0,    yoy: null },
-        dos:     { value: t.dos || 0,    yoy: null }
+        dos:     { value: (t.dos == null ? null : t.dos), yoy: null }   // 算不出的 DOS 保持 null(上层显 '-')；||0 会印成「0 天」，读起来像马上断货
       };
       const r = M[measure] || M.sellOut;
       return { kind: 'value', value: r.value, yoy: r.yoy };

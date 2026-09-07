@@ -8,6 +8,19 @@
 const C = require('./engine-core');
 /* 月份参数容错(2026-08-28 评测R10):AI 常把 fromM/toM 传成 YYYYMM(202401)——
    旧逻辑 inRange 恒 false → 实际全 0 → "BP达成率0.00%" 这类灾难性错答。归一为 1..12。 */
+/* 达成率的分母必须「站得住」（2026-09-07 复盘：经营分析首屏出现 BP完成率 51799351.9%，
+   还标成绿色像超额完成 51 万倍）。原判据 `a.bp ? ... : null` 只挡住 bp 恰好为 0/null，
+   而演示/缺失数据里 bp 是个约等于 0 的极小非零值（0.29 USD 对 15M 收入），相除得到有限但荒唐的数，
+   isFinite 也拦不住。这个值还会流进 AI 回答与导出，所以必须在源头判掉，不能只改显示。
+   判据用**相对量**：分母不足分子的千分之一 ⇒ 达成率无意义，按「没有 BP」处理返回 null（下游一律显「—」）。
+   注意：这不是改口径，是拒绝报一个没有意义的比值——与全局口径 6「缺数不补零」同规。 */
+function attainRate(num, den){
+  if(den==null || num==null || !isFinite(den) || !isFinite(num)) return null;
+  if(den===0) return null;
+  if(Math.abs(den) < Math.abs(num)/1000) return null;   // 分母塌缩：比率会突破 100000%，必是数据缺失/单位错
+  const r = num/den;
+  return isFinite(r) ? r : null;
+}
 function normM(v){ let n = +v; if(!isFinite(n) || n<=0) return null; if(n>=190001) n = n%100; if(n<1||n>12) return null; return Math.round(n); }
 const { isSubtotal, finUnitScale, isQtyMetric } = C;
 
@@ -69,7 +82,7 @@ C.Engine.prototype.finance = function(p){
       }
     }
     const mk=o=>({actual:o.actual,forecast:o.forecast,prev:o.prev,
-      attain:o.forecast!==0?o.actual/o.forecast:null, yoy:o.prev!==0?(o.actual-o.prev)/o.prev:null});
+      attain:attainRate(o.actual,o.forecast), yoy:o.prev!==0?(o.actual-o.prev)/o.prev:null});
     const rows=[]; G.forEach((o,gc)=>{ const m=mk(o); m.key=gDict[gc]; rows.push(m); });
     rows.sort((a,b)=>b.actual-a.actual);
     const total=mk(tot); total.key='合计';
@@ -182,11 +195,11 @@ C.Engine.prototype.financeAchieve = function(p){
         nsip25, nsip26, nsipYoy:nsip25?(nsip26-nsip25)/nsip25:null,
         // 区间预测 + 预测口径派生
         revFc:a.revFc, gmFc:a.gmFc, siFc:a.siFc,
-        attainFc:a.rfc?a.revFc/a.rfc:null,                 // 区间累计预测收入 ÷ 全年预测收入
+        attainFc:attainRate(a.revFc,a.rfc),                 // 区间累计预测收入 ÷ 全年预测收入
         nsipFc:a.siFc?a.revFc/a.siFc:null,                 // 预测口径 NSIP
         gmrFc:a.revFc?a.gmFc/a.revFc:null,                 // 预测口径销毛率
         fcRev:a.rfc,                                       // 全年预测收入(显式)
-        fc:a.rfc, attain:a.rfc?a.ra26/a.rfc:null };        // 既有字段保留
+        fc:a.rfc, attain:attainRate(a.ra26,a.rfc) };        // 既有字段保留
     };
     const sumNodes=arr=>{ const t=node(); arr.forEach(n=>{t.ra25+=n.ra25;t.ra26+=n.ra26;t.rfc+=n.rfc;t.ga25+=n.ga25;t.ga26+=n.ga26;t.si25+=n.si25;t.si26+=n.si26;t.revFc+=n.revFc;t.gmFc+=n.gmFc;t.siFc+=n.siFc;}); return t; };
     const reps=[...acc.keys()];
@@ -305,8 +318,8 @@ C.Engine.prototype.financeAchieve = function(p){
         gm25:a.ga25, gm26:a.ga26, gmYoy:a.ga25?(a.ga26-a.ga25)/a.ga25:null,
         gmr25:a.ra25?a.ga25/a.ra25:null, gmr26:a.ra26?a.ga26/a.ra26:null,
         nsip25, nsip26, nsipYoy:(nsip25!=null&&nsip26!=null)?(nsip26-nsip25):null,   // NSIP同比=绝对USD差(单价同比看产品结构升降)
-        bp:a.bp, bpAttain:a.bp?a.ra26/a.bp:null,
-        fc:a.fc, fcAttain:a.fc?a.ra26/a.fc:null };
+        bp:a.bp, bpAttain:attainRate(a.ra26,a.bp),
+        fc:a.fc, fcAttain:attainRate(a.ra26,a.fc) };
     };
     const sumNodes=arr=>{ const t=node(); arr.forEach(n=>{ t.ra25+=n.ra25;t.ra26+=n.ra26;t.ga25+=n.ga25;t.ga26+=n.ga26;t.si25+=n.si25;t.si26+=n.si26;t.fc+=n.fc;t.bp+=n.bp; }); return t; };
     const build=(acc,totKey)=>{
@@ -413,8 +426,8 @@ C.Engine.prototype.financeAchieve = function(p){
         gm25:a.ga25, gm26:a.ga26, gmYoy:a.ga25?(a.ga26-a.ga25)/a.ga25:null,
         gmr25:a.ra25?a.ga25/a.ra25:null, gmr26:a.ra26?a.ga26/a.ra26:null,
         nsip25, nsip26, nsipYoy:(nsip25!=null&&nsip26!=null)?(nsip26-nsip25):null,   // NSIP同比=绝对USD差(与产品板一致,非比率)
-        bp:a.bp, bpAttain:a.bp?a.ra26/a.bp:null,
-        fc:a.fc, fcAttain:a.fc?a.ra26/a.fc:null };
+        bp:a.bp, bpAttain:attainRate(a.ra26,a.bp),
+        fc:a.fc, fcAttain:attainRate(a.ra26,a.fc) };
     };
     const sumNodes=arr=>{ const t=node(); arr.forEach(n=>{ t.ra25+=n.ra25;t.ra26+=n.ra26;t.ga25+=n.ga25;t.ga26+=n.ga26;t.si25+=n.si25;t.si26+=n.si26;t.fc+=n.fc;t.bp+=n.bp; }); return t; };
     const build=(acc,totKey)=>{
@@ -565,7 +578,7 @@ C.Engine.prototype.financeAchieve = function(p){
     // total 的 PSI：整体 p 范围(_finProductScope) — 与 financeOverview 一致,稳健于 rep 名不匹配场景
     const totPsi = needPsiActual ? psiOf({reps:_globalScope.reps,families:_globalScope.families,series:_globalScope.series}) : null;
     // 派生：从汇总分量重算 ratio
-    const ratio=(a,b)=>b?a/b:null;
+    const ratio=(a,b)=>attainRate(a,b);   // 统一走分母守卫：分母塌缩时返回 null 而不是荒唐比值
     const valByBasis=(n,which)=>{
       if(which==='rev') return basis==='actual'?n.actRev:basis==='forecast'?n.fcRev:n.bpRev;
       if(which==='gm')  return basis==='actual'?n.actGm :basis==='forecast'?n.fcGm :n.bpGm;
@@ -636,11 +649,11 @@ C.Engine.prototype.financeBP = function(p){
       if(!lv1Sub.has(lc)) add(accLv1,lc,mn,fld,v);
     }
     const buildRows=(acc,dict)=>{ const rows=[];
-      acc.forEach((mmap,gc)=>{ const cells={}; metrics.forEach(mn=>{ const c=mmap.get(mn)||{actual:0,bp:0}; cells[mn]={actual:c.actual,bp:c.bp,attain:c.bp?c.actual/c.bp:null}; });
+      acc.forEach((mmap,gc)=>{ const cells={}; metrics.forEach(mn=>{ const c=mmap.get(mn)||{actual:0,bp:0}; cells[mn]={actual:c.actual,bp:c.bp,attain:attainRate(c.actual,c.bp)}; });
         rows.push({key:dict[gc],cells}); });
       return rows; };
     const repRows=buildRows(accRep,repDict), lv1Rows=buildRows(accLv1,lv1Dict);
-    const totalCells={}; metrics.forEach(mn=>{ let a=0,b=0; repRows.forEach(r=>{a+=r.cells[mn].actual;b+=r.cells[mn].bp;}); totalCells[mn]={actual:a,bp:b,attain:b?a/b:null}; });
+    const totalCells={}; metrics.forEach(mn=>{ let a=0,b=0; repRows.forEach(r=>{a+=r.cells[mn].actual;b+=r.cells[mn].bp;}); totalCells[mn]={actual:a,bp:b,attain:attainRate(a,b)}; });
     const primary=metrics[0]; const byA=(a,b)=>((b.cells[primary]?b.cells[primary].actual:0)-(a.cells[primary]?a.cells[primary].actual:0));
     repRows.sort(byA); lv1Rows.sort(byA);
     return { hasBP:true, curYear, cutoff, bpVersion, bpVersions:fm.bpVersions, metrics,
@@ -696,7 +709,7 @@ C.Engine.prototype.financeBPBoard = function(p){
       if(!repBad) get(accRep,rep)[fld]+=v;
       if(!repBad && !famBad) get(accCross,rep+SEP+fam)[fld]+=v;
     }
-    const attain=(a,b)=>b?a/b:null;
+    const attain=(a,b)=>attainRate(a,b);   // 统一走分母守卫
     const gmRate=(g,r)=>r?g/r:null;
     const ppDiff=(a,b)=>(a!=null&&b!=null)?a-b:null;
     // 收入达成行 + total
@@ -808,7 +821,7 @@ C.Engine.prototype.financeOverview = function(p){
     const psi=this._psiActual({year:curYear,fromM,toM,reps:scope.reps,families:scope.families,series:scope.series});
     // 派生工具
     const yoy=(a,pv)=>pv?(a-pv)/pv:null;
-    const ratio=(a,b)=>b?a/b:null;
+    const ratio=(a,b)=>attainRate(a,b);   // 统一走分母守卫：分母塌缩时返回 null 而不是荒唐比值
     const diff=(a,b)=>(a!=null&&b!=null)?a-b:null;
     const amtMetric=(a)=>{ const bpAttain=ratio(a.act,a.bp), fcAttain=ratio(a.act,a.fc);
       return {actual:a.act, prev:a.prev, yoy:yoy(a.act,a.prev), bp:a.bp, fc:a.fc, bpAttain, fcAttain}; };
@@ -947,3 +960,6 @@ C.Engine.prototype.financeHealth = function(){
   this._finHealthFor=F; this._finHealthCache=out;
   return out;
 };
+
+/* 供单测直接验证达成率分母守卫（本文件其余能力挂在 Engine.prototype 上，无需导出） */
+if (typeof module !== "undefined" && module.exports) module.exports.attainRate = attainRate;

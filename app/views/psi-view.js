@@ -368,7 +368,7 @@ async function doExportPPT(){
   closePreview();
   const res=state.lastQuery; if(!res||!res.buckets.length) return;
   const order=state.stackOrder, buckets=res.buckets, data=res.data, type=state.chartType;
-  const _div=unitInfo().div;   // 导出按所选单位换算数值(不带后缀)：万台→/10000、千台→/1000
+  const _div=state.metric==='dos'?1:unitInfo().div;   // 导出按所选单位换算(不带后缀)；DOS 是「天」不换算（同 exportXLSX）
   const val=(name,b)=>+((((data[name]&&data[name][b])||0))/_div).toFixed(_div===1?2:3);
   const pptx=new PptxGenJS(); pptx.defineLayout({name:'W',width:13.333,height:7.5}); pptx.layout='W';
   const RED='C7000B';
@@ -398,7 +398,7 @@ async function doExportPPT(){
   else if(type==='stackBar'){ ctype=pptx.ChartType.bar; opts=Object.assign({barDir:'col',barGrouping:'stacked',dataLabelColor:'FFFFFF'},common); }
   else if(type==='pctBar'){ ctype=pptx.ChartType.bar; opts=Object.assign({barDir:'col',barGrouping:'percentStacked',dataLabelColor:'FFFFFF',valAxisMaxVal:100},common); }
   else { ctype=pptx.ChartType.bar; opts=Object.assign({barDir:'col',barGrouping:'clustered'},common); }
-  if(bs.total){
+  if(bs.total && state.metric!=='dos'){   // DOS 不可相加：屏幕上的 ∑ 顶标已屏蔽，导出 PPT 这条路原来漏了
     // 总计：第二图层折线，无线无点、仅顶部标签，等价于手工"加总计列+无填充+调Y轴"
     const totOpts=Object.assign({},opts,{chartColors:['FFFFFF'],lineSize:0,lineDataSymbol:'none',lineSmooth:false,
       showValue:true,showLegend:true,dataLabelColor:lstyle.color?lstyle.color.replace('#',''):'1A1A1A',dataLabelPosition:'t'});
@@ -424,13 +424,23 @@ async function exportPNG(){
 async function exportXLSX(){
   const res=state.lastQuery; if(!res||!res.buckets.length){ toast('当前无数据可导出','err'); return; }
   const order=state.stackOrder, buckets=res.buckets, data=res.data;
-  const _div=unitInfo().div;   // 按所选单位换算(不带后缀)
+  /* 导出的两条口径纪律（2026-09-07 复盘，比图上的错更危险：xlsx 会脱离看板被转发，没有上下文纠正）：
+     ① DOS 是「天」不是「台」，不参与台数单位换算（否则 11 天 ÷10000 导出成 0.0011，说明页还标着「万台」）；
+     ② 合计行只对可加指标出：sell-in/sell-out 跨期累加合法；库存是时点快照 → 改出「区间末库存」；
+        DOS 是比率 → 填「—」（与看板上「DOS为比率,合计需按库存÷日均SO重算」同规）。只是不再输出不该存在的数，计算一行未改。 */
+  const _isDos=state.metric==='dos', _isInv=state.metric==='inv';
+  const _div=_isDos?1:unitInfo().div;   // 按所选单位换算(不带后缀)；DOS 恒为天
   const v=(s,b)=>+((((data[s]&&data[s][b])||0))/_div).toFixed(_div===1?2:3);
   const aoa=[['周期'].concat(order)];
   buckets.forEach(b=>aoa.push([b].concat(order.map(s=>v(s,b)))));
-  aoa.push(['合计'].concat(order.map(s=>+buckets.reduce((a,b)=>a+v(s,b),0).toFixed(_div===1?2:3))));
-  const unitTxt={one:'单台(原值)',k:'千台(已÷1000)',w:'万台(已÷10000)'}[state.unit]||'单台';
-  const guide=XLSX.utils.aoa_to_sheet([['Salesboard · PSI 数据导出'],[],['指标',METRIC_LABEL[state.metric]],['堆叠维度',DIM_LABEL[state.stackDim]],['粒度',{day:'日',week:'周',month:'月'}[state.gran]],['数据单位',unitTxt],['时间',(state.rangeFrom||state.from)+' ~ '+(state.rangeTo||state.to)],[],['做堆积面积图：选「数据」表全选 → 插入 → 面积图 → 堆积面积图']]);
+  const _sum=PsiChart.summaryRow(state.metric,order,buckets,v);   // 可加性规则收在核心里，有单测锁着
+  aoa.push([_sum.label].concat(_sum.cells.map(c=>typeof c==='number'?+c.toFixed(_div===1?2:3):c)));
+  const unitTxt=_isDos?'天(DOS 不做单位换算)':({one:'单台(原值)',k:'千台(已÷1000)',w:'万台(已÷10000)'}[state.unit]||'单台');
+  const guide=XLSX.utils.aoa_to_sheet([['Salesboard · PSI 数据导出'],[],['指标',METRIC_LABEL[state.metric]],['堆叠维度',DIM_LABEL[state.stackDim]],['粒度',{day:'日',week:'周',month:'月'}[state.gran]],['数据单位',unitTxt],['时间',(state.rangeFrom||state.from)+' ~ '+(state.rangeTo||state.to)],
+    ['合计口径', _isDos?'DOS 是比率，跨期/跨系列相加无意义，故合计填「—」；需要合计请按 库存÷日均SO 重算'
+      : _isInv?'库存是时点快照，跨期相加无意义，故末行给「区间末库存」而非累加'
+      : '销量可跨期累加，末行为区间合计'],[],
+    ['做堆积面积图：选「数据」表全选 → 插入 → 面积图 → 堆积面积图']]);
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'数据'); XLSX.utils.book_append_sheet(wb,guide,'使用说明');
   const b64=XLSX.write(wb,{bookType:'xlsx',type:'base64'});
   const fn='PSI_'+state.metric+'_'+todayStr()+'.xlsx';

@@ -218,6 +218,22 @@
     let timer = null;
     const fire = () => { clearTimeout(timer); timer = setTimeout(() => { if (o.onChange) o.onChange(serialize(editor)); }, 400); };
     editor.addEventListener('input', fire);
+    /* AI 生成（2026-09-07 用户：销售分析那句话让模型按我的表述方式写）。
+       喂给模型的是本料架芯片已解析好的真实数值，模型只组织语言、不碰计算；
+       回来后校验答案里的数字是否都出自事实清单，编数会当场告警。生成的是纯文本（数字已写死），
+       下周点一下重新生成即可——想要自动跟数的地方仍然用芯片。 */
+    if (typeof window !== 'undefined' && window.WeeklyAI) {
+      const gap = document.createElement('span'); gap.className = 'wk-shelf-sep';
+      const bAi = document.createElement('button');
+      bAi.className = 'wk-shelf-chip wk-ai'; bAi.type = 'button'; bAi.textContent = '✨ AI 生成';
+      bAi.title = '按你在「文风样例」里存的写法，用本周真实数据生成这段销售分析';
+      bAi.addEventListener('click', () => aiGenerate(host, editor, o, bAi, fire));
+      const bSt = document.createElement('button');
+      bSt.className = 'wk-shelf-chip'; bSt.type = 'button'; bSt.textContent = '✎ 文风样例';
+      bSt.title = '把你以往写的销售分析贴进去，AI 会照着你的语气和句式写';
+      bSt.addEventListener('click', () => openStyleDialog());
+      shelf.appendChild(gap); shelf.appendChild(bAi); shelf.appendChild(bSt);
+    }
     host.appendChild(shelf);
     host.appendChild(editor);
     renderDoc(editor, o.doc);
@@ -226,6 +242,63 @@
       getDoc: () => serialize(editor),
       setDoc: d => renderDoc(editor, d),
     };
+  }
+
+  /* ---- AI 生成叙述 ---- */
+  function scopeLabelOf(o) {
+    const sc = (o && o.scopeOpts) || [];
+    const pal = (o && o.palette) || [];
+    const first = pal.find(p => p && p.cfg && p.cfg.scope);
+    if (!first) return '产业整体';
+    const lv = first.cfg.scope.level, val = first.cfg.scope.value;
+    const hit = sc.find(x => x.level === lv && (x.value == null || x.value === val));
+    return (hit && hit.label) || (val ? (val + '') : lv);
+  }
+  // 复用应用既有的模型通道（provider/密钥/超时都在里面），拿不到就给可读提示
+  function chatFn() {
+    const P = (typeof window !== 'undefined') && window.AIPanel;
+    if (!P || !P.makeOrchDeps || !P.loadCfg) return null;
+    try { const d = P.makeOrchDeps(P.loadCfg(), () => {}); return d && d.chat ? d.chat : null; } catch (e) { return null; }
+  }
+  async function aiGenerate(host, editor, o, btn, fire) {
+    const AI = window.WeeklyAI;
+    const chat = chatFn();
+    if (!chat) { alert('AI 通道不可用：请先在 AI 问答面板的设置里填好模型 Key。'); return; }
+    const ctx = (o.getCtx ? o.getCtx() : {}) || {};
+    const facts = AI.factsFrom(o.palette || [], ctx, WC);
+    const old = btn.textContent; btn.textContent = '生成中…'; btn.disabled = true;
+    let r;
+    try { r = await AI.generate({ facts: facts, style: AI.styleGet(), scopeLabel: scopeLabelOf(o), chat: chat }); }
+    catch (e) { r = { error: String((e && e.message) || e) }; }
+    btn.textContent = old; btn.disabled = false;
+    if (!r || r.error) { alert('生成失败：' + ((r && r.error) || '未知错误')); return; }
+    if (r.verify && !r.verify.ok) {
+      const go = confirm('注意：生成的句子里有几个数字不在本周事实清单里（' + r.verify.unknown.join('、') + '），可能是模型自己算的或编的。建议点取消重新生成一次。仍要插入吗？');
+      if (!go) return;
+    }
+    insertNode(editor, document.createTextNode(r.text));
+    if (fire) fire();
+  }
+  // 文风样例：用户把以往写法贴进来，作为 few-shot 供模型模仿语气
+  function openStyleDialog() {
+    const AI = window.WeeklyAI;
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:var(--c-bg-elev,#fff);border-radius:14px;box-shadow:var(--sh-3,0 16px 44px rgba(16,24,40,.16));padding:18px;width:min(720px,94vw)">'
+      + '<div style="font-weight:600;font-size:15px;margin-bottom:6px">周报文风样例</div>'
+      + '<div style="font-size:12px;color:var(--c-ink-3,#8A9099);line-height:1.7;margin-bottom:10px">'
+      + '把你以往写的「销售分析」原文贴进来（几段就够，多多益善）。AI 只学你的<b>语气、句式和用词</b>，'
+      + '不会引用样例里的旧数字。留空则用默认的客观周报口吻。</div>'
+      + '<textarea id="wkStyleTa" spellcheck="false" placeholder="例：大区整体销售：W30 WoW +5%，SO同比 +12%，渠道DOS 42天，整体健康……" '
+      + 'style="width:100%;height:260px;border:1px solid var(--c-line,#E6E8EB);border-radius:10px;padding:10px;font:13px/1.7 inherit;resize:vertical"></textarea>'
+      + '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">'
+      + '<button class="btn" id="wkStyleCancel">取消</button><button class="btn primary" id="wkStyleSave">保存</button></div></div>';
+    document.body.appendChild(ov);
+    const ta = ov.querySelector('#wkStyleTa'); ta.value = AI.styleGet(); ta.focus();
+    const close = () => { try { document.body.removeChild(ov); } catch (e) {} };
+    ov.querySelector('#wkStyleCancel').onclick = close;
+    ov.querySelector('#wkStyleSave').onclick = () => { AI.styleSet(ta.value); close(); };
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
   }
 
   /* 数据刷新后：root 范围内所有芯片重算显示值 */
@@ -241,6 +314,9 @@
     '.wk-nared{border:1px solid var(--c-line);border-radius:8px;background:var(--c-bg-elev);margin:4px 0 6px}',
     '.wk-shelf{display:flex;flex-wrap:wrap;gap:4px;padding:5px 8px;border-bottom:1px dashed var(--c-line)}',
     '.wk-shelf-chip{font-size:10.5px;padding:1px 8px;border:1px solid var(--c-line);border-radius:10px;background:var(--c-bg);color:var(--c-ink-2);cursor:grab}',
+    '.wk-shelf-sep{display:inline-block;width:1px;height:14px;background:var(--c-line);margin:0 6px;vertical-align:middle}',
+    '.wk-shelf-chip.wk-ai{cursor:pointer;border-color:var(--c-brand);color:var(--c-brand);font-weight:600}',
+    '.wk-shelf-chip.wk-ai:disabled{opacity:.55;cursor:default}',
     '.wk-shelf-chip:hover{border-color:var(--c-brand);color:var(--c-brand)}',
     '.wk-editor{min-height:34px;padding:7px 10px;font-size:12.5px;line-height:1.8;color:var(--c-ink-1);outline:none;font-family:"Microsoft YaHei",微软雅黑,sans-serif}',
     '.wk-chip{display:inline-block;padding:0 5px;margin:0 1px;border-radius:5px;background:rgba(199,0,11,.08);border:1px solid rgba(199,0,11,.25);color:var(--c-brand);font-weight:600;white-space:nowrap;cursor:default}',

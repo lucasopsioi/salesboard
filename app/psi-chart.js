@@ -51,5 +51,15 @@
     }
     return { cd, colors, total, valMax };
   }
-  return { exportOrder, bucketTotals, yAxisMax, yAxisMin, labelStyle, buildPptxSeries };
+  /* 导出末行（2026-09-07 复盘）：原来对所有指标一律跨期求和，而项目口径卡写得很清楚——
+     库存是时点快照、DOS 是比率，跨期相加都无意义。xlsx 会脱离看板被转发，错数没有上下文能纠正，
+     所以这里只决定「输不输出这个数、叫什么名」，一行计算都不改。
+     入参 v(series,bucket) 由调用方给（已按单位换算）。 */
+  function summaryRow(metric, order, buckets, v) {
+    const last = buckets[buckets.length - 1];
+    if (metric === 'dos') return { label: '合计', cells: order.map(function () { return '—'; }), additive: false };
+    if (metric === 'inv') return { label: '区间末库存', cells: order.map(function (s) { return v(s, last); }), additive: false };
+    return { label: '合计', cells: order.map(function (s) { return buckets.reduce(function (a, b) { return a + (+v(s, b) || 0); }, 0); }), additive: true };
+  }
+  return { exportOrder, bucketTotals, yAxisMax, yAxisMin, labelStyle, buildPptxSeries, summaryRow };
 });

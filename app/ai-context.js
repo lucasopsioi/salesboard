@@ -756,7 +756,23 @@ const AIData = (function () {
         return finNote(r);
       }),
       // 通用聚合（PSI）
-      agg: wrap(a => api.agg(a || {})),
+      /* agg 与 query 必须同规（2026-09-07 复盘）：query 早已明写「库存/DOS跨期相加是口径红线，绝不提供」，
+         而 agg 原来把引擎的 total 原样透传给模型——模型看到返回里明晃晃一个 total 就会引用它。
+         这里摘掉不可加指标的 total 并说明原因；cats/series/data 一概不动，引擎也不改。 */
+      agg: wrap(async (a) => {
+        const p2 = a || {};
+        const r = await api.agg(p2);
+        try {
+          const m = p2.measure, isIdcAsp = (p2.dataset === 'idc' && m === 'asp');
+          if (r && typeof r === 'object' && (m === 'inv' || m === 'dos' || isIdcAsp)) {
+            delete r.total;
+            r.口径说明 = (m === 'dos') ? 'DOS 是比率，跨桶/跨系列相加或平均都无意义，本工具不提供合计；需要时逐桶列出，或按 库存÷日均SO 重算。'
+              : isIdcAsp ? '均价是单价，不能相加；需要整体均价请用 Σ销额÷Σ销量。'
+              : '库存是时点快照，跨期相加无意义，本工具不提供合计；需要时取区间末桶。';
+          }
+        } catch (e) {}
+        return r;
+      }),
       // IDC 市场聚合：主进程判的是 params.dataset==='idc'（旧版传 source 导致静默返回 PSI 数据冒充 IDC）
       aggIdc: wrap(a => {
         if (a && a.field && typeof api.idcOptions === 'function') return api.idcOptions(a.field, a.filters || {});

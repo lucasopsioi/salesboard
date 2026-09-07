@@ -52,4 +52,16 @@ ok('剔除 null/NaN/Infinity', P.yAxisMin([null, NaN, Infinity, 100, 200]) === 0
 ok('与 yAxisMax 成对：正数区间 [0, max]',
   P.yAxisMin([100, 8821]) === 0 && Math.round(P.yAxisMax([100, 8821])) === Math.round(8821 * 1.1));
 
+// —— 导出末行的可加性（2026-09-07：库存快照/DOS 比率不可跨期相加）——
+const _ord = ['A', 'B'], _bk = ['W1', 'W2', 'W3'];
+const _vals = { A: { W1: 10, W2: 20, W3: 30 }, B: { W1: 1, W2: 2, W3: 4 } };
+const _v = (s, b) => _vals[s][b];
+const rSO = P.summaryRow('sellOut', _ord, _bk, _v);
+ok('E1 销量可加：末行=区间合计', rSO.label === '合计' && rSO.additive === true && rSO.cells[0] === 60 && rSO.cells[1] === 7);
+const rIn = P.summaryRow('inv', _ord, _bk, _v);
+ok('E2 库存是快照：末行=区间末库存而非累加', rIn.label === '区间末库存' && rIn.additive === false && rIn.cells[0] === 30 && rIn.cells[1] === 4);
+const rDos = P.summaryRow('dos', _ord, _bk, _v);
+ok('E3 DOS 是比率：末行填「—」不给数', rDos.additive === false && rDos.cells.every(c => c === '—'));
+ok('E4 sellIn 同销量口径可加', P.summaryRow('sellIn', _ord, _bk, _v).cells[0] === 60);
+
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS'); process.exit(f ? 1 : 0);

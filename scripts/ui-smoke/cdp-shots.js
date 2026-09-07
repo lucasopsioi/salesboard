@@ -4,7 +4,7 @@
 const fs = require('fs'); const path = require('path');
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const OUT = path.join(__dirname, process.argv[2] || 'shots');
-const VIEWS = ['report','finance','inventory','roadmap','pptoutput','agentchat','pricinglib'];
+const VIEWS = ['finance'];
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });

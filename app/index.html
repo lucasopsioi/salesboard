@@ -656,6 +656,40 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
 .nav-item:focus-visible{outline:2px solid var(--c-focus);outline-offset:-2px}
 /* 状态不只靠颜色：给圆点加形状差异（实心=已锚定，空心=未锚定） */
 .status .dot.off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--c-ink-3)}
+
+/* ---- SO 推演面板：左 5 列冻结 + 右侧期次横向滚动 ---- */
+.fc-wrap{padding:12px 16px}
+.fc-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.fc-lab{font-size:12px;color:var(--ink3)}
+.fc-hint{font-size:11px;color:var(--ink3);margin-left:auto}
+.fc-empty{padding:40px;text-align:center;color:var(--ink3)}
+.fc-warn{margin-bottom:8px;padding:6px 10px;border-radius:8px;background:var(--c-warn-soft);color:var(--c-warn-text,#8A6D00);font-size:12px}
+.fc-scroll{overflow:auto;max-height:calc(100vh - 210px);border:1px solid var(--c-line);border-radius:var(--r-lg);background:var(--c-bg-elev)}
+table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-space:nowrap}
+.fc-table th,.fc-table td{padding:5px 8px;border-bottom:1px solid var(--c-line-soft);background:var(--c-bg-elev)}
+.fc-table thead th{position:sticky;top:0;z-index:3;background:var(--c-table-head);font-weight:600;color:var(--ink2)}
+.fc-table thead tr:nth-child(2) th{top:27px}
+.fc-table th.num,.fc-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.fc-table th.sub{font-size:10px;color:var(--ink3);font-weight:500}
+.fc-table th.per{border-left:1px solid var(--c-line)}
+/* 冻结：左 5 列各自 sticky，left 逐列累加 */
+.fc-table .fz{position:sticky;z-index:2}
+.fc-table thead .fz{z-index:5}
+.fc-table .fz1{left:0;min-width:150px;max-width:220px;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.fc-table .fz2{left:150px;min-width:130px}
+.fc-table .fz3{left:280px;min-width:90px}
+.fc-table .fz4{left:370px;min-width:90px}
+.fc-table .fz5{left:460px;min-width:90px;box-shadow:1px 0 0 var(--c-line)}
+.fc-table td.dim{color:var(--ink3)}
+.fc-exp{display:inline-block;width:14px;color:var(--ink3)}
+.fc-prod td{font-weight:600}
+.fc-model td{background:var(--c-table-zebra)}
+.fc-in{width:62px;border:1px solid transparent;border-radius:5px;padding:2px 4px;text-align:right;font:inherit;background:transparent}
+.fc-in:hover{border-color:var(--c-line)}
+.fc-in:focus{border-color:var(--c-brand);background:var(--c-bg-elev);outline:none}
+.fc-in.si{color:var(--ink2)}
+.fc-table td.dos-hi{color:var(--c-warn-text,#8A6D00);background:var(--c-warn-soft)}
+.fc-table td.dos-lo{color:var(--c-bad)}
 </style>
 </head>
 <body>
@@ -671,6 +705,7 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
       <div class="nav-item" data-view="country"><span class="ic" data-icon="country"></span>国家看板</div>
       <div class="nav-item" data-view="report"><span class="ic" data-icon="report"></span>汇总表</div>
       <div class="nav-item" data-view="inventory"><span class="ic" data-icon="inventory"></span>库存管理</div>
+      <div class="nav-item" data-view="forecast"><span class="ic" data-icon="psi"></span>SO 推演</div>
       <div class="nav-item" data-view="finance"><span class="ic" data-icon="finance"></span>经营分析</div>
       <div class="nav-item" data-view="roadmap"><span class="ic" data-icon="roadmap"></span>路标管理</div>
       <div class="nav-item" data-view="pricing"><span class="ic" data-icon="pricing"></span>定价测算</div>
@@ -976,6 +1011,7 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
       <div id="txtRoot" style="padding:0;overflow:hidden;height:100%"></div>
     </section>
     <section class="view" id="view-fob"></section>
+    <section class="view" id="view-forecast"></section>
     <section class="view" id="view-audio">
       <div id="auRoot" style="padding:16px 20px;overflow:auto;height:100%"></div>
     </section>
@@ -1097,6 +1133,8 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
   <script src="views/audio-ind.js"></script>
   <script src="views/audio-view.js"></script>
   <script src="views/fob-view.js"></script>
+  <script src="forecast-core.js"></script>
+  <script src="views/forecast-view.js"></script>
   <script src="views/audio-newprod.js"></script>
   <script src="app.js"></script>
   <script src="ux-guide.js"></script>

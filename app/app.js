@@ -125,7 +125,7 @@ function switchView(v){
   $$('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===v));
   $$('.view').forEach(el=>el.classList.toggle('active',el.id==='view-'+v));
   renderDataBar(v);
-  $('#viewTitle').textContent={psi:'PSI 数据分析',industry:'产业看板',finance:'经营分析',country:'国家看板',report:'汇总表',custom:'自定义图表',designer:'看板设计器',source:'数据源',pricing:'定价测算',pricinglib:'产品定价库',roadmap:'路标管理',pptoutput:'PPT output',inventory:'库存管理',textout:'文字输出',audio:'产业周报',fob:'Floor FOB',agentchat:'Agent 对话'}[v]||v;
+  $('#viewTitle').textContent={psi:'PSI 数据分析',industry:'产业看板',finance:'经营分析',country:'国家看板',report:'汇总表',custom:'自定义图表',designer:'看板设计器',source:'数据源',pricing:'定价测算',pricinglib:'产品定价库',roadmap:'路标管理',pptoutput:'PPT output',inventory:'库存管理',textout:'文字输出',audio:'产业周报',fob:'Floor FOB',forecast:'SO 推演',agentchat:'Agent 对话'}[v]||v;
   if(v==='pricing'&&typeof renderPricing==='function') renderPricing();
   if(v==='pricinglib'&&typeof renderPricingLib==='function') renderPricingLib();
   if(v==='roadmap'&&typeof renderRoadmap==='function') renderRoadmap();
@@ -134,6 +134,7 @@ function switchView(v){
   if(v==='textout'&&typeof renderTextout==='function') renderTextout();
   if(v==='audio'&&typeof renderAudio==='function') renderAudio();
   if(v==='fob'&&typeof renderFob==='function') renderFob();
+  if(v==='forecast'&&typeof renderForecast==='function') renderForecast();
   if(v==='agentchat'&&typeof renderAgentChat==='function') renderAgentChat();
   if(v==='psi'&&chart) setTimeout(()=>chart.resize(),50);
   if(v==='industry'){ if(state.dims.length){ if(!ind.data) initIndustry(); else setTimeout(()=>ind.chart&&ind.chart.resize(),50); } else $('#indEmpty').classList.remove('hidden'); }
@@ -164,7 +165,7 @@ function applyNav(){
      修法不是「把标签插到组内第一项前」——那样一旦用户拖过顺序（或 archive 里存着旧顺序），
      成员就会散落到别的组标题下。**改成按组决定渲染顺序，保存的顺序只在组内生效**：
      分组永远自洽，组内仍尊重用户拖拽；不在任何组里的（将来新增看板）原样接在最后。 */
-  const GROUPS=[['navLabWatch',['psi','industry','country','report','inventory','finance']],
+  const GROUPS=[['navLabWatch',['psi','industry','country','report','inventory','forecast','finance']],
                 ['navLabPlan', ['roadmap','pricing','pricinglib','fob']],
                 ['navLabMake', ['audio','pptoutput','textout','custom','designer']],
                 ['navLabData', ['source']],

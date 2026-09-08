@@ -56,17 +56,19 @@ let fails = 0; const ok = (n, c, extra) => { console.log((c ? 'PASS ' : 'FAIL ')
   const kids = await ev("document.querySelectorAll('#view-forecast tr.fc-model.fc-r-si').length");
   ok('F4 展开产品能看到型号（每型号也是四行）', (+kids.v || 0) > 0, 'model blocks=' + kids.v);
   // 边输入边变：改 SI 输入框 → INV / DOS 单元格当场变（不重渲、不丢焦点）
+  // 先拍一个 SO（有销量才有日销、DOS 才有意义），再改 SI，验证 INV 与 DOS 都当场变
   const live = await ev("(function(){ const k=FC.rows[0].key; const i=FC.firstFcIdx;"
-    + " const inp=document.querySelector('input.fc-in[data-f=\"si\"][data-k=\"'+k+'\"][data-i=\"'+i+'\"]'); if(!inp) return 'no-input';"
+    + " const soInp=document.querySelector('input.fc-in[data-f=\"so\"][data-k=\"'+k+'\"][data-i=\"'+i+'\"]');"
+    + " const inp=document.querySelector('input.fc-in[data-f=\"si\"][data-k=\"'+k+'\"][data-i=\"'+i+'\"]'); if(!inp||!soInp) return 'no-input';"
+    + " soInp.value='300'; soInp.dispatchEvent(new Event('input',{bubbles:true}));"
     + " const invEl=document.getElementById(k+'@@'+i+'@@inv'), dosEl=document.getElementById(k+'@@'+i+'@@dos');"
     + " const before={inv:invEl.textContent, dos:dosEl.textContent};"
-    + " inp.value='99999'; inp.dispatchEvent(new Event('input',{bubbles:true}));"
-    + " const focusKept = document.activeElement===inp || true;"
+    + " inp.value='5000'; inp.dispatchEvent(new Event('input',{bubbles:true}));"
     + " return JSON.stringify({before:before, after:{inv:invEl.textContent, dos:dosEl.textContent}}); })()");
   let LV = {}; try { LV = JSON.parse(live.v); } catch (e) {}
   ok('F4b 改 SI 时 INV 与 DOS 当场变（原地刷新）', LV.before && LV.after && LV.after.inv !== LV.before.inv && LV.after.dos !== LV.before.dos, JSON.stringify(LV));
   console.log('   SI 改动前后: ' + JSON.stringify(LV));
-  await ev("(function(){ const k=FC.rows[0].key; const i=FC.firstFcIdx; if(FC.edits[k]&&FC.edits[k][i]) delete FC.edits[k][i].si; fcRender(); return 1; })()"); await sleep(500);
+  await ev("(function(){ FC.edits={}; fcRender(); return 1; })()"); await sleep(500);
 
   // F5 产品行填 SO=1000 → 型号按历史 SI 占比分摊且和守恒
   const split = await ev("(function(){ const p=FC.rows.find(x=>x.expanded)||FC.rows[0]; p.expanded=true;"
@@ -86,6 +88,28 @@ let fails = 0; const ok = (n, c, extra) => { console.log((c ? 'PASS ' : 'FAIL ')
     + " return JSON.stringify({lowSo_dos:a, highSo_dos:b}); })()");
   let D = {}; try { D = JSON.parse(dos.v); } catch (e) {}
   ok('F6 SO 调大 → DOS 变小（DOS 跟着推演变）', D.lowSo_dos != null && D.highSo_dos != null && D.highSo_dos < D.lowSo_dos, JSON.stringify(D));
+
+  // F9 只调 SO 时库存必须跟着变（用户报的 bug：SI 默认跟随 SO 导致库存纹丝不动）
+  const causal = await ev("(function(){ const p=FC.rows[0]; const i=FC.firstFcIdx;"
+    + " FC.edits[p.key]={}; FC.edits[p.key][i]={so:100}; const lo=fcComputeProduct(p).product[i];"
+    + " FC.edits[p.key]={}; FC.edits[p.key][i]={so:9000}; const hi=fcComputeProduct(p).product[i];"
+    + " FC.edits={};"
+    + " return JSON.stringify({loInv:lo.inv, hiInv:hi.inv, loSi:lo.si, hiSi:hi.si, loDos:lo.dos, hiDos:hi.dos}); })()");
+  let CA = {}; try { CA = JSON.parse(causal.v); } catch (e) {}
+  ok('F9 只调 SO → 库存跟着变（SO 大则库存低）', CA.hiInv != null && CA.loInv != null && CA.hiInv < CA.loInv, JSON.stringify(CA));
+  ok('F9b SI 不随 SO 变（两次 SI 相同）', CA.loSi === CA.hiSi, JSON.stringify({loSi:CA.loSi, hiSi:CA.hiSi}));
+  // 不许替用户预测：什么都不填时推演期 SI/SO 必须是 0、库存保持期初不动
+  const noPred = await ev("(function(){ FC.edits={}; fcRender(); const p=FC.rows[0]; const i=FC.firstFcIdx; const c=fcComputeProduct(p);"
+    + " const lastHist=c.product[i-1]; const f=c.product[i];"
+    + " const inputs=[...document.querySelectorAll('input.fc-in[data-i=\"'+i+'\"]')].map(x=>x.value);"
+    + " return JSON.stringify({si:f.si, so:f.so, inv:f.inv, histInv:lastHist?lastHist.inv:null, emptyInputs: inputs.every(v=>v===''), n:inputs.length}); })()");
+  let NP = {}; try { NP = JSON.parse(noPred.v); } catch (e) {}
+  ok('F9d 不预测：未填时 SI/SO 为 0，库存停在历史期末', NP.si === 0 && NP.so === 0 && NP.inv === NP.histInv, JSON.stringify(NP));
+  ok('F9e 未填的推演格子是空的（不预填数字）', NP.emptyInputs === true && (NP.n || 0) > 0, JSON.stringify({empty:NP.emptyInputs, n:NP.n}));
+  console.log('   SO=100 vs 9000: ' + JSON.stringify(CA));
+  // DOS 不带「天」
+  const dosTxt = await ev("(function(){ const tr=document.querySelector('#view-forecast tr.fc-prod.fc-r-dos'); const td=[...tr.querySelectorAll('td.num')].pop(); return td?td.textContent.trim():''; })()");
+  ok('F9c DOS 单元格不含「天」字', !/天/.test(dosTxt.v || ''), 'DOS=' + dosTxt.v);
 
   // F8 期次标签必须是真实日历，且历史在左、推演在右
   const lab = await ev("(function(){ const ths=[...document.querySelectorAll('#view-forecast thead th.per')];"

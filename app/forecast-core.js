@@ -120,7 +120,8 @@
   function dosOf(inv, rate) {
     const i = n0(inv), r = n0(rate);
     if (i == null || r == null || r <= 0) return null;   // 日销为 0/未知 → DOS 无意义，显「—」
-    return i / r;
+    if (i < 0) return null;                              // 库存为负 = 计划超卖（缺口），「负的可供天数」没有意义 → 显「—」
+    return i / r;                                        // 负库存本身照常显示，那是有用的缺口信号
   }
 
   /* 一条产品线（或型号）的完整推演。
@@ -152,7 +153,10 @@
     const shares = siShares(siMap) || equalShares(models.map(m => m.key));
     const pps = opt.productPeriods || [];
     const soSplit = pps.map(p => splitInt(n0(p.so) || 0, shares));
-    const siSplit = pps.map((p, i) => (n0(p.si) != null) ? splitInt(n0(p.si), shares) : soSplit[i]);
+    /* SI 绝不默认等于 SO（2026-09-07 用户：「我调整SO的时候库存为什么不会变化」）——
+       让 SI 跟着 SO 走会使 期末 = 期初 + SI − SO 的增减恰好抵消，库存永远不动，
+       整个推演的因果链就断了。没给 SI 就按 0 处理，由调用方显式传入默认发货量。 */
+    const siSplit = pps.map((p, i) => splitInt(n0(p.si) != null ? n0(p.si) : 0, shares));
     const byModel = {};
     models.forEach(m => {
       const periods = pps.map((p, i) => ({ so: soSplit[i][m.key] || 0, si: siSplit[i][m.key] || 0, days: p.days }));
@@ -201,7 +205,10 @@
     const shares = siShares(siMap) || equalShares(models.map(m => m.key));
     const pps = opt.productPeriods || [];
     const soSplit = pps.map(p => splitInt(n0(p.so) || 0, shares));
-    const siSplit = pps.map((p, i) => (n0(p.si) != null) ? splitInt(n0(p.si), shares) : soSplit[i]);
+    /* SI 绝不默认等于 SO（2026-09-07 用户：「我调整SO的时候库存为什么不会变化」）——
+       让 SI 跟着 SO 走会使 期末 = 期初 + SI − SO 的增减恰好抵消，库存永远不动，
+       整个推演的因果链就断了。没给 SI 就按 0 处理，由调用方显式传入默认发货量。 */
+    const siSplit = pps.map((p, i) => splitInt(n0(p.si) != null ? n0(p.si) : 0, shares));
     const byModel = {};
     models.forEach(m => {
       const periods = pps.map((p, i) => ({ so: soSplit[i][m.key] || 0, si: siSplit[i][m.key] || 0, days: p.days }));

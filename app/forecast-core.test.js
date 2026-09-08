@@ -36,6 +36,7 @@ ok('I3 月粒度默认 30 天、天粒度 1 天', F.periodDays('month') === 30 &
 ok('D1 DOS = 库存 ÷ 日销', F.dosOf(280, 10) === 28);
 ok('D2 日销为0/未知 → null（不写0天）', F.dosOf(280, 0) === null && F.dosOf(280, null) === null);
 ok('D3 库存未知 → null', F.dosOf(null, 10) === null);
+ok('D4 库存为负(计划超卖) → DOS 显 null，不给「负的可供天数」', F.dosOf(-500, 10) === null);
 
 // —— 完整推演：DOS 随 SO/SI 变化 ——
 const sim = F.simulate({ openInv: 700, histDaily: new Array(28).fill(10), periods: [{ si: 0, so: 70 }, { si: 0, so: 70 }], gran: 'week' });
@@ -91,8 +92,18 @@ const pwh = F.simulateProductWithHistory({
   ],
 });
 ok('H7 产品级带历史：未来仍按 60/40 分摊', pwh.byModel.A1.forecast[0].so === 600 && pwh.byModel.A2.forecast[0].so === 400);
-ok('H8 各型号推演接自己的历史期末库存', pwh.byModel.A1.forecast[0].inv === 2000 && pwh.byModel.A2.forecast[0].inv === 1500,
-  [pwh.byModel.A1.forecast[0].inv, pwh.byModel.A2.forecast[0].inv]);
+// 推演首期库存 = 历史期末实际库存 + 本期SI − 本期SO（没给 SI 就是 0，库存必然下降）
+ok('H8 各型号推演接自己的历史期末库存并按 SI/SO 滚动', (() => {
+  const a = pwh.byModel.A1, b = pwh.byModel.A2;
+  return a.forecast[0].inv === 2000 + a.forecast[0].si - a.forecast[0].so
+      && b.forecast[0].inv === 1500 + b.forecast[0].si - b.forecast[0].so;
+})(), [pwh.byModel.A1.forecast[0], pwh.byModel.A2.forecast[0]].map(r => [r.si, r.so, r.inv]));
+// 核心因果：只改 SO 时库存必须跟着变（SI 不许跟随 SO，否则增减抵消、库存永远不动）
+ok('H9 只调 SO → 库存随之变化（SI 不跟随 SO）', (() => {
+  const mk = so => F.simulateWithHistory({ gran: 'month', histRows: [{ si: 500, so: 400, inv: 3000 }], periods: [{ so: so }] }).forecast[0];
+  const lo = mk(100), hi = mk(900);
+  return lo.inv === 2900 && hi.inv === 2100 && lo.si === 0 && hi.si === 0;
+})());
 
 console.log(f ? (f + ' FAILED') : 'ALL PASS');
 process.exit(f ? 1 : 0);

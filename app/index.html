@@ -686,6 +686,7 @@ table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-sp
 .fc-table td.met-inv,.fc-table td.met-dos{color:var(--ink3)}
 .fc-table tr.fc-r-dos td{border-bottom:2px solid var(--c-line)}
 .fc-table td.inv{color:var(--ink2);background:var(--c-table-zebra)}
+.fc-table td.inv.neg{color:var(--c-bad);font-weight:600}   /* 负库存 = 计划超卖的缺口，必须显眼 */
 /* 历史实际 vs 推演：灰底只读 = 已发生；粗竖线右侧 = 可改的推演 */
 .fc-table th.hist,.fc-table td.hist{background:var(--c-bg-sunken);color:var(--ink2)}
 .fc-table th.hist .tag{display:block;font-size:9px;font-weight:400;color:var(--ink3);letter-spacing:1px}
@@ -699,6 +700,8 @@ table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-sp
 .fc-in:hover{border-color:var(--c-line)}
 .fc-in:focus{border-color:var(--c-brand);background:var(--c-bg-elev);outline:none}
 .fc-in.si{color:var(--ink2)}
+.fc-in::placeholder{color:var(--c-ink-3);opacity:.5}
+.fc-in.own{font-weight:600;color:var(--c-brand)}   /* 我自己拍的数：加重区分「手填」与「分摊来的」 */
 .fc-table td.dos-hi{color:var(--c-warn-text,#8A6D00);background:var(--c-warn-soft)}
 .fc-table td.dos-lo{color:var(--c-bad)}
 </style>

@@ -25,7 +25,7 @@ const FC = {
 // esc 在本项目里是各视图各自定义的局部函数，不是全局——不定义就每次渲染都 ReferenceError（界面会永远卡在「正在取数…」）
 const fcEsc = t => String(t == null ? '' : t).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
 function fcNum(v, d) { return (v == null || !isFinite(v)) ? '—' : (+v).toLocaleString('en-US', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); }
-function fcDos(v) { return (v == null || !isFinite(v)) ? '—' : Math.round(v) + '天'; }
+function fcDos(v) { return (v == null || !isFinite(v)) ? '—' : String(Math.round(v)); }   // 用户 2026-09-07：DOS 后面不要写「天」
 
 /* 期次标签必须和引擎的桶标签**完全同格式**，否则历史与推演接不上：
      月 2026-06 / 周 2026-W25 / 日 2026-06-15（已实测确认；注意 sosim-core.bucketOf 的月是 202606，不能用）。
@@ -192,11 +192,14 @@ function fcComputeProduct(p) {
   const fcPeriods = FC.periods.slice(nH);
   const ed = FC.edits[p.key] || {};
   // 产品级推演输入：没手填就按平均周销折算到该期天数
+  /* 不做任何预测（2026-09-07 用户：「谁让你预测未来的SI，我不需要你给我预测未来的SI和SO，
+     我自己会拍这个数据，你只需要把我输入的数据拆到型号，或者国家就行了」）。
+     没填的格子就是 0，库存原地不动；填了才动。本工具只负责：拆分 + 滚库存 + 算 DOS。 */
   const productPeriods = fcPeriods.map((pd, j) => {
     const i = nH + j;
     return {
-      so: (ed[i] && ed[i].so != null) ? +ed[i].so : Math.round((p.weekly != null ? p.weekly : 0) * (pd.days / 7)),
-      si: (ed[i] && ed[i].si != null) ? +ed[i].si : null,
+      so: (ed[i] && ed[i].so != null) ? +ed[i].so : 0,
+      si: (ed[i] && ed[i].si != null) ? +ed[i].si : 0,
       days: pd.days,
     };
   });
@@ -291,10 +294,12 @@ function fcBlock(row, calc, isModel) {
         h += '<td class="num' + cls + (m === 'dos' ? ' ' + fcDosCls(c.dos) : '') + '">' + v + '</td>';
       } else if (m === 'si' || m === 'so') {
         const ed = (FC.edits[row.key] || {})[i] || {};
-        const val = (ed[m] != null) ? ed[m] : Math.round(c[m] || 0);
-        h += '<td class="num' + cls + '"><input class="fc-in fc-' + m + '" data-k="' + fcEsc(row.key) + '" data-i="' + i + '" data-f="' + m + '" value="' + val + '"></td>';
+        // 产品级手填会分摊到型号：型号行显示分摊结果；产品行没填就留空（待填一眼可见）
+        const own = (ed[m] != null);
+        const val = own ? ed[m] : (isModel && c[m] ? Math.round(c[m]) : '');
+        h += '<td class="num' + cls + '"><input class="fc-in fc-' + m + (own ? ' own' : '') + '" data-k="' + fcEsc(row.key) + '" data-i="' + i + '" data-f="' + m + '" value="' + val + '" placeholder="—"></td>';
       } else if (m === 'inv') {
-        h += '<td class="num inv' + cls + '" id="' + fcEsc(fcCellId(row.key, i, 'inv')) + '">' + fcNum(c.inv) + '</td>';
+        h += '<td class="num inv' + cls + (c.inv != null && c.inv < 0 ? ' neg' : '') + '" id="' + fcEsc(fcCellId(row.key, i, 'inv')) + '">' + fcNum(c.inv) + '</td>';
       } else {
         h += '<td class="num' + cls + ' ' + fcDosCls(c.dos) + '" id="' + fcEsc(fcCellId(row.key, i, 'dos')) + '">' + fcDos(c.dos) + '</td>';
       }
@@ -331,7 +336,7 @@ function fcRefreshProduct(p) {
   const put = (key, rows) => {
     rows.forEach((c, i) => {
       const iv = document.getElementById(fcCellId(key, i, 'inv'));
-      if (iv) iv.textContent = fcNum(c.inv);
+      if (iv) { iv.textContent = fcNum(c.inv); iv.classList.toggle('neg', c.inv != null && c.inv < 0); }
       const dv = document.getElementById(fcCellId(key, i, 'dos'));
       if (dv) { dv.textContent = fcDos(c.dos); dv.className = 'num ' + fcDosCls(c.dos); }
     });

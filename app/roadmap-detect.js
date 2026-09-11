@@ -60,6 +60,23 @@
   // 'YYYY-MM' → 'YYYY/MM'（路标 lifeDate 认这个格式，缺日按当月 1 号）
   const toRoadmapMonth = m => String(m || '').replace('-', '/');
 
+  /* PSI 的「产品线」→ 路标的「品类」。
+     2026-09-10 用户实锤：自动识别出的音频产品「显示添加成功了，路标图就是显示不出来」——
+     根因是 PSI 里产品线叫「音频与智能配件」，路标图的品类按钮却是写死的「音频」，
+     等号一比对不上，切到「音频」页签就被整批筛掉。这里按包含关系归一到四个标准品类；
+     归不进去的保留原值（不编、不丢）。 */
+  const CATS = ['手机', '穿戴', '平板', '音频'];
+  function lineToCategory(line) {
+    const s = String(line == null ? '' : line).trim();
+    if (!s) return '';
+    for (const c of CATS) if (s.indexOf(c) >= 0) return c;
+    if (/tablet|pad/i.test(s)) return '平板';
+    if (/audio|buds|headphone|earphone|耳机/i.test(s)) return '音频';
+    if (/watch|band|手表|手环/i.test(s)) return '穿戴';
+    if (/phone|手机/i.test(s)) return '手机';
+    return s;
+  }
+
   /* 单个产品的判定。item 来自 engine.launchScan()，months 是共享的连续月轴。 */
   function detectOne(item, months, opt) {
     const o = clampOpt(opt);
@@ -251,5 +268,5 @@
     return out;
   }
 
-  return { DEFAULTS, clampOpt, detectOne, detectAll, matchProducts, groupOrphans, toRoadmapPatch, toRoadmapMonth, norm, STATUS_LABEL, CONF_LABEL };
+  return { DEFAULTS, clampOpt, detectOne, detectAll, matchProducts, groupOrphans, toRoadmapPatch, toRoadmapMonth, lineToCategory, CATS, norm, STATUS_LABEL, CONF_LABEL };
 });

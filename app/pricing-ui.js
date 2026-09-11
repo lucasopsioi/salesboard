@@ -283,26 +283,36 @@
   function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 
   /* ---------- export ---------- */
-  function buildAoa() {
+  /* Excel 要**原始数字**（用户要能自己套格式、加公式），PPT 要**成稿文本**。
+     两者共用一份 aoa 会出这种事：销毛率是 0.2580123456789012 这样的浮点，
+     Excel 里看不出来（存的是数字），PPT 里被 String() 一转就是 18 个字符的长串，
+     再宽的列也放不下 —— 这是「导出的表格很多数字都换行」的真凶之一。
+     asText=true 时：销毛率按 % 一位小数、金额两位小数、null 出「—」（不写 0）。 */
+  const _money = v => (v == null || v === '' ? '—' : (isFinite(v) ? (+v).toFixed(2) : String(v)));
+  const _pct = v => (v == null || v === '' ? '—' : (isFinite(v) ? (+v * 100).toFixed(1) + '%' : String(v)));
+  const _short = v => (typeof v === 'number' && isFinite(v)) ? (Math.abs(v) < 1 ? +v.toFixed(4) : +v.toFixed(2)) : v;
+  function buildAoa(asText) {
     const head = ['国家'].concat(COLS.map(col => col.t)).concat(['本国bundle', 'Floor cost', 'NSIP-原价', 'FOB-原价', '销毛-原价', '销毛-促销价后', 'NSIP-Bundle后', '销毛-Bundle后', 'NSIP-对投后', '销毛-对投后']);
     const aoa = [head];
+    const mny = asText ? _money : (v => v), pc = asText ? _pct : (v => v);
     M.order().forEach(c => {
       const out = M.computeCountry(c), rows = M.rowsOf(c);
       rows.forEach((r, i) => {
         const o = out.rows[i];
-        const base = COLS.map(col => col.kind === 'coinvest' ? (r.coInvestRule ? r.coInvestRule + ' ' + ((M.state.coInvestRules[r.coInvestRule] || [])[r.coInvestTier] || {}).label : '无') : col.kind === 'month' ? (r.costYm ? ymLabel(r.costYm) : '') : r[col.k]);
-        aoa.push([c].concat(base).concat([M.bundleFor(c, r.sku), o.costFloor, o.nsip1, o.fob1, o.gm1, o.gmPromo, o.nsip2, o.gm2, o.nsip3, o.gm3]));
+        let base = COLS.map(col => col.kind === 'coinvest' ? (r.coInvestRule ? r.coInvestRule + ' ' + ((M.state.coInvestRules[r.coInvestRule] || [])[r.coInvestTier] || {}).label : '无') : col.kind === 'month' ? (r.costYm ? ymLabel(r.costYm) : '') : r[col.k]);
+        if (asText) base = base.map(_short);
+        aoa.push([c].concat(base).concat([mny(M.bundleFor(c, r.sku)), mny(o.costFloor), mny(o.nsip1), mny(o.fob1), pc(o.gm1), pc(o.gmPromo), mny(o.nsip2), pc(o.gm2), mny(o.nsip3), pc(o.gm3)]));
       });
-      Object.keys(out.weightedBySku).filter(s => s !== '').forEach(s => { const w = out.weightedBySku[s]; const wrow = new Array(head.length).fill(''); wrow[0] = c + ' 加权·' + s; wrow[head.indexOf('销毛-原价')] = w.gm1; wrow[head.indexOf('销毛-促销价后')] = w.gmPromo; wrow[head.indexOf('销毛-Bundle后')] = w.gm2; wrow[head.indexOf('销毛-对投后')] = w.gm3; aoa.push(wrow); });
+      Object.keys(out.weightedBySku).filter(s => s !== '').forEach(s => { const w = out.weightedBySku[s]; const wrow = new Array(head.length).fill(''); wrow[0] = c + ' 加权·' + s; wrow[head.indexOf('销毛-原价')] = pc(w.gm1); wrow[head.indexOf('销毛-促销价后')] = pc(w.gmPromo); wrow[head.indexOf('销毛-Bundle后')] = pc(w.gm2); wrow[head.indexOf('销毛-对投后')] = pc(w.gm3); aoa.push(wrow); });
     });
     return aoa;
   }
-  function factorAoa() {
+  function factorAoa(asText) {
     const head = ['国家'].concat(FACTORS.map(a => a.t));
-    return [head].concat(M.order().map(c => { const f = M.countries()[c]; return [c].concat(FACTORS.map(a => a.kind === 'pct' ? (+(f[a.k] * 100).toFixed(4)) + '%' : f[a.k])); }));
+    return [head].concat(M.order().map(c => { const f = M.countries()[c]; return [c].concat(FACTORS.map(a => a.kind === 'pct' ? (+(f[a.k] * 100).toFixed(4)) + '%' : (asText ? _short(f[a.k]) : f[a.k]))); }));
   }
   function exportXlsx() { if (!M.state.costMap.size) { alert('请先导入成本底表'); return; } ExportUtil.saveXlsx('定价测算_' + ExportUtil.ymd() + '.xlsx', { '定价测算': buildAoa(), '国家商务因子': factorAoa() }); }
-  function exportPpt() { if (!M.state.costMap.size) { alert('请先导入成本底表'); return; } ExportUtil.savePptxTables('定价测算_' + ExportUtil.ymd() + '.pptx', '定价测算 · 多国家多产品', [{ name: '分客户测算', aoa: buildAoa() }, { name: '国家商务因子', aoa: factorAoa() }]); }
+  function exportPpt() { if (!M.state.costMap.size) { alert('请先导入成本底表'); return; } ExportUtil.savePptxTables('定价测算_' + ExportUtil.ymd() + '.pptx', '定价测算 · 多国家多产品', [{ name: '分客户测算', aoa: buildAoa(true) }, { name: '国家商务因子', aoa: factorAoa(true) }]); }
 
   window.renderPricing = renderPricing;
   window.PRICING_API = { renderBlocks, recomputeBlock };

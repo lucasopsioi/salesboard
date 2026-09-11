@@ -105,5 +105,35 @@ ok('H9 只调 SO → 库存随之变化（SI 不跟随 SO）', (() => {
   return lo.inv === 2900 && hi.inv === 2100 && lo.si === 0 && hi.si === 0;
 })());
 
+// —— 未填 ≠ 卖 0 台（缺数不补零）：不预测时推演期 SO 为空，不许把日销窗口摊成 0 ——
+ok('Z1 未填的推演期不进日销窗口，DOS 仍算得出来', (() => {
+  const r = F.simulateWithHistory({
+    gran: 'month',
+    histRows: [{ si: 0, so: 300, inv: 900 }],
+    periods: [{}, {}, {}],                       // 三期都没填
+  });
+  return r.forecast.every(x => x.inv === 900) && r.forecast.every(x => x.dos != null && x.dos > 0);
+})(), F.simulateWithHistory({ gran: 'month', histRows: [{ si: 0, so: 300, inv: 900 }], periods: [{}, {}, {}] }).forecast.map(x => [x.inv, x.rate, x.dos]));
+ok('Z2 显式填 0 是真的「卖0台」，照常进窗口（DOS 变 null）', (() => {
+  const r = F.simulateWithHistory({ gran: 'month', histRows: [{ si: 0, so: 300, inv: 900 }], periods: [{ so: 0, si: 0 }] });
+  return r.forecast[0].rate === 0 && r.forecast[0].dos === null;
+})(), F.simulateWithHistory({ gran: 'month', histRows: [{ si: 0, so: 300, inv: 900 }], periods: [{ so: 0, si: 0 }] }).forecast[0]);
+ok('Z3 未填标记 soGiven=false，填了为 true', (() => {
+  const r = F.rollInventory(100, [{}, { so: 0 }, { so: 5 }], 'month');
+  return r[0].soGiven === false && r[1].soGiven === true && r[2].soGiven === true;
+})(), F.rollInventory(100, [{}, { so: 0 }, { so: 5 }], 'month').map(x => x.soGiven));
+ok('Z4 产品级没填 → 型号也是「没填」，不是 0', (() => {
+  const r = F.simulateProductWithHistory({
+    gran: 'month', productPeriods: [{}],
+    models: [{ key: 'A1', histSi: 600, histRows: [{ si: 600, so: 500, inv: 2000 }] }],
+  });
+  const f = r.byModel.A1.forecast[0];
+  return f.soGiven === false && f.inv === 2000 && f.dos != null;
+})(), F.simulateProductWithHistory({ gran: 'month', productPeriods: [{}], models: [{ key: 'A1', histSi: 600, histRows: [{ si: 600, so: 500, inv: 2000 }] }] }).byModel.A1.forecast[0]);
+ok('Z5 只填 SI（补货）不填 SO：库存涨、DOS 涨，而不是塌成 null', (() => {
+  const r = F.simulateWithHistory({ gran: 'month', histRows: [{ si: 0, so: 300, inv: 900 }], periods: [{ si: 600 }] });
+  return r.forecast[0].inv === 1500 && r.forecast[0].dos > r.hist[0].dos;
+})(), F.simulateWithHistory({ gran: 'month', histRows: [{ si: 0, so: 300, inv: 900 }], periods: [{ si: 600 }] }).forecast[0]);
+
 console.log(f ? (f + ' FAILED') : 'ALL PASS');
 process.exit(f ? 1 : 0);

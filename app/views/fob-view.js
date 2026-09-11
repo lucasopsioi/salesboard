@@ -1,4 +1,6 @@
 'use strict';
+/* PptTableFit：浏览器取全局、Node 单测走 require —— 两边都要能拿到，否则单测一 require 就炸 */
+function _fitLib(){ return (typeof window!=='undefined'&&window.PptTableFit)?window.PptTableFit:(typeof require!=='undefined'?require('../ppt-table-fit.js'):null); }
 /* ============================================================
    Floor FOB 看板(视图层)。the earlier prototype(PySide6) 全功能移植:
    ① 导入刷新(粘一列→嗅探还原→算价→写入) ② 看板(品类页签/手工编辑/自定义排序/增删行)
@@ -1142,7 +1144,9 @@ async function fobBuildPptB64(view, boards, deltas, pcts) {
           if (cell.status !== 'none' && cell.status !== 'same') o.fill = st[0];
           return { text: cell.text, options: o };
         })));
-      slide.addTable(data, { x: 0.4, y: 1.0, w: 12.5, fontFace: FONT, fontSize: 8.5, border: { pt: 0.5, color: 'CED6E5' }, valign: 'middle', autoPage: false });
+      const fr = _fitLib().fit(data, { availIn: 12.5, fontSize: 8.5, minFontSize: 6, minColIn: 0.26 });
+      slide.addTable(fr.rows, _fitLib().tableOpts(fr, { x: (13.333 - fr.totalIn) / 2, y: 1.0,
+        fontFace: FONT, border: { pt: 0.5, color: 'CED6E5' }, autoPage: false }));
     }
   };
   boards.forEach(addSpec);

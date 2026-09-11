@@ -37,16 +37,57 @@
     const b64 = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
     return _saveFile(safe(filename), b64, 'xlsx');
   }
-  function savePptxTables(filename, title, slides) {
-    const pptx = new PptxGenJS(); pptx.defineLayout({ name: 'W', width: 13.333, height: 7.5 }); pptx.layout = 'W';
-    (slides && slides.length ? slides : [{ name: '', aoa: [['(空)']] }]).forEach(sl => {
-      const s = pptx.addSlide();
-      s.addText(String(title || '') + (sl.name ? ' · ' + sl.name : ''), { x: 0.3, y: 0.25, w: 12.7, h: 0.4, fontSize: 18, bold: true, color: '1A1A1A' });
+  /* aoa → 幻灯片 spec（含算好的 colW/字号）。预览与真正导出吃的是同一份 spec，
+     所以「预览里不换行」= 「导出后不换行」。
+     2026-09-08 用户报的两个毛病都出在这里：addTable 不给 colW 就等分宽度 → 长文本必换行。 */
+  function _fit() { return (typeof window !== 'undefined' && window.PptTableFit) || null; }
+  function pptxSpecs(title, slides) {
+    const MARGIN = 0.3, avail = 13.333 - MARGIN * 2;
+    return (slides && slides.length ? slides : [{ name: '', aoa: [['(空)']] }]).map(sl => {
       const aoa = (sl.aoa && sl.aoa.length) ? sl.aoa : [['(空)']];
-      const rows = aoa.map((r, ri) => (r && r.length ? r : ['']).map(c => ({ text: c == null ? '' : String(c), options: ri === 0 ? { bold: true, fill: { color: 'F2F3F5' }, color: '333333' } : { color: '333333' } })));
-      s.addTable(rows, { x: 0.3, y: 0.8, w: 12.7, fontSize: 9, border: { type: 'solid', color: 'E6E8EB', pt: 0.5 }, autoPage: true, autoPageRepeatHeader: true, valign: 'middle' });
+      const rows = aoa.map((r, ri) => (r && r.length ? r : ['']).map((c, ci) => ({
+        text: c == null ? '' : String(c),
+        options: ri === 0
+          ? { bold: true, fill: { color: 'F2F3F5' }, color: '333333', align: ci === 0 ? 'left' : 'center' }
+          : { color: '333333', align: ci === 0 ? 'left' : 'right' },
+      })));
+      const F = _fit();
+      const fitres = F ? F.fit(rows, { availIn: avail, fontSize: 9, minFontSize: 6, minColIn: 0.26 })
+        : { colW: null, fontSize: 9, rowH: null, squeezed: [], totalIn: avail, rows: rows };
+      return {
+        title: String(title || '') + (sl.name ? ' · ' + sl.name : ''),
+        titleColor: '1A1A1A',
+        rows: fitres.rows || rows, colW: fitres.colW, fontSize: fitres.fontSize, rowH: fitres.rowH,
+        squeezed: fitres.squeezed, x: (13.333 - (fitres.totalIn || avail)) / 2, y: 0.8,
+        note: verStamp(), fit: fitres,
+      };
+    });
+  }
+  function _writeSpecs(filename, specs) {
+    const pptx = new PptxGenJS(); pptx.defineLayout({ name: 'W', width: 13.333, height: 7.5 }); pptx.layout = 'W';
+    specs.forEach(sp => {
+      const s = pptx.addSlide();
+      s.addText(sp.title, { x: 0.3, y: 0.25, w: 12.7, h: 0.4, fontSize: 18, bold: true, color: sp.titleColor || '1A1A1A' });
+      const base = { x: sp.x, y: sp.y, border: { type: 'solid', color: 'E6E8EB', pt: 0.5 },
+        autoPage: true, autoPageRepeatHeader: true };
+      const F = _fit();
+      // colW 必须和 w 一起给、margin 必须用 <1 的英寸值 —— 都在 PptTableFit.tableOpts 里堵掉了
+      const topt = (F && sp.colW) ? F.tableOpts(sp.fit, base)
+        : Object.assign({ w: 12.7, fontSize: sp.fontSize, valign: 'middle' }, base);
+      s.addTable(sp.rows, topt);
+      if (sp.note) s.addText(sp.note, { x: 0.3, y: 7.05, w: 12.7, h: 0.3, fontSize: 9, color: '8A9099' });
     });
     return pptx.write('base64').then(b64 => _saveFile(safe(filename), b64, 'pptx'));
+  }
+  /* opt.preview !== false 且页面上有 PptPreview → 先弹预览，用户点「导出 PPT」才真正写文件。 */
+  function savePptxTables(filename, title, slides, opt) {
+    const specs = pptxSpecs(title, slides);
+    const PV = (typeof window !== 'undefined' && window.PptPreview) || null;
+    if (PV && !(opt && opt.preview === false)) {
+      PV.open({ filename: safe(filename), slides: specs, onExport: () => _writeSpecs(filename, specs) });
+      return Promise.resolve(null);
+    }
+    return _writeSpecs(filename, specs);
   }
   // ---- Live Excel formula cells (Task 7) -------------------------------
   // Replace a precomputed ratio/diff cell with a real SheetJS formula cell so
@@ -125,5 +166,5 @@
     });
   }
 
-  return { ymd, safe, verStamp, saveXlsx, savePptxTables, setFormulaCell, applyFaFormulas, applyRowYoy };
+  return { ymd, safe, verStamp, saveXlsx, savePptxTables, pptxSpecs, setFormulaCell, applyFaFormulas, applyRowYoy };
 });

@@ -409,6 +409,9 @@ table.rep-table th,table.rep-table td{padding:7px 10px;border-bottom:1px solid v
 table.rep-table th{position:sticky;top:0;background:var(--c-table-head);color:var(--ink2);font-weight:600;z-index:2;border-bottom:1px solid var(--line);text-align:center}
 table.rep-table th.sortable{cursor:pointer;user-select:none}
 table.rep-table th.sortable:hover{background:var(--c-table-hover);color:var(--red)}
+/* 「这列也能点」的提示：平时几乎看不见，鼠标移到表头才浮出来，不跟真正的排序箭头抢注意力 */
+table.rep-table th .ts-hint{opacity:0;color:var(--c-ink-3);font-weight:400;transition:opacity .12s}
+table.rep-table th.sortable:hover .ts-hint{opacity:.55}
 table.rep-table th:first-child,table.rep-table td:first-child{position:sticky;left:0;background:var(--c-bg-elev);z-index:1;font-weight:500;border-right:1px solid var(--line)}
 table.rep-table td:first-child{text-align:left}
 table.rep-table th:first-child{z-index:3;background:var(--c-table-head);text-align:center}
@@ -657,53 +660,95 @@ table.data td{padding:8px 12px;border-bottom:1px solid var(--c-line-soft)}
 /* 状态不只靠颜色：给圆点加形状差异（实心=已锚定，空心=未锚定） */
 .status .dot.off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--c-ink-3)}
 
-/* ---- SO 推演面板：左 5 列冻结 + 右侧期次横向滚动 ---- */
-.fc-wrap{padding:12px 16px}
-.fc-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.fc-lab{font-size:12px;color:var(--ink3)}
-.fc-hint{font-size:11px;color:var(--ink3);margin-left:auto}
-.fc-empty{padding:40px;text-align:center;color:var(--ink3)}
-.fc-warn{margin-bottom:8px;padding:6px 10px;border-radius:8px;background:var(--c-warn-soft);color:var(--c-warn-text,#8A6D00);font-size:12px}
-.fc-scroll{overflow:auto;max-height:calc(100vh - 210px);border:1px solid var(--c-line);border-radius:var(--r-lg);background:var(--c-bg-elev)}
-table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-space:nowrap}
-.fc-table th,.fc-table td{padding:5px 8px;border-bottom:1px solid var(--c-line-soft);background:var(--c-bg-elev)}
-.fc-table thead th{position:sticky;top:0;z-index:3;background:var(--c-table-head);font-weight:600;color:var(--ink2)}
-.fc-table thead tr:nth-child(2) th{top:27px}
+/* ---- SO 推演面板：Excel 式网格（可拖列宽 / 可开关冻结 / 选区 + 统计条） ---- */
+.fc-wrap{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+/* 工具条：按语义分组，组间用细分隔线，比一排挤在一起好认 */
+.fc-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border:1px solid var(--c-line);border-radius:var(--r-lg);background:var(--c-bg-elev);box-shadow:var(--sh-1)}
+.fc-grp{display:flex;align-items:center;gap:6px;padding-right:10px;border-right:1px solid var(--c-line-soft)}
+.fc-lab{font-size:11px;color:var(--ink3);white-space:nowrap}
+.fc-bar input[type=number],.fc-bar select{height:26px;border:1px solid var(--c-line);border-radius:7px;background:var(--c-bg-base);color:var(--ink);font:inherit;font-size:12px;padding:0 6px}
+.fc-bar input[type=number]{width:52px}
+.fc-bar input[type=number]:focus,.fc-bar select:focus{outline:none;border-color:var(--c-brand)}
+.fc-bar .btn{height:28px;padding:0 10px;font-size:12px}
+.fc-spacer{flex:1 1 auto}
+.fc-tip{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11px;color:var(--ink3);padding:0 2px}
+.fc-tip b{font-weight:600;color:var(--ink2)}
+.fc-empty{padding:48px;text-align:center;color:var(--ink3)}
+.fc-warn{padding:6px 10px;border-radius:8px;background:var(--c-warn-soft);color:var(--c-warn-text,#8A6D00);font-size:12px}
+
+.fc-grid{position:relative;border:1px solid var(--c-line);border-radius:var(--r-lg);background:var(--c-bg-elev);box-shadow:var(--sh-1);overflow:hidden}
+.fc-grid:focus{outline:none;border-color:var(--c-brand);box-shadow:0 0 0 3px var(--c-brand-soft),var(--sh-1)}
+.fc-scroll{position:relative;overflow:auto;max-height:calc(100vh - 285px)}
+/* table-layout:fixed 是「列宽可控」的前提：列宽由 <colgroup> 说了算，不再被内容撑 */
+table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-space:nowrap;table-layout:fixed}
+.fc-table th,.fc-table td{position:relative;padding:4px 8px;border-bottom:1px solid var(--c-line-soft);background:var(--c-bg-elev);overflow:hidden;text-overflow:ellipsis}
+.fc-table thead th{position:sticky;top:0;z-index:3;height:36px;background:var(--c-table-head);font-weight:600;color:var(--ink2);border-bottom:1px solid var(--c-line);vertical-align:middle;user-select:none}
 .fc-table th.num,.fc-table td.num{text-align:right;font-variant-numeric:tabular-nums}
-.fc-table th.sub{font-size:10px;color:var(--ink3);font-weight:500}
-.fc-table th.per{border-left:1px solid var(--c-line)}
-/* 冻结：左 5 列各自 sticky，left 逐列累加 */
+.fc-table th.per .lb{display:block;line-height:1.15}
+.fc-table th.per .tag{display:block;font-size:9px;font-weight:400;color:var(--ink3);letter-spacing:1px;line-height:1.1}
+.fc-table th.per{border-left:1px solid var(--c-line-soft)}
+/* 冻结：横向靠 left（left:auto = 不冻结）；表头的竖向吸附独立于此，取消冻结也不丢 */
 .fc-table .fz{position:sticky;z-index:2}
-.fc-table thead .fz{z-index:5}
-.fc-table .fz1{left:0;min-width:150px;max-width:220px;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
-.fc-table .fz2{left:150px;min-width:130px}
-.fc-table .fz3{left:280px;min-width:90px}
-.fc-table .fz4{left:370px;min-width:90px}
-.fc-table .fz5{left:460px;min-width:90px}
-.fc-table .fz6{left:550px;min-width:52px;box-shadow:1px 0 0 var(--c-line);font-size:11px;font-weight:600;color:var(--ink2);text-align:center}
-/* 四行一组：SI/SO 可输入，INV/DOS 是算出来的 —— 用底色区分「我填的」和「算出来的」 */
+.fc-table thead .fz{z-index:6}
+.fc-table .fz1{left:var(--l1,auto);cursor:pointer}
+.fc-table .fz2{left:var(--l2,auto)}
+.fc-table .fz3{left:var(--l3,auto)}
+.fc-table .fz4{left:var(--l4,auto)}
+.fc-table .fz5{left:var(--l5,auto)}
+.fc-table .fz6{left:var(--l6,auto);font-size:10px;font-weight:700;letter-spacing:.5px;text-align:center;color:var(--ink3)}
+/* 冻结区右缘给一道投影，一眼看出「这条线左边是不动的」 */
+.fc-table:not(.nofz) .fz6{box-shadow:1px 0 0 var(--c-line),7px 0 10px -7px rgba(0,0,0,.28)}
+/* 列宽把手：贴在表头右缘，拖动改宽、双击自适应 */
+.fc-grip{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize;z-index:8}
+.fc-grip:hover{background:var(--c-brand);opacity:.45}
+body.fc-resizing{cursor:col-resize!important;user-select:none}
+body.fc-resizing *{cursor:col-resize!important}
+/* 四行一组：SI/SO 是「我拍的」，INV/DOS 是「算出来的」，用颜色区分职责 */
 .fc-table td.met-si,.fc-table td.met-so{color:var(--c-brand)}
-.fc-table td.met-inv,.fc-table td.met-dos{color:var(--ink3)}
 .fc-table tr.fc-r-dos td{border-bottom:2px solid var(--c-line)}
-.fc-table td.inv{color:var(--ink2);background:var(--c-table-zebra)}
+.fc-table td.inv{color:var(--ink2)}
 .fc-table td.inv.neg{color:var(--c-bad);font-weight:600}   /* 负库存 = 计划超卖的缺口，必须显眼 */
-/* 历史实际 vs 推演：灰底只读 = 已发生；粗竖线右侧 = 可改的推演 */
-.fc-table th.hist,.fc-table td.hist{background:var(--c-bg-sunken);color:var(--ink2)}
-.fc-table th.hist .tag{display:block;font-size:9px;font-weight:400;color:var(--ink3);letter-spacing:1px}
-.fc-table th.fcstart,.fc-table td.fcstart{border-left:2px solid var(--c-brand)}
 .fc-table tr.fc-r-inv td.num,.fc-table tr.fc-r-dos td.num{background:var(--c-table-zebra)}
+/* 历史实际 vs 推演：左边是已发生的事实（灰底只读），右边是可以拍数的工作区（品牌色标注） */
+.fc-table th.hist,.fc-table td.hist{background:var(--c-bg-sunken);color:var(--ink2)}
+.fc-table thead th.hist{background:var(--c-bg-sunken)}
+.fc-table thead th.hist .tag{color:var(--ink3)}
+.fc-table thead th.per:not(.hist) .tag{color:var(--c-brand);font-weight:600}
+.fc-table th.fcstart,.fc-table td.fcstart{border-left:2px solid var(--c-brand)}
 .fc-table td.dim{color:var(--ink3)}
 .fc-exp{display:inline-block;width:14px;color:var(--ink3)}
+.fc-tree{display:inline-block;width:14px;height:1px;margin-right:2px;border-top:1px solid var(--c-line);vertical-align:middle}
 .fc-prod td{font-weight:600}
-.fc-model td{background:var(--c-table-zebra)}
-.fc-in{width:62px;border:1px solid transparent;border-radius:5px;padding:2px 4px;text-align:right;font:inherit;background:transparent}
-.fc-in:hover{border-color:var(--c-line)}
-.fc-in:focus{border-color:var(--c-brand);background:var(--c-bg-elev);outline:none}
-.fc-in.si{color:var(--ink2)}
-.fc-in::placeholder{color:var(--c-ink-3);opacity:.5}
-.fc-in.own{font-weight:600;color:var(--c-brand)}   /* 我自己拍的数：加重区分「手填」与「分摊来的」 */
+.fc-model td{background:var(--c-table-zebra);font-weight:400}
+.fc-model td.fz1,.fc-model td.fz2{padding-left:16px;color:var(--ink2)}
+/* 可填的格子给一层极淡的品牌底：一眼看出「这里等我拍数」。
+   用 color-mix 兑到 4%，比直接铺 --c-brand-soft 淡得多——那个太抢眼，
+   空格子反而成了整屏最强的视觉元素。深浅色主题都跟着 --c-brand 走。 */
+.fc-table td.ed{cursor:cell;color:var(--ink2);
+  background-image:linear-gradient(color-mix(in srgb,var(--c-brand) 4%,transparent),color-mix(in srgb,var(--c-brand) 4%,transparent))}
+.fc-table thead th.per:not(.hist){background:color-mix(in srgb,var(--c-brand) 7%,var(--c-table-head))}
+.fc-table td.ed:empty::after{content:attr(data-ph);color:var(--c-ink-3);opacity:.45}
+.fc-table td.ed.partial:empty::after{opacity:.7;font-style:italic}   /* 进行中那期：灰字显示「到目前为止的实际」，填了才算数 */
+.fc-table th.per .tag.cur{color:var(--c-warn-text,#8A6D00);font-weight:600}
+.fc-table td.fz1.nokids{cursor:default}
+.fc-table td.own{font-weight:700;color:var(--c-brand)}   /* 我自己拍的数：和「分摊来的」一眼分得开 */
 .fc-table td.dos-hi{color:var(--c-warn-text,#8A6D00);background:var(--c-warn-soft)}
 .fc-table td.dos-lo{color:var(--c-bad)}
+/* 行悬停用叠加层，不动格子自己的底色（底色还要表达历史/库存/DOS 等语义） */
+.fc-table tbody tr:hover td::before{content:'';position:absolute;inset:0;background:var(--c-ink-1);opacity:.035;pointer-events:none}
+/* 选区：淡色覆盖 + 细边框；当前格用品牌色描边（Excel 观感） */
+.fc-table td.sel::after{content:'';position:absolute;inset:0;background:var(--c-brand);opacity:.12;pointer-events:none;box-shadow:inset 0 0 0 1px var(--c-brand)}
+.fc-table td.cur::after{opacity:.06;box-shadow:inset 0 0 0 2px var(--c-brand)}
+/* 全表共用一个浮动编辑框（不是每格一个 input）——上千个 input 又慢又难管 */
+.fc-editor{position:absolute;display:none;z-index:20;box-sizing:border-box;padding:3px 7px;border:2px solid var(--c-brand);border-radius:4px;background:var(--c-bg-elev);color:var(--ink);font:inherit;font-size:12px;font-weight:700;text-align:right;outline:none;box-shadow:var(--sh-2)}
+.fc-editor.on{display:block}
+/* 统计条：求和 / 计数 / 平均 —— 口径不成立时给「—」并在右侧说明原因 */
+.fc-status{display:flex;align-items:center;gap:16px;min-height:32px;padding:5px 12px;border-top:1px solid var(--c-line);background:var(--c-bg-sunken);font-size:11.5px}
+.fc-stat{display:flex;gap:16px;flex-wrap:wrap}
+.fc-status .pc{display:inline-flex;align-items:baseline;gap:5px}
+.fc-status .k{color:var(--ink3)}
+.fc-status .v{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.fc-status .note{margin-left:auto;color:var(--c-warn-text,#8A6D00);text-align:right}
 </style>
 </head>
 <body>
@@ -1079,6 +1124,8 @@ table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-sp
   <script src="ai-panel.js"></script>
   <script src="nav-order.js"></script>
   <script src="export-util.js"></script>
+  <script src="ppt-table-fit.js"></script>
+  <script src="ppt-preview.js"></script>
   <script src="pricing-core.js"></script>
   <script src="cost-base.js"></script>
   <script src="pricing-model.js"></script>
@@ -1147,6 +1194,7 @@ table.fc-table{border-collapse:separate;border-spacing:0;font-size:12px;white-sp
   <script src="views/audio-ind.js"></script>
   <script src="views/audio-view.js"></script>
   <script src="views/fob-view.js"></script>
+  <script src="grid-core.js"></script>
   <script src="forecast-core.js"></script>
   <script src="views/forecast-view.js"></script>
   <script src="views/audio-newprod.js"></script>

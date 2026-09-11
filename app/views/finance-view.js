@@ -1,4 +1,6 @@
 'use strict';
+/* PptTableFit：浏览器取全局、Node 单测走 require —— 两边都要能拿到，否则单测一 require 就炸 */
+function _fitLib(){ return (typeof window!=='undefined'&&window.PptTableFit)?window.PptTableFit:(typeof require!=='undefined'?require('../ppt-table-fit.js'):null); }
 // ECharts 主题桥取值器（canvas 不认 CSS 变量，必须给真实色值）
 function CT(){ return (typeof window!=='undefined'&&window.SbChartTheme)?window.SbChartTheme:{ink1:()=>'#1A1A1A',ink2:()=>'#5A5F66',ink3:()=>'#8A9099',line:()=>'#E6E8EB',lineSoft:()=>'#F0F1F3',bgElev:()=>'#FFFFFF',register:c=>c}; }
 /* ============================================================
@@ -838,7 +840,10 @@ async function exportFinDashboardPpt(){
       const txt=(ci===0||asText)?String(v==null?'':v):(pct.has(ci)?fmtPct(v):fmtNum(v));
       return cl(txt,{align:ci===0?'left':'center'});
     }));
-    s.addTable(data,{x:0.35,y:0.85,w:12.63,border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true,valign:'middle'});
+    // 自适应列宽：不给 colW 时 pptxgenjs 等分宽度，长表头/长名字必换行（2026-09-08 用户报）
+    const fr=_fitLib().fit(data,{availIn:12.63,fontSize:9,minFontSize:6,minColIn:0.26});
+    s.addTable(fr.rows,_fitLib().tableOpts(fr,{x:(13.333-fr.totalIn)/2,y:0.85,
+      border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true}));
   });
   const b64=await pptx.write('base64');
   const res=await api.saveFile('经营分析看板_'+todayStr()+'.pptx',b64,'pptx');
@@ -905,7 +910,9 @@ function finPptAddTable(pptx, title, spec, pctCells){
     const txt=(ci===0||asText)?String(v==null?'':v):(isPct(ri,ci)?fmtPct(v):fmtNum(v));
     return cl(txt,{align:ci===0?'left':'center'});
   }));
-  s.addTable(rows,{x:0.3,y:0.9,w:12.7,border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true,valign:'middle'});
+  const fr2=_fitLib().fit(rows,{availIn:12.733,fontSize:9,minFontSize:6,minColIn:0.26});
+  s.addTable(fr2.rows,_fitLib().tableOpts(fr2,{x:(13.333-fr2.totalIn)/2,y:0.9,
+    border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true}));
   return s;
 }
 async function exportUnitPpt(id){

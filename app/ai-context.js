@@ -101,8 +101,8 @@ const TOOL_SCHEMAS = {
   docSlice: {
     description: '按行号读取用户上传文档的一段原文（一次≤2000行）。配合 docSearch 的行号使用。',
     properties: { docId: { type: 'string' }, from: { type: 'integer' }, to: { type: 'integer' } }, required: ['docId', 'from'] },
-  fsList: { description: '列出工作区文件夹内容（用户授权的本机目录）。path 用绝对路径。', properties: { dir: { type: 'string' }, depth: { type: 'integer', description: '1-3' } }, required: [] },
-  fsRead: { description: '读本机文件：xlsx 按工作表返回行（sheet/fromRow/rows 可分页）；pptx/docx 抽文本；其余按文本。只能读工作区内。', properties: { path: { type: 'string' }, sheet: { type: 'string' }, fromRow: { type: 'integer' }, rows: { type: 'integer' }, maxChars: { type: 'integer' } }, required: ['path'] },
+  fsList: { description: '（已挂载的底表文件夹 PSI/库龄/财经/IDC/发货/成本 可只读访问，路径见 meta 的「PSI文件夹」或 dataCatalog）列出工作区文件夹内容（用户授权的本机目录）。path 用绝对路径。', properties: { dir: { type: 'string' }, depth: { type: 'integer', description: '1-3' } }, required: [] },
+  fsRead: { description: '（已挂载的底表文件夹 PSI/库龄/财经/IDC/发货/成本 可只读访问，路径见 meta 的「PSI文件夹」或 dataCatalog）读本机文件：xlsx 按工作表返回行（sheet/fromRow/rows 可分页）；pptx/docx 抽文本；其余按文本。只能读工作区内。', properties: { path: { type: 'string' }, sheet: { type: 'string' }, fromRow: { type: 'integer' }, rows: { type: 'integer' }, maxChars: { type: 'integer' } }, required: ['path'] },
   fsWrite: { description: '写文本类文件(txt/md/csv/json/js/py…)到工作区，整文件覆盖，写前自动备份。用户会先确认。', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] },
   tableProfile: {
     description: '【大表首选·先做这步】流式体检本机表格(.xlsx/.csv/.tsv，50MB+ 也秒回)：返回工作表清单、数据行数、每列的名字/类型/取值范围/样例值、前几行。任何针对表格的统计或查找前，先用它看清列名与工作表名。',
@@ -419,7 +419,7 @@ const AIData = (function () {
 
   // 通用兜底 provider 的快照：能取则取，取不到跳过；最后 JSON 化 + 截断。
   // boardId 用来附带该看板的持久化状态与标签；null=全局模式。
-  async function genericSnapshot(boardId) {
+  async function genericSnapshot(boardId, opts) {
     const api = A();
     const out = { 看板: boardId ? labelOf(boardId) : '全局（跨看板）' };
 
@@ -451,9 +451,11 @@ const AIData = (function () {
     // 读不到再退 localStorage。这是修复「用户筛了 Product Series=Coral，AI 却看不见」的关键。
     const ctx = boardId ? boardContext(boardId) : null;
     if (ctx && ctx.state) out.当前看板设置 = truncObj(ctx.state, BOARD_STATE_MAX);
-    const curFilters = (ctx && ctx.filters && Object.keys(ctx.filters).length) ? ctx.filters : null;
-    if (curFilters) {
-      out.当前筛选_仅供参考 = curFilters;
+    const uiFilters = (ctx && ctx.filters && Object.keys(ctx.filters).length) ? ctx.filters : null;
+    // ignoreFilters：本题不指界面范围 → 概览按全量取，只把界面筛选当备注列出来
+    const curFilters = (opts && opts.ignoreFilters) ? null : uiFilters;
+    if (uiFilters) {
+      out.当前筛选_仅供参考 = uiFilters;
       out.筛选说明 = '上面是用户界面此刻的筛选状态。若提问点名了具体产品/国家/产业，必须按提问自行构造 filters 取数，不受此筛选限制；仅当提问未指明范围时才参考它。';
     }
 
@@ -591,7 +593,14 @@ const AIData = (function () {
             const cell = (t, o) => ({ text: String(t == null ? '' : t), options: Object.assign({ fontFace: '微软雅黑', fontSize: 9, align: 'right', valign: 'middle' }, o || {}) });
             const rows = [tb.headers.map((h, i) => cell(h, { bold: true, color: 'FFFFFF', fill: { color: 'C7000B' }, align: i === 0 ? 'left' : 'right' }))];
             tb.rows.slice(0, 40).forEach(r => rows.push((r || []).map((v, i) => cell(v, i === 0 ? { align: 'left' } : null))));
-            pg.addTable(rows, { x: 0.4, y: y, w: 12.5, border: { type: 'solid', color: 'E6E8EB', pt: 0.5 }, autoPage: false });
+            const FIT = (typeof window !== 'undefined' && window.PptTableFit) || null;
+            if (FIT) {
+              const fr = FIT.fit(rows, { availIn: 12.5, fontSize: 9, minFontSize: 6, minColIn: 0.26 });
+              pg.addTable(fr.rows, FIT.tableOpts(fr, { x: (13.333 - fr.totalIn) / 2, y: y,
+                border: { type: 'solid', color: 'E6E8EB', pt: 0.5 }, autoPage: false }));
+            } else {
+              pg.addTable(rows, { x: 0.4, y: y, w: 12.5, border: { type: 'solid', color: 'E6E8EB', pt: 0.5 }, autoPage: false });
+            }
           }
         });
         const b64 = await pptx.write('base64');

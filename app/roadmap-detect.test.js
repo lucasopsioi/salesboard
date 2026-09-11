@@ -140,5 +140,12 @@ const item = (so, extra) => Object.assign({ key: 'X', so, si: so.map(v => Math.r
   ok('R4 在售产品不写销售结束时间(空=仍在售)', live.salesEnd === undefined);
 }
 
+// —— 产品线 → 品类归一（2026-09-10：「音频与智能配件」对不上「音频」，路标图整批消失）——
+ok('K1 「音频与智能配件」归到「音频」', D.lineToCategory('音频与智能配件') === '音频');
+ok('K2 「平板」原样', D.lineToCategory('平板') === '平板');
+ok('K3 英文产品线也认（Tablet / Buds）', D.lineToCategory('LatAm Tablet') === '平板' && D.lineToCategory('SonicBuds line') === '音频');
+ok('K4 归不进去的保留原值（不编、不丢）', D.lineToCategory('智能家居') === '智能家居');
+ok('K5 空值给空串', D.lineToCategory('') === '' && D.lineToCategory(null) === '');
+
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS');
 process.exit(f ? 1 : 0);

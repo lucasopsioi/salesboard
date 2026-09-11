@@ -1,4 +1,6 @@
 'use strict';
+/* PptTableFit：浏览器取全局、Node 单测走 require —— 两边都要能拿到，否则单测一 require 就炸 */
+function _fitLib(){ return (typeof window!=='undefined'&&window.PptTableFit)?window.PptTableFit:(typeof require!=='undefined'?require('../ppt-table-fit.js'):null); }
 /* ============================================================
    Salesboard — views/country-view.js
    国家看板视图：从上到下列出每个国家(或国家办)的汇总表 + 单国/整表导出。
@@ -360,7 +362,9 @@ async function exportCbPpt(){
       o.weekly.forEach(x=>a.push(cell(num(x),{color:'5A5F66'}))); a.push(cell(o.wow==null?'—':(o.wow*100).toFixed(0)+'%'),cell(num(o.inv),{bold:!!tot}),cell(num(o.dos),{bold:!!tot}));
       if(r.hasFlow){ a.push(cell(num(o.flowInv)),cell(num(o.flowDos)),cell(num(o.dcfdc))); } return a; };
     cbVisibleRows(v,r,cbColumns(r)).forEach(o=>rows.push(mk(o))); if(r.total)rows.push(mk(r.total,true));
-    s.addTable(rows,{x:0.3,y:0.8,w:12.7,border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:false});
+    const fr=_fitLib().fit(rows,{availIn:12.733,fontSize:9,minFontSize:6,minColIn:0.26});
+    s.addTable(fr.rows,_fitLib().tableOpts(fr,{x:(13.333-fr.totalIn)/2,y:0.8,
+      border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:false}));
   });
   const b64=await pptx.write('base64'); const res=await api.saveFile('国家看板_'+todayStr()+'.pptx',b64,'pptx'); if(res&&res.path)toast('已导出（每国一页）','ok');
 }

@@ -17,3 +17,23 @@ try {
 app.setPath('userData', path.join(base, 'sb-ui-test-ud-' + process.pid + '-' + Date.now()));
 app.commandLine.appendSwitch('remote-debugging-port', '9224');
 require('D:/workspace/Salesboard/main.js');
+
+/* 导出落盘改成「无对话框直写临时目录」。
+   真实的 saveFile 会弹系统保存框，自动化里没人点，await 就永远挂着 ——
+   之前的导出实测就是这么假死的（渲染进程里 api 是 contextBridge 冻结对象，改不掉，
+   只能在主进程这一侧换掉 IPC 处理器）。测试脚本直接读这个目录来核对导出结果。 */
+const OUT_DIR = path.join(base, 'sb-ui-test-out');
+try { fs.rmSync(OUT_DIR, { recursive: true, force: true }); } catch (e) {}
+fs.mkdirSync(OUT_DIR, { recursive: true });
+app.whenReady().then(() => {
+  const { ipcMain } = require('electron');
+  ['saveFile'].forEach(ch => {
+    try { ipcMain.removeHandler(ch); } catch (e) {}
+    ipcMain.handle(ch, (_e, name, b64) => {
+      const safe = String(name || 'out').replace(/[\/:*?"<>|]/g, '_');
+      const f = path.join(OUT_DIR, safe);
+      fs.writeFileSync(f, Buffer.from(String(b64 || ''), 'base64'));
+      return { path: f };
+    });
+  });
+});

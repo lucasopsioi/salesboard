@@ -499,7 +499,7 @@
       parseToolCall: AD.parseToolCall,
       boardLabel: b => (b ? AD.labelOf(b) : '全局（跨看板）'),
       filters: b => { try { const c = AD.boardContext && AD.boardContext(b); return c ? c.filters : null; } catch (e) { return null; } },
-      snapshot: async b => { try { return await AD.genericSnapshot(b); } catch (e) { return ''; } },
+      snapshot: async (b, o) => { try { return await AD.genericSnapshot(b, o); } catch (e) { return ''; } },
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
       optionsDirect: async (field) => AD.dispatchTool(registry, { tool: 'options', args: { field } }),
       provRetry: true,
@@ -551,7 +551,13 @@
           if (el) el.innerHTML = flow.map(fmtFlowStep).join('');
           else renderMessages();
         };
-        if (e.type === 'plan') {
+        if (e.type === 'understand') {
+          if (detail) push({ k: 'plan', label: '结合上文理解为：' + e.to, state: 'ok' });
+          setProg('结合上文理解问题…');
+        } else if (e.type === 'planner') {
+          if (detail) push({ k: 'plan', label: '规划 ' + (e.tasks || []).length + ' 个子任务：' + (e.tasks || []).map(t => t.agent + (t.label ? '·' + t.label : '')).join(' / '), state: 'ok' });
+          setProg('已规划 ' + (e.tasks || []).length + ' 个子任务…');
+        } else if (e.type === 'plan') {
           if (detail) push({ k: 'plan', label: '路由：' + (e.tasks || []).join(' → '), state: 'ok' });
           setProg('已规划 ' + (e.tasks || []).length + ' 个专家…');
         } else if (e.type === 'agentStart') {
@@ -589,7 +595,13 @@
     let out;
     try {
       st.messages.push(bubble);
-      out = await OR.orchestrate(question, st.boardId, deps, { mode: cfg.lmDeep ? 'deep' : 'fast', streamInto: bubble });
+      /* 把此前的对话带给编排层（2026-09-10 用户：追问「对比 2025 年卖得怎么样」被答「取不出数据」——
+         以前每轮只送当前一句，上文的产品名根本没传过去）。只带真正的问答，不带进度条/流式气泡。 */
+      const history = st.messages
+        .filter(m => m && !m.progress && !m.streaming && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+        .slice(0, -1)                                     // 最后一条是本轮刚推进去的问题本身
+        .slice(-6).map(m => ({ role: m.role, content: m.content }));
+      out = await OR.orchestrate(question, st.boardId, deps, { mode: cfg.lmDeep ? 'deep' : 'fast', streamInto: bubble, history: history });
     } finally {
       clearInterval(timer);
       const i = st.messages.indexOf(prog); if (i >= 0) st.messages.splice(i, 1);
@@ -1103,7 +1115,7 @@
       parseToolCall: AD.parseToolCall,
       boardLabel: b => (b ? AD.labelOf(b) : '全局（跨看板）'),
       filters: b => { try { const c = AD.boardContext && AD.boardContext(b); return c ? c.filters : null; } catch (e) { return null; } },
-      snapshot: async b => { try { return await AD.genericSnapshot(b); } catch (e) { return ''; } },
+      snapshot: async (b, o) => { try { return await AD.genericSnapshot(b, o); } catch (e) { return ''; } },
       runTool: async (name, args) => AD.dispatchTool(registry, { tool: name, args }),
       optionsDirect: async (field) => AD.dispatchTool(registry, { tool: 'options', args: { field } }),
       catalogDirect: async () => { try { return await api().psiCatalog(); } catch (e) { return null; } },

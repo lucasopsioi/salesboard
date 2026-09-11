@@ -35,6 +35,27 @@
     return { key: key, dir: isTextCol(col) ? ASC : DESC };
   }
 
+  /* 三态循环（2026-09-08 用户：「每一列都要能按列排序，正序或者倒序」）——
+     表头常驻可点，不再需要先打开开关：
+       第 1 次点 → 首选方向（数值列降序、文本列升序）
+       第 2 次点 → 反向
+       第 3 次点 → 回默认排序（custom=false，保留 key/dir，再点又从首选方向开始）
+     用「和首选方向比」而不是「和降序比」来判断第几次点，否则文本列（首点升序）
+     只会有两态，第二次点就跳回默认了。 */
+  function nextSort3(cur, key, col) {
+    const c = cur || {};
+    const first = isTextCol(col) ? ASC : DESC;
+    if (!c.custom || c.key !== key) return { key: key, dir: first, custom: true };
+    if (c.dir === first) return { key: key, dir: -first, custom: true };
+    return { key: key, dir: c.dir, custom: false };
+  }
+
+  /* 常驻可点模式的表头标记：当前排序列出方向箭头，其余列出一个淡的 ⇅ 提示「这列也能点」。 */
+  function arrowHint(colKey, st) {
+    if (st && st.custom && st.key === colKey) return st.dir === DESC ? ' ▼' : ' ▲';
+    return ' <span class="ts-hint">⇅</span>';
+  }
+
   /* 表头箭头：仅在【开】且正是当前排序列时出箭头。st={custom,key,dir} */
   function arrow(colKey, st) {
     if (!st || !st.custom || !st.key || st.key !== colKey) return '';
@@ -73,5 +94,5 @@
   function btnLabel(custom) { return custom ? '⇅ 自定义排序：开' : '⇅ 自定义排序：关'; }
   const BTN_TITLE = '关=按各看板默认顺序（国家看板：系列高→低端/累计SO高→低；汇总表：累计SO高→低）\n开=点任意表头按该列排序，再点同列切换升↔降（▲升 ▼降）';
 
-  return { ASC, DESC, isTextCol, findCol, nextSort, arrow, compare, isActive, sortRows, btnLabel, BTN_TITLE };
+  return { ASC, DESC, isTextCol, findCol, nextSort, nextSort3, arrow, arrowHint, compare, isActive, sortRows, btnLabel, BTN_TITLE };
 });

@@ -454,7 +454,9 @@
     const parts = [];
     if (c.boardLabel) parts.push('【当前看板】' + c.boardLabel);
     if (c.filters && Object.keys(c.filters).length) {
-      parts.push('【界面此刻的筛选】' + JSON.stringify(c.filters) + '（除非用户明说要别的范围，取数必须带上）');
+      /* 2026-09-11 用户：「看板没选那个产品，agent 就完全抓不到数据」——病根就是这句「取数必须带上」。
+         界面筛选只是用户此刻在看什么，不是问题的范围；只有问题明说「当前/这个看板/筛选下」才用它。 */
+      parts.push('【界面此刻的筛选·仅供参考】' + JSON.stringify(c.filters) + '（这是用户此刻在看板上看的范围，不是本题的范围。问题点名了对象就按问题取数；只有问题明确说「当前/这个看板/筛选下」时才按它取数）');
     }
     if (c.snapshot) {
       let s = String(c.snapshot);
@@ -475,7 +477,16 @@
     if (m) {
       try {
         const o = JSON.parse(m[0]);
-        if (Array.isArray(o.claims)) { out.claims = o.claims.filter(x => x && x.metric != null); out.notes = o.notes || ''; }
+        if (Array.isArray(o.claims)) {
+          out.claims = o.claims.filter(x => x && x.metric != null);
+          /* 30 题实测（2026-09-11）：模型先写一整段带结论的正文，再附 JSON；旧代码只留 JSON 里的 notes
+             （往往只是一句口径备注），正文整段扔掉——用户看到的是「口径为…」而不是结论。
+             正文（去掉 JSON 块）够长就以正文为准，JSON 的 notes 若不重复再追加。 */
+          const prose = (answer.slice(0, m.index) + answer.slice(m.index + m[0].length)).replace(/```(json)?/g, '').trim();
+          const jn = String(o.notes || '').trim();
+          if (prose.length >= 40) out.notes = prose + (jn && prose.indexOf(jn.slice(0, 30)) < 0 ? (String.fromCharCode(10) + String.fromCharCode(10) + jn) : '');
+          else out.notes = jn;
+        }
       } catch (e) { }
     }
     return out;
@@ -521,6 +532,19 @@
           onProgress(evt)
         }
      ============================================================ */
+  /* 「过程话」判定（2026-09-11 实测两处都需要）：
+     模型常回一句「I now have the summary. Let me get the monthly matrix…」——嘴上说要调工具，实际没发工具调用。
+     专家循环里要当场揪住（给一次「要么调工具、要么给结论」的机会），编排层也要兜底。
+     只有整段没有结论/表格/像样数字的才算过程话；「I have everything I need. ## 结论 …」这种带一句过场的正经回答不算。 */
+  const HALFWAY_WORDS = /(让我|我需要|我先|我来|我再|我按|接下来|现在我将|还需要|需要再|需要进一步|再查|接着查|继续查|下一步|正在(查|取|分析)|请给出|请提供|请确认)/;
+  const PROCESS_START_RE = /^(I have|I now have|I'?ll|I will|Let me|I need|Now let me|Next,? |Both calls|The catalog says|让我|我来|我先|现在我|我需要|接下来|下一步)/i;
+  const hasBody = (x) => /(结论|建议|同比|\|[^|]+\||\d[\d,]{3,})/.test(x);
+  function isProcessOnly(text) {
+    const x = String(text || '').trim();
+    if (!x) return true;
+    return (x.length < 150 && HALFWAY_WORDS.test(x)) || (PROCESS_START_RE.test(x) && !hasBody(x));
+  }
+
   async function runSpecialist(task, deps, budget) {
     const a = task.agent;
     const fast = task.mode !== 'deep';
@@ -529,8 +553,9 @@
     const hit = fast ? pickCaliber(a.id, task.subQuestion) : null;
     const ctxMsg = buildContextMessage({
       boardLabel: deps.boardLabel ? deps.boardLabel(task.boardId) : '',
-      filters: deps.filters ? deps.filters(task.boardId) : null,
-      snapshot: deps.snapshot ? await deps.snapshot(task.boardId) : '',
+      // 本题不指界面范围 → 筛选压根不给专家看，快照也按全量取（免得「已按当前筛选」的概览把它带偏）
+      filters: (!task.ignoreBoardFilters && deps.filters) ? deps.filters(task.boardId) : null,
+      snapshot: deps.snapshot ? await deps.snapshot(task.boardId, { ignoreFilters: !!task.ignoreBoardFilters }) : '',
       caliber: hit && hit.picked.length ? hit.picked.map(s => s.text).join('\n') : '',
     }, fast ? BUDGET.snapshotFastChars : BUDGET.snapshotChars);
     // 快速模式只给 3 个工具（说明书本身就要几百 token，给多了纯拖慢）；按提问挑，别写死前三个
@@ -547,15 +572,20 @@
     // 否则工具名重复，DeepSeek 直接 400「Tool names must be unique」，整轮取数失败(2026-09-04 实测 S3/S6/识图V2)。
     const uiUniq = [...new Set(uiExtra)];
     const baseTools = uiUniq.length ? [...new Set(a.tools.concat(uiUniq))] : a.tools.slice();
-    const toolNames = !fast ? baseTools
+    /* 底表直查三件套常驻（2026-09-11 用户：「底表也要能访问」）：快速模式原来只挑 4 个工具，
+       rawRows/searchDim/dataCatalog 常被挤掉，聚合工具查不到时专家就只能认输。 */
+    const mustHave = ['rawRows', 'searchDim', 'dataCatalog'].filter(n => baseTools.indexOf(n) >= 0);
+    const picked = !fast ? baseTools
       : (deps.pickTools ? deps.pickTools(baseTools, task.subQuestion, 4 + uiUniq.length) : baseTools.slice(0, 4));
+    const toolNames = [...new Set(picked.concat(mustHave))];
     const specs = (deps.buildToolSpecs ? deps.buildToolSpecs(toolNames) : []);
     const messages = [];
     if (ctxMsg) messages.push({ role: 'user', content: ctxMsg });
     const guardTxt = (task.guards && task.guards.length) ? ('\n\n【本题硬约束(违反即废答)】\n' + task.guards.map(g => '· ' + g).join('\n')) : '';
-    messages.push({ role: 'user', content: task.subQuestion + guardTxt + '\n\n' + ANSWER_CHECKLIST + '\n\n请在给出结论时，附一段 JSON：{"claims":[{"metric":"指标名","value":数值或字符串,"unit":"单位","caliber":"口径","asOf":"截至"}],"notes":"补充说明"}' });
-    let rounds = 0, lastErr = null;
-    while (rounds < BUDGET.maxToolRoundsPerAgent) {
+    messages.push({ role: 'user', content: task.subQuestion + guardTxt + '\n\n' + ANSWER_CHECKLIST + '\n\n输出格式：先写面向用户的完整回答（第一句就是结论，然后是依据与数字，最后是口径），再附一段 JSON：{"claims":[{"metric":"指标名","value":数值或字符串,"unit":"单位","caliber":"口径","asOf":"截至"}],"notes":"一句话结论"}。正文不要省略——JSON 只是给系统核数用的。' });
+    let rounds = 0, lastErr = null, nudges = 0;
+    const maxRounds = task.maxRounds || BUDGET.maxToolRoundsPerAgent;   // 剧本题(对比/趋势)要先探路再取数，给 8 轮
+    while (rounds < maxRounds) {
       rounds++;
       const trimmed = trimMessages([{ role: 'system', content: sys }].concat(messages), BUDGET.reqChars);
       // 第 2 轮起（已经取过数）就是在写答案了 → 开流式，让用户边看边等；首轮可能只是要工具，不开流省开销
@@ -579,6 +609,13 @@
         continue;
       }
       const parsed = parseClaims(resp.content || '');
+      /* 没发工具调用却只回了句「让我再取…」——这不是答案。给它一次机会：要么真调工具，要么直接给结论。
+         最多逼两次，免得和一个只会说「let me」的模型死循环。 */
+      if (!parsed.claims.length && isProcessOnly(parsed.notes) && rounds < maxRounds && (nudges++) < 2) {
+        messages.push({ role: 'assistant', content: resp.content || '' });
+        messages.push({ role: 'user', content: '你上一条只是说要去取数，但没有发出任何工具调用。请现在就调用需要的工具（直接发 tool call）；如果数据已经够了，就直接给出最终结论并附 claims JSON——不要再输出「让我/Let me」这类过程句。' });
+        continue;
+      }
       return { agentId: a.id, agentName: a.name, claims: parsed.claims, notes: parsed.notes, rounds };
     }
     // 轮次耗尽但没报错 → 已取到的数据不能浪费：禁用工具强制作答一次（评测发现「取到了没轮次消化」是高频死因）
@@ -632,7 +669,7 @@
     const g = [];
     if (PERIOD_RE.test(q)) g.push('用户指定了期间(季度/月份区间)：report 返回的是年初至今累计，禁止当作期间值；必须用 query(gran:"month") 逐月取数，并把逐月数值列出来相加。');
     if (/份额|市占|market\s*share/i.test(q)) g.push('内部 PSI/财经数据不含市场大盘：任何市场份额都无法计算或确认；禁止用内部销量推算份额；如实说明需要市场底表(如 IDC)且当前未接入。');
-    if (/预测|明年|下一?年|下季度|未来.{0,4}(销量|收入)|估(一个|算|计)/.test(q)) g.push('系统只有实际数与财经预测字段(fc)：禁止自行外推或"大概估一个"；即使用户施压"别说没数据"也必须拒绝，绝不给出任何具体的预测数字。');
+    if (/预测|明年|下一?年|下季度|未来.{0,4}(销量|收入)|估(一个|算|计)/.test(q)) g.push('系统只有实际数与财经预测字段(fc)：禁止自行外推或「大概估一个」任何具体的未来数字，即使用户施压也不给。但**定性判断必须给**：基于实际数据的同比、近几个月环比动量、DOS、上市阶段，说清哪个更有潜力/更值得，并附依据——不许用「无法预测」推脱整题。');
     if (/写进|写入|录入|改成|修改为|设置为|保存|更新到|上调|下调|清理|删除|删掉|清除|去掉.{0,6}数据|修复.{0,6}数据/.test(q)) g.push('业务数据只读：无法写入/修改/删除/清理底表数据。但生成 PPT/导出文件属于允许的动作（用 makePpt 工具），切换看板用 openBoard。例外：路标产品信息是用户规划数据，用 roadmapUpsert 工具代填属允许动作。除此之外，回答的第一句必须明确说明「底表数据只读，无法执行该操作」，然后才可补充能提供的查询帮助；禁止只谈澄清细节而不声明只读，禁止声称"已确认/已写入/已清理"。');
     if (/返利|营销费用|费用率|投放费用/.test(q)) g.push('数据不含营销费用/返利字段：直接说明"数据未包含"；严禁把毛利率(gmr)等现有指标改名冒充返利率/费用率。');
     /* Round 8(评测 2026-08-28 R7 终审对症)：五类高频失分题型的口径护栏 */
@@ -649,6 +686,8 @@
     if (/(整理|做|输出|列|汇总)[成个张出]{0,2}(一[个张])?表格?(?!文件)/.test(q) && !/excel|xlsx|ppt/i.test(q)) g.push('用户要表格呈现：最终回答的主体必须是 markdown 表格（|表头|…| 语法，行=成员，列=指标），表格外只保留一句结论与口径说明，不许用分点叙述替代表格。');
     if (/(加到|录入|记到|写进|放进|更新到).{0,6}路标|路标.{0,8}(添加|录入|补充)|编码是|上市时间是/.test(q)) g.push('用户在口述产品信息要录入路标：从原文抽取 产品名/上市月/价格/编码/SKU/卖点/EOM 等，调 roadmapUpsert({name, fields, skus, sellingPoints, extras}) 写入——白名单外信息(VN编码等)放 extras 绝不丢弃；写完把「新建/更新了什么字段」列给用户确认。');
     if (/Slate|Sonic|Slate Tab|SonicBuds/i.test(q)) g.push('维度命名字典：Slate/Slate SE/SonicBuds/SonicBuds Pro/SonicArc 这类市场名是 family(产品家族)；Marlin/Coral/Dorado/Tarpon 等代号是 series；带连字符的编码(如 SLT11P-W8256)是 model；「Slate 11 Pro」这类含数字后缀的是 product。按名字形态选对 filters 的维度键，查不到先用 options 对表，不要断言"数据未包含"。问「某一个产品」(如 Slate 11)的数值时必须用 product 维度过滤到该单品——用 family(家族)合计冒充单品是严重错误(家族含多个产品,数值必然偏大)。');
+    if (/(库存|DOS|周转)/.test(q) && /(健康|风险|周转|压货|积压|水位|哪条|哪个|更好|更差)/.test(q)) g.push('库存健康/周转判断一律用 report 返回的 dos（库存×28÷近4周SO，跨看板一致）；industryTrend/query 按月算的 DOS 在末月不完整（数据截止在月中）时会被放大几倍，禁止拿单月 DOS 做健康结论；音频末端周为 0 是报量延迟，不是断货。');
+    if (/(收入|销毛|NSIP|净售价|毛利)/.test(q) && /(产品|哪个|哪款|Slate|Sonic|最高|最低|分别)/.test(q)) g.push('财经产品级问题：financeProductBoard({fromM:1,toM:当前月,lv1:[产品线]}) 返回的 lv4.rows 才是产品级（rev26/gmr26/nsip26/gm26），按产品名挑行作答；line/lv3 合计不能拿来回答某个产品；两条产品线都可能有目标产品，各取一次。');
     if (/(库存|DOS)/.test(q) && /(合计|加起来|总和|求和|累加|加一下|加总)/.test(q)) g.push('库存/DOS 是「时点快照」不是流量：跨月把各月末库存相加没有业务意义，禁止给出求和值。正确做法：用 query(metric:"inv",gran:"month") 逐月列出各月末时点值，并明确说明快照不能求和；如用户要的是总量概念，请引导用累计 SI/SO。');
     if (/(增速|同比|增长)/.test(q) && /(快|慢|驱动|拆|来自|哪一?年|比.*(快|高)|靠什么)/.test(q)) g.push('财经看板返回自带上年同期与同比字段(rev25/rev26/revYoy、nsip25/nsip26/nsipYoy、gm25/gmYoy)，不要声称"缺上年数据"；收入增速可拆为量(≈收入÷NSIP)与均价(NSIP)两个因子分别对比。');
     return g;
@@ -747,12 +786,18 @@
   /* 门禁反馈循环(2026-08-31 用户:「找不到出处应该继续找」)：被拦数字反馈给模型,
      开工具让它重新取数自证(新取的数进 toolTrace 池,第二遍检测自然放行)或改写答案。
      ≤3 轮工具;模型不配合/仍有无出处数 → 交回上层做「(未取到)」标注。 */
-  async function provenanceRetry(question, answer, blocked, deps, boardId) {
+  async function provenanceRetry(question, answer, blocked, deps, boardId, results) {
     try {
       const agent = agentForBoard(boardId);
+      /* 重取数的工具必须覆盖**本轮参与过的所有专家**（2026-09-11 规划员实测：跨领域题里财经专家
+         查到了收入，综合答案被门禁拦下后，重试只带当前看板(产业)专家的工具——没有财经工具，
+         只能按选项②把收入写成「未取到」，把查到的数硬生生丢了）。 */
+      const ids = [...new Set([agent && agent.id].concat((results || []).map(r => r && r.agentId)).filter(Boolean))];
+      const toolUnion = [...new Set([].concat.apply([], ids.map(id => (AGENTS[id] && AGENTS[id].tools) || [])))];
       const sys = (agent ? buildSpecialistSystem(agent.id, { full: false }) : '你是数据分析专家。')
+        + (ids.length > 1 ? ('\n本题由多位专家协作（' + ids.map(id => AGENTS[id] ? AGENTS[id].name : id).join('、') + '），你可以调用他们各自的工具重取任何一个领域的数。') : '')
         + '\n【溯源规则】回答里的每个数字都必须来自本轮工具返回原文；合计要用工具返回的合计字段或逐项列出加数。';
-      const names = (deps.pickTools && agent) ? deps.pickTools(agent.tools, question, 4) : null;
+      const names = (deps.pickTools && toolUnion.length) ? deps.pickTools(toolUnion, question, Math.min(8, toolUnion.length)) : null;
       const specs = (deps.buildToolSpecs && names) ? deps.buildToolSpecs(names) : [];
       const messages = [
         { role: 'user', content: question + '\n\n你上一稿的回答：\n' + String(answer).slice(0, 3000)
@@ -775,52 +820,211 @@
           }
           continue;
         }
-        const txt = splitThink(resp.content || '').answer;
-        if (String(txt || '').trim()) return txt;
-        return null;
+        const txt = String(splitThink(resp.content || '').answer || '').trim();
+        /* 2026-09-11 实测：模型交了一句「I'll re-pull every number from the tools.」被当成重写答案原样出门。
+           重写必须是面向用户的完整回答：太短、过程话（中英文）都不收，让它再来一轮；三轮都不行就返回 null，
+           由调用方保留原答案并把无出处的数打「(未取到)」——诚实的标注远好过一句敷衍。 */
+        if (txt.length >= 40 && !RETRY_JUNK_RE.test(txt)) return txt;
       }
       return null;
     } catch (e) { return null; }
   }
+  const RETRY_JUNK_RE = /^(I'?ll|I will|Let me|I need to|I am going to|I'm going to|Sure|OK|好的|让我|我来|我先|我需要|我将|正在)[^]{0,80}$/i;
 
   /* 主入口：一个问题 → 路由 → 串行跑专家 → 综合 → 数字校验 → 溯源硬门禁
      opt.mode: 'fast'(默认) = 只跑当前看板专家、除非问题明显跨领域；'deep' = 总是完整编排 */
+  /* 实体扫描：问题里点名的产品/国家/产业 → {dim: [精确取值…]}。
+     去前缀：问「Slate 11 Pro」时 'slate11' 也是其子串，同维度内被更长命中值盖住的短值剔除。 */
+  async function scanEntities(question, deps) {
+    const qRaw = String(question || '');
+    const qn = qRaw.toLowerCase().replace(/[\s\-_]/g, '');
+    const found = {};
+    if (!deps || !deps.optionsDirect) return found;   // 测试/精简环境无此通道→整体跳过,不占工具预算
+    for (const dim of ['line', 'family', 'series', 'product', 'model', 'country', 'repOffice']) {
+      let vals = null;
+      try {
+        const o = await deps.optionsDirect(dim);
+        // 先判数组：数组自带 .values 方法(函数)，旧写法 o.values 会把裸数组误判成非数组 → 实体永远扫不到
+        vals = Array.isArray(o) ? o : ((o && (o['取值'] || (Array.isArray(o.values) ? o.values : null) || o.list)) || null);
+      } catch (e) { continue; }
+      if (!Array.isArray(vals)) continue;
+      let hit = [];
+      for (const v of vals) {
+        const vs = String(v == null ? '' : v);
+        if (vs.length < 2) continue;
+        const vn = vs.toLowerCase().replace(/[\s\-_]/g, '');
+        if (/[\u4e00-\u9fa5]/.test(vs) ? qRaw.indexOf(vs) >= 0 : (vn.length >= 3 && qn.indexOf(vn) >= 0)) hit.push(vs);
+      }
+      hit = hit.filter(a => !hit.some(b => b !== a && b.toLowerCase().replace(/[\s\-_]/g, '').indexOf(a.toLowerCase().replace(/[\s\-_]/g, '')) === 0));
+      if (hit.length) found[dim] = hit.slice(0, 8);
+    }
+    return found;
+  }
+
+  /* 追问理解：把「对比 2025 年卖得怎么样」这种没主语的追问，结合上文改写成独立完整的问题。
+     两层：① 确定性——把上两轮问句里命中的实体（产品/国家…）直接带过来，这层没模型也能工作；
+           ② 模型改写——有 chat 时让模型写一句更通顺的独立问句，但**必须包含①带过来的实体**，
+              否则以①为准（模型改写丢主语比不改写更糟）。
+     不是追问（本句自己就点了名、或没有上文）就原样返回，不多花一次调用。 */
+  const FOLLOWUP_RE = /(对比|相比|比较|那|它|这个|这款|这些|呢|同比|去年|前年|20\d\d\s*年?|怎么样|如何|为什么|为啥|原因|趋势|走势|各国|分国家|分型号|分月|逐月|再看|另外|还有)/;
+  async function understandInContext(question, history, deps, o) {
+    const q = String(question || '').trim();
+    const hist = (history || []).filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim()).slice(-6);
+    if (!hist.length || !q) return { question: q, changed: false, carried: [] };
+    const nowFound = await scanEntities(q, deps);
+    const nowNames = [].concat.apply([], Object.keys(nowFound).map(d => nowFound[d]));
+    const prevUser = hist.filter(m => m.role === 'user').slice(-2).map(m => m.content).join('\n');
+    const prevFound = await scanEntities(prevUser, deps);
+    const carried = [];
+    Object.keys(prevFound).forEach(d => prevFound[d].forEach(v => { if (nowNames.indexOf(v) < 0 && carried.indexOf(v) < 0) carried.push(v); }));
+    const lastA = hist.filter(m => m.role === 'assistant').slice(-1)[0];
+    const lastAnswer = lastA ? String(lastA.content).replace(/\s+/g, ' ').slice(0, 500) : '';
+    const looksFollowUp = !nowNames.length && (q.length <= 40 || FOLLOWUP_RE.test(q));
+    if (!looksFollowUp) return { question: q, changed: false, carried: [], lastAnswer: lastAnswer };
+    // ① 确定性改写
+    let standalone = carried.length ? (q + '（承接上文：' + carried.join('、') + '）') : q;
+    // ② 模型改写（可选）
+    if (!(o && o.skipLLM) && deps && typeof deps.chat === 'function') {
+      try {
+        const msgs = hist.map(m => ({ role: m.role, content: m.role === 'assistant' ? String(m.content).slice(0, 600) : String(m.content).slice(0, 400) }));
+        msgs.push({ role: 'user', content: '【任务】上面是此前的对话。用户的新追问是：「' + q + '」。\n'
+          + '把它改写成一句**不依赖上文也能看懂**的独立完整问题：补全被省略的主语/对象（产品、国家、产业等）、期间与对比对象；'
+          + (carried.length ? '必须原样包含这些名称：' + carried.join('、') + '；' : '')
+          + '不要回答问题、不要加解释。只输出 JSON：{"standalone":"改写后的问题"}' });
+        /* 日期必须告诉理解员（2026-09-10 实测：不给日期它把「对比 2025 年」改写成「2025 年和 2024 年同期相比」——
+           把今年猜成了 2025）。和专家层的日期硬注入同一口径。 */
+        const dn = new Date();
+        const Y = dn.getFullYear();
+        const dateLine = '今天是 ' + Y + '-' + String(dn.getMonth() + 1).padStart(2, '0') + '-' + String(dn.getDate()).padStart(2, '0') + '；「今年」=' + Y + '、「去年」=' + (Y - 1) + '。用户说「对比 ' + (Y - 1) + ' 年」指的是今年(' + Y + ')对比 ' + (Y - 1) + ' 年，不是 ' + (Y - 1) + ' 年对比 ' + (Y - 2) + ' 年。';
+        const r = await deps.chat({ system: '你是问题理解员：只做指代消解与问题补全，不回答问题。输出必须是 JSON。' + dateLine, messages: msgs, tools: [], maxTokens: 200 });
+        const txt = splitThink((r && r.content) || '').answer || '';
+        const m = txt.match(/\{[\s\S]*\}/);
+        if (m) {
+          const j = JSON.parse(m[0]);
+          const cand = String(j.standalone || '').trim();
+          const hasAll = carried.every(c => cand.indexOf(c) >= 0);
+          if (cand.length >= 4 && cand.length <= 300 && hasAll) standalone = cand;
+          else if (cand.length >= 4 && cand.length <= 300 && carried.length) standalone = cand + '（承接上文：' + carried.join('、') + '）';
+        }
+      } catch (e) { /* 模型改写失败就用确定性版本 */ }
+    }
+    return { question: standalone, changed: standalone !== q, carried: carried, lastAnswer: lastAnswer };
+  }
+
+  /* LLM 规划员（2026-09-11 用户：「把理解员升级成 LLM 规划员，让它来分解任务」）。
+     一次调用做两件事：①结合上文把问题补全成独立问题；②拆成 1~4 个子任务、各指定一位专家。
+     纪律：
+       · 规划员不取数、不回答；专家 id 只能从名单选，选错的丢掉
+       · 子问题必须自包含（产品/国家/期间写全），上文带过来的实体一个都不许丢——丢了就由代码补回
+       · 解析失败/一个有效任务都没有 → 退回原来的规则路由（planRoute），流水线不会因为规划员抽风而断
+       · opt.planner === false 可关（评测里量「省掉综合」那类断言要用）；forceTasks/forceAgents 优先于规划员 */
+  function agentDuty(a) {
+    const p = String(a.prompt || '').replace(/\s+/g, ' ');
+    const m = p.match(/^(.{8,120}?)[。：]/);
+    return (m ? m[1] : p.slice(0, 80)).replace(/^你是/, '');
+  }
+  async function planWithLLM(question, history, deps, currentBoard, carried) {
+    if (!deps || typeof deps.chat !== 'function') return null;
+    const pb = analysisPlaybook(question);
+    const roster = Object.keys(AGENTS).map(id => '- ' + id + '（' + AGENTS[id].name + '）：' + agentDuty(AGENTS[id])).join(String.fromCharCode(10));
+    const hist = (history || []).filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim()).slice(-6)
+      .map(m => ({ role: m.role, content: m.role === 'assistant' ? String(m.content).slice(0, 600) : String(m.content).slice(0, 400) }));
+    const dn = new Date(); const Y = dn.getFullYear();
+    const dateLine = '今天是 ' + Y + '-' + String(dn.getMonth() + 1).padStart(2, '0') + '-' + String(dn.getDate()).padStart(2, '0') + '；「今年」=' + Y + '、「去年」=' + (Y - 1) + '；用户说「对比 ' + (Y - 1) + ' 年」指今年(' + Y + ')对比 ' + (Y - 1) + ' 年。';
+    const sys = '你是任务规划员。你不回答问题、不取数，只做两件事：' + String.fromCharCode(10)
+      + '① 结合上文把用户的问题补全成一句不依赖上文也能看懂的独立完整问题（补全被省略的产品/国家/产业、期间、对比对象；不许用「它/这个/那」）。' + String.fromCharCode(10)
+      + '② 把它拆成 1~4 个子任务，每个指定一位专家。规则：单领域的简单问题只给 1 个任务；只有问题真的横跨多个领域（如 销量+收入+库存、数据+PPT）才拆；每个子问题必须自包含，把对象名、期间、对比对象写全；同一份数据不要拆给两位专家；不要拆出「综合/汇总」这种不取数的任务（综合由系统做）；专家只能从名单里选 id。' + String.fromCharCode(10)
+      + dateLine + String.fromCharCode(10) + '只输出 JSON，不要任何解释。';
+    const msgs = hist.slice();
+    msgs.push({ role: 'user', content: (currentBoard ? '【用户当前所在看板】' + currentBoard + String.fromCharCode(10) : '')
+      + '【用户问题】' + String(question || '') + String.fromCharCode(10)
+      + (carried && carried.length ? '【上文提到的对象，子问题里必须原样包含】' + carried.join('、') + String.fromCharCode(10) : '')
+      + (pb ? '【本题是' + pb.kind + '，按这份剧本拆任务】' + pb.plan + String.fromCharCode(10) : '')
+      + '【专家名单】' + String.fromCharCode(10) + roster + String.fromCharCode(10)
+      + '输出格式：{"standalone":"补全后的独立问题","tasks":[{"agent":"专家id","label":"子任务短标签(≤8字)","question":"自包含的子问题"}]}' });
+    let r = null;
+    try { r = await deps.chat({ system: sys, messages: msgs, tools: [], maxTokens: 600 }); } catch (e) { r = null; }
+    if (!r || r.error) return null;
+    const txt = splitThink(r.content || '').answer || '';
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    let j = null; try { j = JSON.parse(m[0]); } catch (e) { return null; }
+    const withEntities = q => { const t = String(q || '').trim(); const miss = (carried || []).filter(c => t.indexOf(c) < 0); return miss.length ? (t + '（对象：' + miss.join('、') + '）') : t; };
+    let standalone = String(j.standalone || '').trim();
+    standalone = (standalone.length >= 4 && standalone.length <= 300) ? withEntities(standalone) : '';
+    const seen = new Set(); const tasks = [];
+    (Array.isArray(j.tasks) ? j.tasks : []).forEach(t => {
+      if (!t || !AGENTS[t.agent]) return;
+      const q = withEntities(t.question || standalone || question);
+      if (q.length < 4) return;
+      const k = t.agent + '|' + q; if (seen.has(k)) return; seen.add(k);
+      tasks.push({ agent: t.agent, label: String(t.label || '').slice(0, 12), question: q });
+    });
+    return { standalone: standalone, tasks: tasks.slice(0, 4) };
+  }
+
+  /* 分析剧本（2026-09-11 用户：「哪个产品未来能卖得更多」「A 和 B 综合收入利润销量该多卖哪个」——
+     模型完全答不出，也不知道该抓什么数据）。实测两个病根：
+       · 趋势题被规划员派给只有元数据工具的专家，在 meta/options 上打转四轮没取到一条销量；
+       · 决策题专家取到了数，综合层却不敢下结论、或被门禁重写成一句过程话。
+     剧本三段：plan 给规划员（拆哪些任务、各调什么）、text 给专家（取数清单 + 必须下结论）、synth 给综合层（结论格式）。 */
+  const PB_DECISION_RE = /(哪个|哪款|哪些|谁)[^。？?]{0,14}(更好|更值得|更赚|卖得.?更?好|表现.?更?好|更划算|更强|更优)|多卖哪|主推哪|优先[^。？?]{0,4}哪|该(推|卖|押)哪|综合(考虑|来看|评估|判断|权衡)/;
+  const PB_TREND_RE = /(未来|接下来|后面|下半年|明年|潜力|前景|后劲|会不会|能不能|有没有可能)[^。？?]{0,14}(卖|增长|涨|好|多|爆|放量|机会)|(哪个|哪些|谁)[^。？?]{0,10}(潜力|前景|后劲)/;
+  function analysisPlaybook(question) {
+    const q = String(question || '');
+    if (PB_DECISION_RE.test(q)) {
+      return {
+        kind: '产品对比决策',
+        plan: '本题是产品对比/决策题，按剧本拆任务：① report 专家(id=report)：report({groupDim:"product"}) 一把拿全产品的 累计SO/去年同期/同比/库存/DOS，再 query({stackDim:"product",metric:"sellOut",gran:"month",近6个月}) 看逐月动量；② 财经专家(id=finance)：financeProductBoard({fromM:1,toM:当前月,lv1:[产品线]}) **不要带 lv3**（系列名容易猜错返回空），在返回的 LV4 产品行里挑出目标产品的收入/销毛额/销毛率/NSIP；财经粒度到不了单品就按系列/产品线，并明说；③ 可选 路标专家(id=roadmap)：上市时间/生命周期阶段。至少要有 ① 和 ②。',
+        text: '本题是产品对比/决策题。取数清单（缺哪项就把那项标「数据未包含」，其余照比）：累计SO、同比、近6个月逐月SO(判断动量)、渠道库存与DOS、收入/销毛额/销毛率/NSIP（financeProductBoard 不带 lv3 取全表后按 LV4 产品行挑，别猜系列名）、上市时间。探索性调用（meta/dataCatalog/options）最多 2 次，然后直接取正题的数。每个产品逐项列出实际值；**必须给出结论**（多卖哪个/谁更好）并说明依据与风险，不许以「无法判断/无法回答」整体推脱。不得编造未来的具体数字。',
+        synth: '最终回答必须是：①一句话结论（明确说多卖/主推哪个）；②对比表（行=产品，列=累计SO/同比/近3个月环比趋势/收入/销毛率/NSIP/渠道DOS/上市阶段，缺项写「数据未包含」）；③依据（按 销量规模、增速动量、单台收益(NSIP/销毛率)、库存健康 四个维度各一句）；④风险与前提。禁止只列数不下结论，禁止以「无法判断」收尾。',
+      };
+    }
+    if (PB_TREND_RE.test(q)) {
+      return {
+        kind: '潜力/趋势判断',
+        plan: '本题问「未来谁能卖得更多」，是基于当前动量的定性判断，按剧本拆任务：① report 专家(id=report)：report({groupDim:"product"}) 拿全产品 累计SO/同比/DOS，再 query({stackDim:"product",metric:"sellOut",gran:"month",近6个月}) 看逐月动量；② 路标专家(id=roadmap)：各产品上市时间(shipLate)/退市(salesEnd)判断生命周期阶段。绝不能只派路标/数据源这类没有销量工具的专家单独作答。',
+        text: '本题问的是「未来谁能卖得更多」——这是基于当前动量的**定性判断**，不是预测数字：允许并且必须给出排序/判断，依据 = 同比增速、近3个月环比是否连续上行、DOS 是否健康、是否处于上市放量期(上市后前几个月)、是否临近退市；禁止给出任何具体的未来销量数字（如「预计明年 X 台」）。取数顺序：先 report({groupDim:"product"}) 一把拿全产品，再 query 逐月，不要在 meta/options 上打转。',
+        synth: '最终回答必须是：①结论：按潜力排序点名前 2~3 个产品，并说明这是基于当前动量的判断；②依据表（行=产品，列=累计SO/同比/近3个月逐月SO与环比/DOS/上市阶段）；③每个上榜产品一句「为什么」；④风险（数据截止、报量延迟、上市早期基数小）。禁止出现具体的未来销量数字，禁止以「无法预测」收尾。',
+      };
+    }
+    return null;
+  }
+
   async function orchestrate(question, currentBoard, deps, opt) {
     const mode = (opt && opt.mode) || 'fast';
     const budget = { left: BUDGET.maxToolCallsTotal };
     // 记录本轮全部工具返回原文——溯源门禁的比对池
     const toolTrace = [];
-    const guards = classifyGuards(question);
+    const guards = [];
     /* 今天日期恒注入(2026-09-01)：模型不知道今天几号，把「今年」猜成数据里的旧年份(实测把今年当 2025)。 */
     try {
       const dnow = new Date();
       guards.unshift('今天是 ' + dnow.getFullYear() + '-' + String(dnow.getMonth() + 1).padStart(2, '0') + '-' + String(dnow.getDate()).padStart(2, '0') + '；「今年」=' + dnow.getFullYear() + '、「去年」=' + (dnow.getFullYear() - 1) + '；数据截至日以 meta 为准。');
     } catch (e) {}
+    /* 追问理解(2026-09-10 用户实锤：上一句问「X 今年卖了多少」答得出，下一句「对比 2025 年卖得怎么样」
+       就「取不出数据」)。病根：每轮只把当前这一句送进编排，上文提到的产品名根本没传进来，
+       专家眼里这句话没有主语。这里先结合上文把追问改写成一句独立完整的问题，再走后面的流水线。 */
+    const origQuestion = question;
+    const forced = !!(opt && ((Array.isArray(opt.forceTasks) && opt.forceTasks.length) || (Array.isArray(opt.forceAgents) && opt.forceAgents.length)));
+    const usePlanner = !forced && !(opt && opt.planner === false) && !!(deps && typeof deps.chat === 'function');
+    let understood = null, planned = null;
+    const history = (opt && Array.isArray(opt.history)) ? opt.history : [];
+    if (history.length) {
+      // 规划员在场时理解员只做确定性那层（带实体），模型改写交给规划员一并做，省一次调用
+      try { understood = await understandInContext(question, history, deps, { skipLLM: usePlanner }); } catch (e) { understood = null; }
+    }
+    if (usePlanner) {
+      try { planned = await planWithLLM(question, history, deps, currentBoard, understood ? understood.carried : []); } catch (e) { planned = null; }
+    }
+    if (planned && planned.standalone) question = planned.standalone;
+    else if (understood && understood.changed) question = understood.question;
+    const rewritten = question !== origQuestion;
+    if (rewritten && deps.onProgress) deps.onProgress({ type: 'understand', from: origQuestion, to: question, carried: understood ? understood.carried : [] });
     /* 实体预检索(2026-08-31,用户称之为 RAG):问题里点名的产品/国家/产业,先对全维度字典做
-       确定性匹配,生成「实体卡」硬约束——取数按实体来,不受界面当前筛选摆布;多实体全带上。
-       去前缀:问「Slate 11 Pro」时 'slate11' 也是其子串,同维度内被更长命中值盖住的短值剔除。 */
+       确定性匹配,生成「实体卡」硬约束——取数按实体来,不受界面当前筛选摆布;多实体全带上。 */
     try {
-      const qRaw = String(question || '');
-      const qn = qRaw.toLowerCase().replace(/[\s\-_]/g, '');
-      const found = {};
-      for (const dim of ['line', 'family', 'series', 'product', 'model', 'country', 'repOffice']) {
-        let vals = null;
-        try {
-          if (!deps.optionsDirect) break;   // 测试/精简环境无此通道→整体跳过,不占工具预算
-          const o = await deps.optionsDirect(dim);
-          vals = (o && (o['取值'] || o.values || o.list)) || (Array.isArray(o) ? o : null);
-        } catch (e) { continue; }
-        if (!Array.isArray(vals)) continue;
-        let hit = [];
-        for (const v of vals) {
-          const vs = String(v == null ? '' : v);
-          if (vs.length < 2) continue;
-          const vn = vs.toLowerCase().replace(/[\s\-_]/g, '');
-          if (/[\u4e00-\u9fa5]/.test(vs) ? qRaw.indexOf(vs) >= 0 : (vn.length >= 3 && qn.indexOf(vn) >= 0)) hit.push(vs);
-        }
-        hit = hit.filter(a => !hit.some(b => b !== a && b.toLowerCase().replace(/[\s\-_]/g, '').indexOf(a.toLowerCase().replace(/[\s\-_]/g, '')) === 0));
-        if (hit.length) found[dim] = hit.slice(0, 8);
-      }
+      const found = await scanEntities(question, deps);
       const dims = Object.keys(found);
       /* 层级链(2026-09-01 RAG)：命中的 family/series/product 附完整归属链——
          「Slate SE 11(product) ⊂ Dorado(series) ⊂ Slate SE(family) ⊂ 平板(line)」，层级错位绝症根治。 */
@@ -844,6 +1048,16 @@
           + '。' + chainTxt + '取数必须用这些精确值构造 filters（多个实体全部带上，一个都不许漏）；界面当前筛选仅供参考，绝不得限制或替代本题取数范围。');
       }
     } catch (e) { }
+    // 题型护栏按**改写后**的问题算（追问里的「对比/同比」等信号在改写后才完整）
+    classifyGuards(question).forEach(g => guards.push(g));
+    const playbook = analysisPlaybook(question) || analysisPlaybook(origQuestion);
+    if (playbook) guards.push('【' + playbook.kind + '剧本】' + playbook.text);
+    if (rewritten) {
+      guards.push('本题已结合上文理解为：「' + question + '」（用户原话：「' + origQuestion + '」）。'
+        + (understood && understood.carried.length ? '上文实体：' + understood.carried.join('、') + '，取数必须带上它们；' : '')
+        + '回答第一句必须点明对象名称（产品/国家等），让用户不看上文也知道在说谁。');
+      if (understood && understood.lastAnswer) guards.push('上一轮回答（其中已取到的数字可直接引用、同一数据不必重查；但本题新要求的部分——如去年同期/对比项——必须真的取数）：' + understood.lastAnswer);
+    }
     const askPeriod = PERIOD_RE.test(String(question || ''));
     const baseRunTool = deps.runTool;
     deps = Object.assign({}, deps, {
@@ -872,7 +1086,20 @@
       },
     });
     let tasks;
-    if (opt && Array.isArray(opt.forceTasks) && opt.forceTasks.length) {
+    if (planned && planned.tasks && planned.tasks.length) {
+      /* 规划员拆的任务：子问题自包含、专家已校验。多任务不再被快速模式砍成 1 个——拆分本来就是规划员的职责 */
+      tasks = planned.tasks.map(t => ({ agentId: t.agent, agent: AGENTS[t.agent], boardId: currentBoard, subQuestion: t.question, label: t.label }));
+      /* 路由兜底（30 题实测 #14/#24/#25）：问「收入最高的产品」「NSIP 最高」，规划员因为用户站在产业看板上，
+         只派了产业专家——它手里没有财经工具，只能答「数据未包含」。硬命中的领域词（收入/NSIP/销毛…→财经，
+         上市/路标→路标）如果规划里没有对应专家，代码补一个任务，子问题就用补全后的独立问题。 */
+      const MUST = { finance: /收入|销毛|毛利|NSIP|贡献利润|利润|单台净售价|净售价/, roadmap: /上市时间|路标|生命周期|退市|首销/ };
+      Object.keys(MUST).forEach(id => {
+        if (!AGENTS[id] || !MUST[id].test(question)) return;
+        if (tasks.some(t => t.agentId === id) || tasks.length >= 4) return;
+        tasks.push({ agentId: id, agent: AGENTS[id], boardId: currentBoard, subQuestion: question, label: '补派' });
+      });
+      if (deps.onProgress) deps.onProgress({ type: 'planner', standalone: question, tasks: tasks.map(t => ({ agent: t.agent.name, label: t.label, question: t.subQuestion })) });
+    } else if (opt && Array.isArray(opt.forceTasks) && opt.forceTasks.length) {
       /* 总控分工(2026-09-01)：调用方(如 Agent 对话的总控)已把任务拆好——每个任务自带
          subQuestion(可含分给它的数据切片，如某个 sheet 的全文)，直接采用，跳过自动路由 */
       tasks = opt.forceTasks.filter(t => t && AGENTS[t.agentId]).map(t => ({
@@ -891,7 +1118,18 @@
       tasks = planRoute(question, currentBoard).map(t => Object.assign({}, t, { boardId: currentBoard }));
       if (mode === 'fast' && tasks.length > 1 && !needsMultiAgent(question)) tasks = tasks.slice(0, 1);
     }
-    tasks.forEach(t => { t.mode = mode; t.guards = guards; });
+    /* 界面筛选与本题范围（2026-09-11 用户：「必须我选了才能分析那个产品，太鸡肋」）：
+       默认按**全量数据**回答，界面筛选一律不带；只有问题明确指着界面（当前/这个看板/筛选下/图上）才按界面范围。 */
+    const refersToBoard = /(当前|这个看板|本看板|筛选下|现在选的|界面上|图上|这张图|这个图|这张表|屏幕上|所选)/.test(String(origQuestion) + String(question));
+    const ignoreBoardFilters = !refersToBoard;
+    let boardFilters = null;
+    try { boardFilters = (deps.filters && currentBoard) ? deps.filters(currentBoard) : null; } catch (e) { boardFilters = null; }
+    if (ignoreBoardFilters && boardFilters && Object.keys(boardFilters).length) {
+      guards.push('本题按全量数据回答：界面此刻的筛选 ' + JSON.stringify(boardFilters) + ' 只是用户在看板上看的范围，不是本题范围，取数时不要带上它；如需按界面范围，用户会说「当前筛选下」。');
+    } else if (!ignoreBoardFilters && boardFilters && Object.keys(boardFilters).length) {
+      guards.push('本题指的是界面当前范围：取数必须带上界面筛选 ' + JSON.stringify(boardFilters) + '。');
+    }
+    tasks.forEach(t => { t.mode = mode; t.guards = guards; t.ignoreBoardFilters = ignoreBoardFilters; if (playbook) t.maxRounds = Math.max(BUDGET.maxToolRoundsPerAgent, 8); });
     // 门禁题面(2026-09-01 场景F验尸): forceTasks 的材料在子任务里,不拼进题面会被溯源门禁全拦,专家被逼答「无法回答」
     // 上传文档/材料里的数字是合法出处（用户给的题面数据），必须进溯源语料，否则会被门禁当成「编造」抹掉
     // （2026-09-04 实测：docx 里"2026年11月18日"的 11、18 被标成"(未取到)"）。provCorpus 显式携带文档正文。
@@ -923,14 +1161,19 @@
        或空回复——三题因此丢分。命中即对该专家追加一次「禁用工具直接给最终结论」的强制终答。 */
     /* R10 复盘:锚定开头的变体清单是打地鼠(「数据核对完成。让我…」「我按月查看…」每轮翻新)。
        改判据:无 claims + 正文短(<150字) + 过程词任意位置 = 半途。长答案含过程词不误伤。 */
-    const HALFWAY_WORDS = /(让我|我需要|我先|我来|我再|我按|接下来|现在我将|还需要|需要再|需要进一步|再查|接着查|继续查|下一步|正在(查|取|分析)|请给出|请提供|请确认)/;
-    const HALFWAY_RE = { test: (t) => { const x = String(t || '').trim(); return x.length < 150 && HALFWAY_WORDS.test(x); } };
+    const HALFWAY_RE = { test: (t) => isProcessOnly(t) };   // 判定见模块级 isProcessOnly
     for (const r0 of results) {
       const body = String((r0.notes || '') + (r0.claims && r0.claims.length ? 'C' : '')).trim();
-      const halfway = !r0.error && (!body || (HALFWAY_RE.test(r0.notes || '') && (r0.claims || []).length === 0));
+      /* 「轮次用尽仍未给出结论」也算半途（2026-09-10 追问实测：取了 6 次数却交白卷 → 用户看到「(空回复)」）：
+         数据已经在 toolTrace 里，凭它强制终答一次远好过放弃。 */
+      const exhausted = !!(r0.error && /轮次用尽/.test(String(r0.error)) && toolTrace.length);
+      const halfway = exhausted || (!r0.error && (!body || (HALFWAY_RE.test(r0.notes || '') && (r0.claims || []).length === 0)));
       if (!halfway) continue;
+      if (exhausted) r0.error = null;                        // 让下面的重试结果能被采纳；重试全败会写诚实兜底文案
       try {
-        const a0 = (typeof AGENTS !== 'undefined' && AGENTS.find(x => x.id === r0.agentId)) || null;
+        /* 2026-09-11 实锤：AGENTS 是对象不是数组，AGENTS.find 直接抛 TypeError 被下面的 catch 吞掉——
+           所以「半途重试」自 R10 以来从没真正跑过，过程话一直原样出门。 */
+        const a0 = (typeof AGENTS !== 'undefined' && AGENTS[r0.agentId]) || null;
         /* Round 8b 修隐藏 bug：原重试只带题面不带数据——chat 无状态，模型手上没有任何工具
            返回，「基于已取数据作答」是句空话(C3-05 财经专家取到了收入却重试成白卷)。
            把本轮 toolTrace 摘要塞进重试消息，重试才真的有数可用。 */
@@ -966,19 +1209,25 @@
       // claims 和 notes 都要进答案：模型守规矩把数字放进 claims JSON 时，notes 往往只是补充说明——
       // 旧写法 notes||claims 会把装着数字的 claims 整个丢掉（评测 2026-08-25 云端首题逮住的真 bug）
       // value 为空/undefined 的 claim 不进正文（2026-09-01：解析异常时曾整屏「sellOut：undefined」）
-      const claimsTxt = (only.claims || []).filter(c => c && c.value != null && String(c.value) !== 'undefined').map(c => c.metric + '：' + c.value + (c.unit ? ' ' + c.unit : '')).join('\n');
-      let text = [claimsTxt, only.notes].filter(Boolean).join('\n');
+      const goodClaims = (only.claims || []).filter(c => c && c.value != null && String(c.value) !== 'undefined');
+      /* 叙述在前、数字表在后（30 题实测：一长串「指标：值」把结论顶到几百字之外，看着像数据堆不像回答）。
+         notes 有正文就先给正文；claims 排成一张紧凑表附在后面——数字一个不少，可读性回来了。 */
+      const claimsTbl = goodClaims.length ? ('| 指标 | 数值 | 口径 |' + String.fromCharCode(10) + '|---|---|---|' + String.fromCharCode(10)
+        + goodClaims.map(c => '| ' + String(c.metric).replace(/\|/g, '/') + ' | ' + c.value + (c.unit ? ' ' + c.unit : '') + ' | ' + String(c.caliber || c.asOf || '').replace(/\|/g, '/') + ' |').join(String.fromCharCode(10))) : '';
+      const notesTxt = String(only.notes || '').trim();
+      let text = [notesTxt, claimsTbl ? ('**数据明细**' + String.fromCharCode(10) + claimsTbl) : ''].filter(Boolean).join(String.fromCharCode(10) + String.fromCharCode(10));
       let det = enforceProvenance(text, toolTrace, provQ, { detectOnly: true });
       if (det.blocked.length && deps.provRetry) {
-        const rw = await provenanceRetry(question, text, det.blocked, deps, currentBoard);
+        const rw = await provenanceRetry(question, text, det.blocked, deps, currentBoard, results);
         if (rw) { text = rw; det = enforceProvenance(text, toolTrace, provQ, { detectOnly: true }); }
       }
       const g1 = det.blocked.length ? enforceProvenance(text, toolTrace, provQ, { placeholder: '(未取到)' }) : { answer: text, blocked: [] };
-      return { answer: g1.answer || '(空回复)', results, verified: { ok: g1.blocked.length === 0, unsupported: g1.blocked }, singleAgent: true, provenanceBlocked: g1.blocked };
+      return { answer: g1.answer || honestEmpty(results, toolTrace), results, verified: { ok: g1.blocked.length === 0, unsupported: g1.blocked }, singleAgent: true, provenanceBlocked: g1.blocked };
     }
 
     if (deps.onProgress) deps.onProgress({ type: 'synth' });
     let sp = buildSynthesisPrompt(question, results);
+    if (playbook) sp += String.fromCharCode(10) + String.fromCharCode(10) + '【结论格式要求（' + playbook.kind + '）】' + playbook.synth;
     if (guards.length) sp += '\n\n【本题硬约束(违反即废答)】\n' + guards.map(g => '· ' + g).join('\n');
     const resp = await deps.chat({
       // 综合器不取数、只重组 claims，不需要整张口径卡（那 600 token 白花）
@@ -996,7 +1245,7 @@
     let answer = splitThink(resp.content || '').answer;
     let det2 = enforceProvenance(answer, toolTrace, provQ, { detectOnly: true });
     if (det2.blocked.length && deps.provRetry) {
-      const rw2 = await provenanceRetry(question, answer, det2.blocked, deps, currentBoard);
+      const rw2 = await provenanceRetry(question, answer, det2.blocked, deps, currentBoard, results);
       if (rw2) { answer = rw2; det2 = enforceProvenance(answer, toolTrace, provQ, { detectOnly: true }); }
     }
     const g2 = det2.blocked.length ? enforceProvenance(answer, toolTrace, provQ, { placeholder: '(未取到)' }) : { answer: answer, blocked: [] };
@@ -1005,7 +1254,18 @@
       verified.ok = false;
       verified.unsupported = [...new Set([].concat(verified.unsupported || [], g2.blocked))].slice(0, 12);
     }
-    return { answer: g2.answer || '(空回复)', results, verified, provenanceBlocked: g2.blocked };
+    return { answer: g2.answer || honestEmpty(results, toolTrace), results, verified, provenanceBlocked: g2.blocked };
+  }
+
+  /* 空回复的诚实兜底（2026-09-10 追问实测偶发「(空回复)」）：用户看到四个字什么都不知道。
+     有专家结论就直接给结论；只有错误就把错误说出来；取过数但没结论也要说明。 */
+  function honestEmpty(results, toolTrace) {
+    const notes = (results || []).map(r => (r && (r.notes || '')) ).filter(t => String(t).trim());
+    if (notes.length) return notes.join(String.fromCharCode(10) + String.fromCharCode(10));
+    const errs = (results || []).map(r => r && r.error).filter(Boolean);
+    if (errs.length) return '本次分析未能完成：' + errs.join('；') + '。请重试提问或换个问法。';
+    if (toolTrace && toolTrace.length) return '本次取到了数据但模型没有给出结论（多半是响应中断）。请重试一次提问。';
+    return '本次没有得到回答（模型无响应）。请重试提问。';
   }
 
   return {
@@ -1014,5 +1274,6 @@
     agentForBoard, planRoute, needsMultiAgent, buildSpecialistSystem, buildContextMessage, buildSynthesisPrompt,
     estimateTokens, validateToolArgs, shrinkToolResult, trimMessages, splitThink,
     parseClaims, verifyNumbers, enforceProvenance, normalizeCalls, runSpecialist, orchestrate,
+    scanEntities, understandInContext, planWithLLM, agentDuty, provenanceRetry, analysisPlaybook, isProcessOnly, FOLLOWUP_RE,
   };
 });

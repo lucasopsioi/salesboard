@@ -1,4 +1,6 @@
 'use strict';
+/* PptTableFit：浏览器取全局、Node 单测走 require —— 两边都要能拿到，否则单测一 require 就炸 */
+function _fitLib(){ return (typeof window!=='undefined'&&window.PptTableFit)?window.PptTableFit:(typeof require!=='undefined'?require('../ppt-table-fit.js'):null); }
 /* ============================================================
    汇总表 (report)
    纯搬运自 app.js，无逻辑改动；在 common.js 之后、app.js 之前加载。
@@ -42,17 +44,23 @@ function ensureRepCustomSortUI(){
   const fld=document.createElement('div'); fld.className='fld';
   fld.innerHTML='<label>行排序</label><button id="repCustomSort" class="btn" style="padding:2px 10px"></button>';
   if(dimFld.nextSibling) row.insertBefore(fld,dimFld.nextSibling); else row.appendChild(fld);
-  $('#repCustomSort').onclick=()=>{ rep.custom=!rep.custom; syncRepCustomSortUI(); renderReportTable(); repApplyNote(); repStateSave(); };
+  $('#repCustomSort').onclick=()=>{ if(!rep.custom) return; rep.custom=false; syncRepCustomSortUI(); renderReportTable(); repApplyNote(); repStateSave(); };
   syncRepCustomSortUI();
 }
 // 说明文字里的排序那一段：切开关时只重绘表格，note 要单独刷新（否则措辞停在上一个状态）
 function repSortNote(){ return rep.custom
-  ? ' · 自定义排序【开】：点表头按该列排(再点切升↔降，▲升 ▼降)'
-  : ' · 默认排序：累计SO 高→低（开「自定义排序」可点表头自选列）'; }
+  ? ' · 已按自选列排序（▲升 ▼降；再点该表头第三下回默认）'
+  : ' · 默认排序：累计SO 高→低（点任意表头即可按该列排：降序→升序→默认）'; }
 function repApplyNote(){ const el=$('#repNote'); if(el&&rep.noteBase!=null) el.textContent=rep.noteBase+repSortNote(); }
 function syncRepCustomSortUI(){
-  const b=$('#repCustomSort'); if(!b) return; const TS=repTS();
-  b.textContent=TS.btnLabel(rep.custom); b.title=TS.BTN_TITLE;
+  const b=$('#repCustomSort'); if(!b) return;
+  // 表头已经常驻可点，这个按钮就只剩「一键回默认」一个职责，顺带告诉你现在排在哪一列
+  const col=rep.custom?repTS().findCol(repColumns(rep.last||{weekLabels:[],curYear:0,prevYear:0}),rep.sortKey):null;
+  b.textContent=rep.custom
+    ? ('↩ 恢复默认排序（当前：'+((col&&col.label)||rep.sortKey)+(rep.sortDir===1?' ▲':' ▼')+'）')
+    : '排序：默认（累计SO 高→低）';
+  b.title=rep.custom?'点此回到默认排序；也可以连点该列表头第三下':'点任意表头即可按该列排序（降序→升序→默认）';
+  b.disabled=!rep.custom;
   b.style.background=rep.custom?'var(--c-brand-soft)':''; b.style.borderColor=rep.custom?'var(--c-brand)':''; b.style.color=rep.custom?'var(--c-brand)':'';
 }
 
@@ -184,7 +192,10 @@ function renderReportTable(){
   const st={custom:rep.custom,key:rep.sortKey,dir:rep.sortDir,cols:cols};
   // 开关关：表头不可点、不出箭头（无 sortable 类=无手型/无 hover），保证「关掉=完全回到默认」
   // 行首「隐藏」按钮列：纯界面元素，不进任何导出；✕ 默认透明，hover 到该行才显现(CSS .row-hide-btn)
-  const thead='<tr><th style="width:20px"></th>'+cols.map(c=>`<th data-k="${c.key}" class="${rep.custom?'sortable':''}${c.sep?' col-sep':''}${c.wk?' wk':''}"${rep.custom?' title="点击按此列排序（再点切换升↔降）"':''}>${c.label}${TS.arrow(c.key,st)}</th>`).join('')+'</tr>';
+  /* 表头常驻可点（用户 2026-09-08：「每一列都要能按列排序，正序或者倒序」）。
+     原来必须先打开「自定义排序」开关表头才可点，等于把功能藏起来了。
+     现在点一下降序、再点升序、第三下回默认 —— 「关掉回默认」这条退路还在，只是不用先找开关。 */
+  const thead='<tr><th style="width:20px"></th>'+cols.map(c=>`<th data-k="${c.key}" class="sortable${c.sep?' col-sep':''}${c.wk?' wk':''}" title="点击排序：${TS.isTextCol(c)?'升序 → 降序':'降序 → 升序'} → 恢复默认">${c.label}${TS.arrowHint(c.key,st)}</th>`).join('')+'</tr>';
   const rows=repVisibleRows(r.rows,cols);
   const hideTd=o=>`<td style="white-space:nowrap"><button class="cb-hide-btn row-hide-btn" data-hiderow="${encodeURIComponent(o.key)}" title="隐藏此行（不影响合计，上方「行」chip 可恢复）" style="border:none;background:none;color:var(--c-ink-3);cursor:pointer;font-size:11px;line-height:1;padding:0 3px">✕</button><span style="cursor:grab;color:var(--c-ink-3);font-size:10px" title="按住整行拖动调顺序(会记住)">⠿</span></td>`;
   const rowHtml=(o,cls)=>'<tr class="'+(cls||'')+'"'+(cls==='total'?'':' draggable="true" data-rowkey="'+encodeURIComponent(o.key)+'"')+'>'+(cls==='total'?'<td></td>':hideTd(o))+cols.map(c=>`<td class="${c.left?'':''}${c.sep?' col-sep':''}${c.wk?' wk':''}">${c.cell(o)}</td>`).join('')+'</tr>';
@@ -209,9 +220,10 @@ function renderReportTable(){
       };
     });
   })();
-  if(rep.custom) $$('#repTable th.sortable').forEach(th=>th.onclick=()=>{ const k=th.dataset.k;
-    const nx=TS.nextSort({key:rep.sortKey,dir:rep.sortDir},k,TS.findCol(cols,k));
-    rep.sortKey=nx.key; rep.sortDir=nx.dir; renderReportTable(); repStateSave(); });
+  $$('#repTable th.sortable').forEach(th=>th.onclick=()=>{ const k=th.dataset.k;
+    const nx=TS.nextSort3({key:rep.sortKey,dir:rep.sortDir,custom:rep.custom},k,TS.findCol(cols,k));
+    rep.sortKey=nx.key; rep.sortDir=nx.dir; rep.custom=nx.custom;
+    renderReportTable(); syncRepCustomSortUI(); repApplyNote(); repStateSave(); });
 }
 async function drawReport(){
   if(!state.dims.length){ rep.noteBase=null; $('#repTable').innerHTML=''; $('#repNote').textContent='请先锚定文件夹或载入示例'; return; }
@@ -251,30 +263,77 @@ async function exportRepXlsx(){
   const res=await api.saveFile('汇总表_'+(DIM_LABEL[rep.dim]||rep.dim)+'_'+todayStr()+'.xlsx',b64,'xlsx');
   if(res&&res.path) toast('已导出','ok');
 }
-async function exportRepPpt(){
-  const r=rep.last; if(!r||!r.rows.length){ toast('暂无数据','err'); return; }
+/* PPT 导出：先算列宽再出片，并且先给用户看预览。
+   两处历史问题（2026-09-08 用户报）：
+   ① 少了 全流程库存 / 全流程DOS / 国家仓+FDC 三列 —— Excel 出口一直有，PPT 漏了。
+   ② addTable 不给 colW 就把宽度**等分**，20+ 列时每列 0.58 英寸，长名字和表头一律换行。
+      现在按每列最长文本算宽度（PptTableFit），先缩字号保「不换行」，实在挤不下才如实告警。 */
+function repPptSpec(){
+  const r=rep.last; if(!r||!r.rows.length) return null;
   const cy=r.curYear%100, py=r.prevYear%100;
-  const pptx=new PptxGenJS(); pptx.defineLayout({name:'W',width:13.333,height:7.5}); pptx.layout='W';
-  const s=pptx.addSlide();
-  s.addText('PSI 汇总表 · 按'+(DIM_LABEL[rep.dim]||rep.dim),{x:0.4,y:0.2,w:12.5,h:0.5,fontFace:'微软雅黑',fontSize:18,bold:true,color:'C7000B'});
-  const num=v=>v==null?'—':Math.round(v).toLocaleString('en-US');
-  const cell=(t,o)=>({text:String(t),options:Object.assign({fontFace:'微软雅黑',fontSize:8,align:'right',valign:'middle'},o||{})});
-  const pctCellPpt=(v,bold)=>cell(v==null?'—':(v*100).toFixed(0)+'%',{color:v==null?'888888':(v>=0?'1E9E57':'C7000B'),bold:!!bold});
-  const headTexts=[(DIM_LABEL[rep.dim]||rep.dim),cy+'累计SO',py+'同期','SO同比',cy+'累计SI',py+'同期SI','SI同比'].concat(r.weekLabels).concat(['WoW','库存','DOS']);
-  const rowsArr=[ headTexts.map((h,i)=>cell(h,{bold:true,color:'FFFFFF',fill:{color:'C7000B'},align:'center'})) ];
+  const num=v=>(v==null||!isFinite(v))?'—':Math.round(v).toLocaleString('en-US');
+  // 全流程三列：没有库龄表(hasFlow=false)时一律「—」，绝不写 0（与 Excel 出口同口径）
+  const fnum=v=>r.hasFlow?num(v):'—';
+  const cell=(t,o)=>({text:String(t),options:Object.assign({fontFace:'微软雅黑',align:'right',valign:'middle'},o||{})});
+  const pctC=(v,bold)=>cell(v==null?'—':(v*100).toFixed(0)+'%',{color:v==null?'888888':(v>=0?'1E9E57':'C7000B'),bold:!!bold});
+  // DOS 红绿灯照搬看板：渠道 <90绿/90-120黄/>120红；全流程 <120/120-150/>150
+  const dosC=(v,kind,bold)=>{
+    if(v==null||!isFinite(v)||!(kind!=='flow'||r.hasFlow)) return cell('—',{color:'888888',bold:!!bold});
+    const n=Math.round(v);
+    const c=(kind==='flow') ? (n<120?'1E9E57':(n<=150?'8A6D00':'C7000B')) : (n<90?'1E9E57':(n<=120?'8A6D00':'C7000B'));
+    return cell(n.toLocaleString('en-US'),{color:c,bold:!!bold});
+  };
+  const headTexts=[(DIM_LABEL[rep.dim]||rep.dim),cy+'累计SO',py+'同期SO','SO同比',cy+'累计SI',py+'同期SI','SI同比']
+    .concat(r.weekLabels).concat(['WoW','库存','DOS','全流程库存','全流程DOS','国家仓+FDC']);
+  const rowsArr=[ headTexts.map((h,i)=>cell(h,{bold:true,color:'FFFFFF',fill:{color:'C7000B'},align:i===0?'left':'center'})) ];
   const mkrow=(o,tot)=>{
     const row=[cell(o.key,{align:'left',bold:!!tot,fill:tot?{color:'FFF1F1'}:undefined})];
-    row.push(cell(num(o.cumCur),{bold:!!tot}),cell(num(o.cumPrev),{bold:!!tot}),pctCellPpt(o.yoy,tot),cell(num(o.siCur),{bold:!!tot}),cell(num(o.siPrev),{bold:!!tot}),pctCellPpt(o.siYoy,tot));
+    row.push(cell(num(o.cumCur),{bold:!!tot}),cell(num(o.cumPrev),{bold:!!tot}),pctC(o.yoy,tot),
+             cell(num(o.siCur),{bold:!!tot}),cell(num(o.siPrev),{bold:!!tot}),pctC(o.siYoy,tot));
     o.weekly.forEach(v=>row.push(cell(num(v),{color:'5A5F66'})));
-    row.push(pctCellPpt(o.wow,tot),cell(num(o.inv),{bold:!!tot}),cell(num(o.dos),{bold:!!tot}));
+    row.push(pctC(o.wow,tot),cell(num(o.inv),{bold:!!tot}),dosC(o.dos,'channel',tot),
+             cell(fnum(o.flowInv),{bold:!!tot}),dosC(r.hasFlow?o.flowDos:null,'flow',tot),cell(fnum(o.dcfdc),{bold:!!tot}));
+    if(tot) row.forEach(c=>{ c.options.fill=c.options.fill||{color:'FFF1F1'}; });
     return row;
   };
   repVisibleRows(r.rows,repColumns(r)).forEach(o=>rowsArr.push(mkrow(o)));   // PPT 与界面同序同筛
   if(r.total)rowsArr.push(mkrow(r.total,true));
-  s.addTable(rowsArr,{x:0.3,y:0.8,w:12.7,border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true});
+  const MARGIN=0.3, avail=13.333-MARGIN*2;
+  // padIn 不传：内核默认 = 真实会被吃掉的 margin + 字形测量余量（两个数必须同源，否则算着够、导出还换行）
+  const fitres=_fitLib().fit(rowsArr,{availIn:avail,fontSize:9,minFontSize:6,minColIn:0.26});
+  /* 脚注要说清全流程三列为什么空 —— 两种「空」原因完全不同，混为一谈会让人以为是丢数：
+     ① 没挂库龄表；② 按渠道拆分（库龄表本身没有渠道维度，引擎按设计不出这三列）。
+     其余所有维度（产品线/系列/产品/型号/大区/国家办/国家）都有全流程三列。 */
+  const note=(r.hasFlow
+      ? ('全流程库存=渠道库存+国家仓/FDC（库龄表 '+(state.flowDate||'')+'）')
+      : (rep.dim==='channel' ? '按渠道拆分时不出全流程三列：库龄表没有渠道维度' : '未挂库龄表，全流程三列为空'))
+    + ' · 库存=最新周快照 · DOS=库存×28÷近4周SO';
+  return {
+    title:'PSI 汇总表 · 按'+(DIM_LABEL[rep.dim]||rep.dim),
+    titleColor:'C7000B',
+    rows:fitres.rows, colW:fitres.colW, fontSize:fitres.fontSize, rowH:fitres.rowH,
+    squeezed:fitres.squeezed, note:note, fit:fitres,
+    x:(13.333-fitres.totalIn)/2, y:0.8,
+  };
+}
+async function writeRepPpt(spec){
+  const pptx=new PptxGenJS(); pptx.defineLayout({name:'W',width:13.333,height:7.5}); pptx.layout='W';
+  const s=pptx.addSlide();
+  s.addText(spec.title,{x:0.4,y:0.2,w:12.5,h:0.5,fontFace:'微软雅黑',fontSize:18,bold:true,color:spec.titleColor||'C7000B'});
+  s.addTable(spec.rows, _fitLib().tableOpts(spec.fit,{x:spec.x,y:spec.y,
+    border:{type:'solid',color:'E6E8EB',pt:0.5},autoPage:true,autoPageRepeatHeader:true}));
+  s.addText(spec.note||'',{x:0.4,y:7.0,w:12.5,h:0.3,fontFace:'微软雅黑',fontSize:9,color:'8A9099'});
   const b64=await pptx.write('base64');
   const res=await api.saveFile('汇总表_'+(DIM_LABEL[rep.dim]||rep.dim)+'_'+todayStr()+'.pptx',b64,'pptx');
   if(res&&res.path) toast('已导出（PPT 原生表格，可编辑）','ok');
+}
+async function exportRepPpt(preview){
+  const spec=repPptSpec();
+  if(!spec){ toast('暂无数据','err'); return; }
+  if(preview===false){ await writeRepPpt(spec); return; }
+  // 预览与导出吃同一份 spec（同一套 colW/字号/单元格）——预览里不换行 = 导出后不换行
+  PptPreview.open({ filename:'汇总表_'+(DIM_LABEL[rep.dim]||rep.dim)+'_'+todayStr()+'.pptx',
+    slides:[spec], onExport:()=>writeRepPpt(spec) });
 }
 
 /* ---- 事件绑定(从 app.js init() 搬来，保持同位置顺序) ---- */
@@ -282,12 +341,25 @@ function initReportView(){
   // report controls
   $('#repDim').onchange=e=>{ rep.dim=e.target.value; drawReport(); repStateSave(); };
   $('#repExportXlsx').onclick=exportRepXlsx;
-  $('#repExportPpt').onclick=exportRepPpt;
+  // 导出 PPT 一律先过预览（用户 2026-09-08：「预览的时候能看到导出之后的 PPT 长什么样子」）
+  $('#repExportPpt').onclick=()=>exportRepPpt(true);
+  ensureRepPreviewBtn();
   // 行首 ✕ 隐藏行（事件委托：表格 innerHTML 每次重绘，监听挂在常驻的 table 上）
   $('#repTable').addEventListener('click',e=>{
     const hb=e.target.closest&&e.target.closest('button[data-hiderow]'); if(!hb) return;
     repHideRow(decodeURIComponent(hb.dataset.hiderow)); renderReportTable();
   });
+}
+
+/* 「直接导出」按钮：不想看预览的时候用。插在「导出 PPT」旁边，不改 index.html。 */
+function ensureRepPreviewBtn(){
+  const b=$('#repExportPpt'); if(!b||$('#repExportPptNow')) return;
+  const n=document.createElement('button');
+  n.id='repExportPptNow'; n.className=b.className||'btn'; n.textContent='直接导出 PPT';
+  n.title='跳过预览，直接写文件';
+  n.onclick=()=>exportRepPpt(false);
+  b.textContent='预览并导出 PPT';
+  if(b.nextSibling) b.parentNode.insertBefore(n,b.nextSibling); else b.parentNode.appendChild(n);
 }
 
 /* 供单测 require（浏览器端 module 未定义，自动跳过；不影响运行时） */

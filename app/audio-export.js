@@ -1,4 +1,6 @@
 'use strict';
+/* PptTableFit：浏览器取全局、Node 单测走 require —— 两边都要能拿到，否则单测一 require 就炸 */
+function _fitLib(){ return (typeof window!=='undefined'&&window.PptTableFit)?window.PptTableFit:(typeof require!=='undefined'?require('./ppt-table-fit.js'):null); }
 /* ============================================================
    产业周报（音频 / 平板）· 一键导出（PPT / PDF / Outlook 邮件 .eml）
    - 纯构建函数(buildWeeklyHtml / buildEml / b64Utf8 / 列宽对齐算法)可在 Node 单测;
@@ -788,7 +790,11 @@ if (typeof window !== 'undefined') (function () {
     const addTbl = (s, header, rows, y, opts) => {
       const data = [header.map(x => ({ text: String(x), options: { bold: true, fill: 'F5F6F7', color: '5A5F66' } }))]
         .concat(rows.map(r => r.map(x => String(x == null ? '' : x))));
-      s.addTable(data, Object.assign({ x: 0.4, y: y || 0.85, w: 12.5, fontFace: F, fontSize: (opts && opts.fs) || 9, border: { pt: 0.5, color: 'D9DCE0' }, align: 'right', valign: 'middle', autoPage: true, autoPageRepeatHeader: true }, opts || {}));
+      const base = (opts && opts.fs) || 9;
+      const fr = _fitLib().fit(data, { availIn: 12.5, fontSize: base, minFontSize: 6, minColIn: 0.26 });
+      const o2 = Object.assign({}, opts || {}); delete o2.fs;
+      s.addTable(fr.rows, _fitLib().tableOpts(fr, Object.assign({ x: (13.333 - fr.totalIn) / 2, y: y || 0.85,
+        fontFace: F, border: { pt: 0.5, color: 'D9DCE0' }, align: 'right', autoPage: true, autoPageRepeatHeader: true }, o2)));
     };
     let s = pptx.addSlide();
     title(s, m.industryLabel + '周报 ' + m.week + ' · 一 遗留问题');

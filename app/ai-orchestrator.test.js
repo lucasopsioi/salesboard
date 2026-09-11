@@ -193,18 +193,18 @@ async function speed() {
 
   // 单领域问题 → 只跑 1 个专家、1 次调用
   const a = mk([{ content: '就这些。{"claims":[{"metric":"SO","value":"100"}],"notes":"单领域"}' }]);
-  const r1 = await O.orchestrate('这个系列最近卖得怎么样', 'psi', a.deps);
+  const r1 = await O.orchestrate('这个系列最近卖得怎么样', 'psi', a.deps, { planner: false });
   ok('S1 快速模式:单领域问题只跑 1 个专家', r1.results.length === 1 && r1.singleAgent === true);
   ok('S2 快速模式:只发 1 次模型请求(省掉综合)', a.calls.length === 1);
 
   // 明确跨领域(收入+库存) → 仍然拆多个专家
   const b = mk([]);
-  const r2 = await O.orchestrate('这个产品今年收入多少、库存水位如何', null, b.deps);
+  const r2 = await O.orchestrate('这个产品今年收入多少、库存水位如何', null, b.deps, { planner: false });
   ok('S3 快速模式:真跨领域(收入+库存)仍会拆多专家', r2.results.length >= 2);
 
   // deep 模式:即使单领域也按完整编排走(不做单专家短路)
   const c = mk([]);
-  const r3 = await O.orchestrate('收入 库存 定价 都看看', null, c.deps, { mode: 'deep' });
+  const r3 = await O.orchestrate('收入 库存 定价 都看看', null, c.deps, { mode: 'deep', planner: false });
   ok('S4 deep 模式仍可用', r3.results.length >= 2);
 
   ok('S5 needsMultiAgent:单领域=false / 跨领域=true',
@@ -216,7 +216,7 @@ async function speed() {
     { content: '最终答案。{"claims":[],"notes":"done"}' },
   ]);
   const sink = { content: '' };
-  await O.orchestrate('这个系列卖得怎么样', 'psi', d.deps, { streamInto: sink });
+  await O.orchestrate('这个系列卖得怎么样', 'psi', d.deps, { streamInto: sink, planner: false });
   ok('S6 首轮(要工具)不开流式', !d.calls[0].streamInto);
   ok('S7 第2轮(写答案)开流式并指向气泡', d.calls.length >= 2 && d.calls[1].streamInto === sink);
 }
@@ -252,7 +252,7 @@ async function main() {
     },
     onProgress: e => { (deps._events = deps._events || []).push(e.type); },
   };
-  const out = await O.orchestrate('Product D 今年经营情况：收入多少、库存水位如何', 'finance', deps);
+  const out = await O.orchestrate('Product D 今年经营情况：收入多少、库存水位如何', 'finance', deps, { planner: false });
 
   ok('A46 编排完成并产出答案', !!out.answer && out.answer.indexOf('14,976,729') >= 0);
   ok('A47 确实跑了多个专家(finance + inventory)', out.results.length >= 2 && out.results.some(r => r.agentId === 'finance') && out.results.some(r => r.agentId === 'inventory'));
@@ -274,7 +274,8 @@ async function main() {
   });
   await O.orchestrate('收入 库存 定价 上市 都看看', null, deps2);
   ok('A55 全局工具预算生效(≤' + O.BUDGET.maxToolCallsTotal + ' 次,防本地模型死循环)', calls2.length <= O.BUDGET.maxToolCallsTotal);
-  ok('A56 每个专家工具轮上限生效(≤' + O.BUDGET.maxToolRoundsPerAgent + ' 轮)', n <= O.BUDGET.maxToolRoundsPerAgent * 4 + 2);
+  // 预算账：4 位专家 × 轮上限 + 规划员 1 次 + 每位专家轮次耗尽后的强制终答 1 次 + 半途重试至多 2 次（2026-09-11 起重试真的会跑了）
+  ok('A56 每个专家工具轮上限生效(≤' + O.BUDGET.maxToolRoundsPerAgent + ' 轮，含终答/重试预算)', n <= O.BUDGET.maxToolRoundsPerAgent * 4 + 1 + 4 + 8);
 
   // 单专家场景：省掉综合那次调用
   let calls3 = 0;
@@ -282,7 +283,7 @@ async function main() {
     _events: [],
     chat: async () => { calls3++; return { content: '就这些。{"claims":[{"metric":"SO","value":"100"}],"notes":"仅一个专家"}' }; },
   });
-  const out3 = await O.orchestrate('这个系列卖得怎么样', 'psi', deps3);
+  const out3 = await O.orchestrate('这个系列卖得怎么样', 'psi', deps3, { planner: false });   // 量的是专家路径的调用数，规划员单独有测
   ok('A57 单专家问题不再多花一次 30B 综合调用', out3.singleAgent === true && calls3 === 1);
 
   // 模型报错时优雅降级
@@ -308,8 +309,244 @@ async function main() {
 
   await speed();
   trim();
+  await followup();
+  await planner();
+  await retryTools();
+  await unscoped();
+  await judge();
+  await nudge();
 
   console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS');
   process.exit(f ? 1 : 0);
+}
+
+/* ---------- 追问理解：上文实体必须带进本轮（2026-09-10 用户实锤） ---------- */
+async function followup() {
+  const PRODUCTS = ['Product A 13.2-inch', 'Product B 11-inch', 'Product D Buds'];
+  const mk = (script) => {
+    let i = 0; const calls = []; const events = [];
+    return {
+      calls, events,
+      deps: {
+        schemas: AD.TOOL_SCHEMAS, buildToolSpecs: n => AD.buildToolSpecs(n), parseToolCall: AD.parseToolCall,
+        boardLabel: () => 'X', filters: () => null, snapshot: async () => '',
+        runTool: async () => ({ ok: 1 }),
+        optionsDirect: async (dim) => (dim === 'product' ? PRODUCTS : []),
+        chat: async p => { calls.push(p); return script[i++] || { content: '答案。{"claims":[{"metric":"SO","value":"1"}],"notes":"n"}' }; },
+        onProgress: e => events.push(e),
+      },
+    };
+  };
+  const HIST = [{ role: 'user', content: 'Product A 13.2-inch 今年卖了多少' }, { role: 'assistant', content: '今年累计 SO 1,234 台。' }];
+  const lastUser = (calls) => { const c = calls[calls.length - 1]; const u = (c.messages || []).filter(m => m.role === 'user'); return u.length ? u[u.length - 1].content : ''; };
+
+  // F1 模型改写成功 → 专家拿到的是改写后的完整问句
+  const a = mk([{ content: '{"standalone":"Product A 13.2-inch 2026 年与 2025 年销量对比，卖得怎么样"}' },
+                { content: '对比结论。{"claims":[{"metric":"SO","value":"1234"}],"notes":"n"}' }]);
+  await O.orchestrate('对比2025年卖的怎么样', 'industry', a.deps, { history: HIST });
+  const ua = lastUser(a.calls);
+  ok('F1 追问被改写：专家看到的问句含上文产品名', ua.indexOf('Product A 13.2-inch') >= 0 && ua.indexOf('2025') >= 0);
+  ok('F1b 理解+规划合并成 1 次模型调用（规划 1 + 专家 1）', a.calls.length === 2);
+  ok('F1c 进度流里有「understand」事件且带改写结果', a.events.some(e => e.type === 'understand' && /Product A 13\.2-inch/.test(e.to)));
+  ok('F1d 硬约束里带上「已结合上文理解」与上一轮回答', /已结合上文理解为/.test(ua) && /上一轮回答/.test(ua) && /1,234/.test(ua));
+  ok('F1e 实体检索按改写后的问句命中 product', /实体检索命中：product=Product A 13\.2-inch/.test(ua));
+
+  // F2 模型改写失败/丢主语 → 确定性兜底：原句 + 承接上文实体
+  const b = mk([{ content: '{"standalone":"2026 年和 2025 年销量对比"}' },       // 丢了产品名
+                { content: 'x。{"claims":[],"notes":"n"}' }]);
+  await O.orchestrate('对比2025年卖的怎么样', 'industry', b.deps, { history: HIST });
+  ok('F2 模型改写丢了主语 → 自动补回产品名', /(承接上文|对象)：Product A 13\.2-inch/.test(lastUser(b.calls)));
+  const c = mk([{ error: 'boom' }, { content: 'x。{"claims":[],"notes":"n"}' }]);
+  await O.orchestrate('对比2025年卖的怎么样', 'industry', c.deps, { history: HIST });
+  ok('F2b 模型改写报错 → 仍能用确定性版本带上产品名', /Product A 13\.2-inch/.test(lastUser(c.calls)));
+
+  // F3 没有上文 / 本句自己就点了名 → 不多花那次调用
+  const d = mk([{ content: 'x。{"claims":[],"notes":"n"}' }]);
+  await O.orchestrate('对比2025年卖的怎么样', 'industry', d.deps, { planner: false });
+  ok('F3 关掉规划员且没有上文 → 不多花调用、没有理解事件', d.calls.length === 1 && !d.events.some(e => e.type === 'understand'));
+  const e = mk([{ content: 'x。{"claims":[],"notes":"n"}' }]);
+  await O.orchestrate('Product B 11-inch 对比2025年卖的怎么样', 'industry', e.deps, { history: HIST });
+  ok('F3b 本句自己点了名 → 不把上文的 Product A 硬塞进来', lastUser(e.calls).indexOf('Product A') < 0);
+
+  // F5 理解员必须知道今天几号，否则「对比 2025 年」会被改写成「2025 vs 2024」（2026-09-10 实测）
+  const g = mk([{ content: '{"standalone":"x"}' }, { content: 'x。{"claims":[],"notes":"n"}' }]);
+  await O.orchestrate('对比2025年卖的怎么样', 'industry', g.deps, { history: HIST });
+  const Y = new Date().getFullYear();
+  ok('F5 理解员的 system 里带今天日期与「今年=' + Y + '」', g.calls.length >= 1 && new RegExp('今年」=' + Y).test(g.calls[0].system || '') && new RegExp('今天是 ' + Y + '-').test(g.calls[0].system || ''));
+
+  // F6 空回复不许四个字了事：综合层返回空 → 落到专家结论/错误说明
+  const h = mk([{ content: '{"standalone":"Product A 13.2-inch 收入与库存"}' },
+                { content: '收入专家结论。{"claims":[{"metric":"收入","value":"9"}],"notes":"收入说明"}' },
+                { content: '库存专家结论。{"claims":[{"metric":"库存","value":"8"}],"notes":"库存说明"}' },
+                { content: '' }]);                                              // 综合层空回复
+  const r6 = await O.orchestrate('它的收入 和 库存 怎么样', 'finance', h.deps, { history: HIST, mode: 'deep' });
+  ok('F6 综合层空回复时不再输出「(空回复)」，而是给出专家结论', r6.answer !== '(空回复)' && /收入说明|库存说明|未能完成|重试/.test(r6.answer));
+
+  // F4 纯函数：understandInContext 的确定性层
+  const u = await O.understandInContext('它在墨西哥呢', HIST, { optionsDirect: async d => (d === 'product' ? PRODUCTS : []) });
+  ok('F4 无模型时也能把上文实体带过来', u.changed === true && u.carried.indexOf('Product A 13.2-inch') >= 0 && /承接上文/.test(u.question));
+}
+
+
+/* ---------- LLM 规划员：分解任务（2026-09-11 用户：把理解员升级成规划员） ---------- */
+async function planner() {
+  const PRODUCTS = ['Product A 13.2-inch', 'Product B 11-inch'];
+  const mk = (script) => {
+    let i = 0; const calls = []; const events = [];
+    return { calls, events, deps: {
+      schemas: AD.TOOL_SCHEMAS, buildToolSpecs: n => AD.buildToolSpecs(n), parseToolCall: AD.parseToolCall,
+      boardLabel: () => 'X', filters: () => null, snapshot: async () => '', runTool: async () => ({ ok: 1 }),
+      optionsDirect: async (dim) => (dim === 'product' ? PRODUCTS : []), parallel: true,
+      chat: async p => { calls.push(p); return script[i++] || { content: '答。{"claims":[{"metric":"m","value":"1"}],"notes":"n"}' }; },
+      onProgress: e => events.push(e) } };
+  };
+  const ANS = { content: '答。{"claims":[{"metric":"m","value":"1"}],"notes":"n"}' };
+  const HIST = [{ role: 'user', content: 'Product A 13.2-inch 今年卖了多少' }, { role: 'assistant', content: '累计 SO 1,234 台。' }];
+
+  // P1 规划员拆成 2 个子任务 → 真的跑 2 位专家，子问题原样下发
+  const a = mk([{ content: '{"standalone":"Product A 13.2-inch 今年销量与收入","tasks":[{"agent":"report","label":"销量","question":"Product A 13.2-inch 今年累计 SO 多少"},{"agent":"finance","label":"收入","question":"Product A 13.2-inch 今年收入多少"}]}' }, ANS, ANS, { content: '综合。' }]);
+  const r1 = await O.orchestrate('它今年卖得怎么样，收入呢', 'industry', a.deps, { history: HIST });
+  const ev1 = a.events.find(e => e.type === 'planner');
+  ok('P1 规划员拆的 2 个子任务都跑了（2 位专家 + 综合）', r1.results.length === 2 && r1.results.map(x => x.agentId).sort().join(',') === 'finance,report');
+  ok('P1b 子问题按规划员给的下发', a.calls.slice(1, 3).every(c => /Product A 13\.2-inch 今年(累计 SO 多少|收入多少)/.test(c.messages[c.messages.length - 1].content)));
+  ok('P1c 有 planner 事件且带子任务清单', !!ev1 && ev1.tasks.length === 2 && /report|汇总/.test(ev1.tasks[0].agent + ev1.tasks[1].agent + '汇总'));
+  ok('P1d 快速模式不再把规划员拆的多任务砍成 1 个', r1.results.length === 2);
+
+  // P2 名单外的专家 id 丢掉，只保留有效的
+  const b = mk([{ content: '{"standalone":"Product A 13.2-inch 今年销量","tasks":[{"agent":"ghost","question":"x"},{"agent":"report","label":"销量","question":"Product A 13.2-inch 今年累计 SO"}]}' }, ANS]);
+  const r2 = await O.orchestrate('它今年卖得怎么样', 'industry', b.deps, { history: HIST });
+  ok('P2 名单外的专家 id 被丢掉，只跑有效的那个', r2.results.length === 1 && r2.results[0].agentId === 'report');
+
+  // P3 规划员输出解析不了 → 退回规则路由，流水线不断
+  const c = mk([{ content: '我觉得应该先……（不是 JSON）' }, ANS]);
+  const r3 = await O.orchestrate('Product B 11-inch 库存水位如何', 'inventory', c.deps, {});
+  ok('P3 规划员抽风时退回规则路由，仍有专家作答', r3.results.length >= 1 && !c.events.some(e => e.type === 'planner') && c.events.some(e => e.type === 'plan'));
+
+  // P4 子问题丢了上文实体 → 代码补回
+  const d = mk([{ content: '{"standalone":"今年销量对比去年","tasks":[{"agent":"report","label":"对比","question":"今年累计 SO 对比去年同期"}]}' }, ANS]);
+  await O.orchestrate('对比去年卖的怎么样', 'industry', d.deps, { history: HIST });
+  const ud = d.calls[1].messages[d.calls[1].messages.length - 1].content;
+  ok('P4 规划员丢了主语 → 子问题和独立问题都被补回产品名', /Product A 13\.2-inch/.test(ud) && /Product A 13\.2-inch/.test(d.events.find(e => e.type === 'understand').to));
+
+  // P5 规划员的提示词里有专家名单、今天日期、上文实体
+  ok('P5 规划员提示词含名单/日期/上文实体', /report（/.test(d.calls[0].messages[d.calls[0].messages.length - 1].content) && new RegExp('今年」=' + new Date().getFullYear()).test(d.calls[0].system) && /Product A 13\.2-inch/.test(d.calls[0].messages[d.calls[0].messages.length - 1].content));
+
+  // P6 forceTasks 优先于规划员（Agent 对话的总控分工不受影响）
+  const e = mk([ANS]);
+  await O.orchestrate('x', null, e.deps, { forceTasks: [{ agentId: 'report', subQuestion: '总控给的子任务' }] });
+  ok('P6 forceTasks 在场时不调规划员', e.calls.length === 1 && /总控给的子任务/.test(e.calls[0].messages[e.calls[0].messages.length - 1].content));
+}
+
+
+/* ---------- 溯源重试要带上所有参与专家的工具（2026-09-11：财经查到的收入被重试丢掉） ---------- */
+async function retryTools() {
+  const calls = [];
+  const deps = { chat: async p => { calls.push(p); return { content: '重写后的回答' }; },
+    pickTools: AD.pickTools, buildToolSpecs: AD.buildToolSpecs, schemas: AD.TOOL_SCHEMAS, runTool: async () => ({}) };
+  const finTool = O.AGENTS.finance.tools.find(t => O.AGENTS.report.tools.indexOf(t) < 0);
+  await O.provenanceRetry('Slate 11 收入与销量', '答案 3520941', ['3520941'], deps, 'industry', [{ agentId: 'report' }, { agentId: 'finance' }]);
+  const names = (calls[0] && calls[0].tools || []).map(t => (t.function && t.function.name) || t.name);
+  ok('R1 跨专家协作时，溯源重试带上了财经专家的工具（' + finTool + '）', !!finTool && names.indexOf(finTool) >= 0);
+  ok('R1b 重试 system 里说明了多专家协作', /多位专家协作/.test(calls[0].system || ''));
+  calls.length = 0;
+  await O.provenanceRetry('Slate 11 销量', '答案 1', ['1'], deps, 'industry', [{ agentId: 'report' }]);
+  ok('R1c 单专家时工具范围不膨胀（不带财经工具）', !((calls[0].tools || []).some(t => ((t.function && t.function.name) || t.name) === finTool)));
+}
+
+
+/* ---------- 界面筛选不再卡住取数（2026-09-11 用户：没选那个产品就抓不到数据） ---------- */
+async function unscoped() {
+  const PRODUCTS = ['Slate 11', 'Slate 11 Pro'];
+  const mk = (script) => {
+    let i = 0; const calls = []; const snaps = [];
+    return { calls, snaps, deps: {
+      schemas: AD.TOOL_SCHEMAS, buildToolSpecs: n => AD.buildToolSpecs(n), parseToolCall: AD.parseToolCall, pickTools: AD.pickTools,
+      boardLabel: () => 'PSI', filters: () => ({ product: ['Slate 11 Pro'] }),      // 界面选着另一个产品
+      snapshot: async (b, o) => { snaps.push(o); return '概览'; }, runTool: async () => ({ ok: 1 }),
+      optionsDirect: async (dim) => (dim === 'product' ? PRODUCTS : []),
+      chat: async p => { calls.push(p); return script[i++] || { content: '答。{"claims":[{"metric":"m","value":"1"}],"notes":"n"}' }; },
+      onProgress: () => {} } };
+  };
+  const userMsgs = calls => calls.map(c => (c.messages || []).filter(m => m.role === 'user').map(m => m.content).join('\n')).join('\n');
+  // U1 问的是别的产品 → 界面筛选不进上下文、快照按全量、护栏明说不带
+  const a = mk([{ content: '{"standalone":"Slate 11 今年卖了多少台","tasks":[{"agent":"psi","label":"销量","question":"Slate 11 今年卖了多少台"}]}' }]);
+  await O.orchestrate('Slate 11 今年卖了多少台', 'psi', a.deps, {});
+  const ua = userMsgs(a.calls.slice(1));
+  ok('U1 问别的产品时，「【界面此刻的筛选】」上下文块不再喂给专家（护栏里只做备注）', ua.indexOf('【界面此刻的筛选') < 0);
+  ok('U1b 护栏明说：按全量数据回答，不要带界面筛选', /按全量数据回答/.test(ua) && /Slate 11 Pro/.test(ua) && /不要带上/.test(ua));
+  ok('U1c 快照按全量取（ignoreFilters=true）', a.snaps.some(o => o && o.ignoreFilters === true));
+  // U2 问「当前筛选下」→ 才按界面范围
+  const b = mk([{ content: '{"standalone":"当前筛选下今年卖了多少台","tasks":[{"agent":"psi","label":"销量","question":"当前筛选下今年卖了多少台"}]}' }]);
+  await O.orchestrate('当前筛选下今年卖了多少台', 'psi', b.deps, {});
+  const ub = userMsgs(b.calls.slice(1));
+  ok('U2 问「当前筛选下」→ 界面筛选进上下文且护栏要求带上', /界面此刻的筛选/.test(ub) && /必须带上界面筛选/.test(ub) && b.snaps.some(o => o && o.ignoreFilters === false));
+  // U3 上下文措辞：不再有「取数必须带上」这种硬绑定
+  const ctx = O.buildContextMessage({ boardLabel: 'PSI', filters: { product: ['X'] } });
+  ok('U3 上下文里界面筛选是「仅供参考」，不再「必须带上」', /仅供参考/.test(ctx) && !/取数必须带上/.test(ctx));
+  // U4 快速模式下数据专家常驻底表三件套
+  const names = (a.calls[1].tools || []).map(t => (t.function && t.function.name) || t.name);
+  ok('U4 快速模式下 PSI 专家仍带 rawRows/searchDim/dataCatalog', ['rawRows', 'searchDim', 'dataCatalog'].every(n => names.indexOf(n) >= 0));
+}
+
+
+/* ---------- 判断/决策类问题：剧本 + 门禁重写验货（2026-09-11） ---------- */
+async function judge() {
+  ok('J1 决策题命中「产品对比决策」剧本', (O.analysisPlaybook('Slate 11 和 Slate 11 Pro 哪个卖得更好？收入利润销量综合考虑该多卖哪个') || {}).kind === '产品对比决策');
+  ok('J1b 趋势题命中「潜力/趋势判断」剧本', (O.analysisPlaybook('现在哪个产品未来能卖得更多？') || {}).kind === '潜力/趋势判断');
+  ok('J1c 普通问数不命中剧本', O.analysisPlaybook('Slate 11 今年卖了多少台') === null);
+  const PRODUCTS = ['Slate 11', 'Slate 11 Pro'];
+  let i = 0; const calls = [];
+  const script = [
+    { content: '{"standalone":"Slate 11 与 Slate 11 Pro 综合对比","tasks":[{"agent":"report","label":"销量","question":"Slate 11 与 Slate 11 Pro 累计SO/同比/DOS"},{"agent":"finance","label":"收入","question":"Slate 11 与 Slate 11 Pro 收入与销毛率"}]}' },
+    { content: 'a。{"claims":[{"metric":"SO","value":"1"}],"notes":"n"}' },
+    { content: 'b。{"claims":[{"metric":"收入","value":"2"}],"notes":"n"}' },
+    { content: '综合：建议多卖 Slate 11 Pro。' },
+  ];
+  const deps = { schemas: AD.TOOL_SCHEMAS, buildToolSpecs: n => AD.buildToolSpecs(n), parseToolCall: AD.parseToolCall, pickTools: AD.pickTools,
+    boardLabel: () => 'X', filters: () => null, snapshot: async () => '', runTool: async () => ({ ok: 1 }), optionsDirect: async d => (d === 'product' ? PRODUCTS : []), parallel: true,
+    chat: async p => { calls.push(p); return script[i++] || { content: 'x' }; }, onProgress: () => {} };
+  await O.orchestrate('Slate 11 和 Slate 11 Pro 哪个卖得更好？综合考虑该多卖哪个', 'industry', deps, {});
+  const u = k => (calls[k].messages || []).filter(m => m.role === 'user').map(m => m.content).join(' ');
+  ok('J2 规划员提示词里带了决策剧本', /按这份剧本拆任务/.test(u(0)) && /financeProductBoard/.test(u(0)));
+  ok('J2b 专家护栏里有「必须给出结论」', /必须给出结论/.test(u(1)) && /必须给出结论/.test(u(2)));
+  ok('J2c 综合层拿到结论格式要求（对比表 + 一句话结论）', /结论格式要求/.test(u(3)) && /对比表/.test(u(3)));
+  const mk = (txt) => ({ chat: async () => ({ content: txt }), pickTools: AD.pickTools, buildToolSpecs: AD.buildToolSpecs, schemas: AD.TOOL_SCHEMAS, runTool: async () => ({}) });
+  const r1 = await O.provenanceRetry('q', '原答案 123', ['123'], mk("I'll re-pull every number from the tools."), 'industry', [{ agentId: 'report' }]);
+  ok('J3 门禁重写交了一句英文过程话 → 不收（返回 null，保留原答案打标）', r1 === null);
+  const r2 = await O.provenanceRetry('q', '原答案 123', ['123'], mk('让我重新查询一下数据。'), 'industry', [{ agentId: 'report' }]);
+  ok('J3b 中文过程话同样不收', r2 === null);
+  const good = 'Slate 11 累计 SO 34,714 台，去年同期 34,551 台，同比 +0.5%；建议维持现有投入，观察 9 月放量情况。';
+  const r3 = await O.provenanceRetry('q', '原答案', ['9'], mk(good), 'industry', [{ agentId: 'report' }]);
+  ok('J3c 正经的完整重写照收', r3 === good);
+}
+
+/* ---------- 「嘴上说取数、实际不调工具」必须被揪住（2026-09-11 实测：AGENTS.find 抛错吞掉，重试从未跑过） ---------- */
+async function nudge() {
+  let i = 0; const calls = [];
+  const script = [
+    { content: '{"standalone":"哪个产品未来能卖得更多","tasks":[{"agent":"report","label":"动量","question":"各产品累计SO/同比/DOS"}]}' },
+    { toolCalls: [{ function: { name: 'report', arguments: '{"groupDim":"product"}' } }] },
+    { content: 'I now have the full product-level summary. Let me get the monthly sell-out matrix by product for the last 6 months to complete the picture.' },
+    { content: '结论：SonicBuds SE4 ANC 动量最强。{"claims":[{"metric":"SO","value":"27696"}],"notes":"结论：SonicBuds SE4 ANC 动量最强"}' },
+  ];
+  const deps = { schemas: AD.TOOL_SCHEMAS, buildToolSpecs: n => AD.buildToolSpecs(n), parseToolCall: AD.parseToolCall, pickTools: AD.pickTools, boardLabel: () => 'X', filters: () => null, snapshot: async () => '',
+    runTool: async () => ({ rows: [{ key: 'SonicBuds SE4 ANC', cumCur: 27696 }] }), optionsDirect: async () => [],
+    chat: async p => { calls.push(p); return script[i++] || { content: 'x' }; }, onProgress: () => {} };
+  const r = await O.orchestrate('现在哪个产品未来能卖得更多？', 'industry', deps, {});
+  ok('N1 过程话不被当成答案：专家被逼着再来一轮（多 1 次调用）', calls.length === 4);
+  ok('N1b 逼话里点明「没有发出工具调用」', /没有发出任何工具调用/.test(calls[3].messages[calls[3].messages.length - 1].content));
+  ok('N1c 最终结论是第 4 次调用给的结论，不是那句 Let me', /SE4 ANC/.test(r.answer) && !/Let me/.test(r.answer));
+  ok('N2 isProcessOnly：过程话=true，带结论的正文=false', O.isProcessOnly('I have the core data. Let me pull the monthly trend for both products.') === true && O.isProcessOnly('I have everything I need. Here is the summary. ## 结论 累计 SO 34,714 台，同比 +0.5%') === false);
+  // 编排层兜底：专家两次逼完仍是过程话 → 半途重试真的会跑（以前 AGENTS.find 抛错吞掉）
+  let j = 0; const calls2 = [];
+  const script2 = [
+    { content: '{"standalone":"q","tasks":[{"agent":"report","label":"x","question":"q"}]}' },
+    { toolCalls: [{ function: { name: 'report', arguments: '{"groupDim":"product"}' } }] },
+    { content: 'Let me pull more data.' }, { content: 'Let me pull more data.' }, { content: 'Let me pull more data.' },
+    { content: '重试终答：SE4 ANC 27696 台。{"claims":[{"metric":"SO","value":"27696"}],"notes":"重试终答"}' },
+  ];
+  const deps2 = Object.assign({}, deps, { chat: async p => { calls2.push(p); return script2[j++] || { content: 'Let me pull more data.' }; } });
+  const r2 = await O.orchestrate('现在哪个产品未来能卖得更多？', 'industry', deps2, {});
+  ok('N3 专家逼两次仍是过程话 → 编排层半途重试真的跑了并采纳终答', r2.results[0].halfwayRetried === true && /重试终答/.test(r2.results[0].notes || ''));
 }
 main().catch(e => { console.log('FAIL 未捕获异常: ' + (e && e.stack || e)); process.exit(1); });

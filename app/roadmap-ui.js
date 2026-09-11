@@ -240,7 +240,8 @@
       p.shipLate = e2.ship != null ? String(e2.ship).trim() : window.RoadmapDetect.toRoadmapMonth(c.launchMonth);
       if (c.status === 'eol' && c.eolMonth) p.salesEnd = window.RoadmapDetect.toRoadmapMonth(c.eolMonth);
       p.seriesGroup = c.series || c.line || '';
-      p.category = c.line || '';
+      // 品类必须归一到路标的四个标准值，否则「音频与智能配件」≠「音频」，切页签就整批消失
+      p.category = window.RoadmapDetect.lineToCategory(c.line || '');
       p.psiLink = c.modelKey || '';
       const predRef = e2.pred != null ? e2.pred : (c.predId || '');
       let pred = null;
@@ -257,7 +258,19 @@
     });
     pendingPred.forEach(({ p, cardIdx }) => { const t = createdByIdx[cardIdx]; if (t) p.predecessorId = t.id; });
     if (!n) { alert('没有可新建的产品（可能同名已存在）。'); return; }
-    if (save()) { alert('已新建 ' + n + ' 个路标产品。可在列表/路标图中继续补充信息。'); DET.newSel = {}; detRun(); }
+    if (!save()) return;
+    DET.newSel = {};
+    /* 新建完直接跳到路标图，并把会把新产品筛掉的条件清空（年份 / 时间切片 / 品类）——
+       2026-09-10 用户：「显示添加成功了，但是前面的路标图就是显示不出来」。
+       新产品上市在 2025，图却停在「2026」页签，或者时间切片停在旧范围，看起来就像没加上。 */
+    const created = Object.values(createdByIdx);
+    const cats = new Set(created.map(p => p.category).filter(Boolean));
+    const cleared = [];
+    if (state.chart.year) { state.chart.year = ''; cleared.push('年份'); }
+    if (state.chart.timeFrom || state.chart.timeTo) { state.chart.timeFrom = ''; state.chart.timeTo = ''; cleared.push('时间切片'); }
+    if (state.chart.category && !cats.has(state.chart.category)) { state.chart.category = cats.size === 1 ? [...cats][0] : ''; cleared.push('品类'); }
+    state.view = 'chart'; renderMain();
+    alert('已新建 ' + n + ' 个路标产品，已切到路标图' + (cleared.length ? '（为了让它们显示出来，清空了：' + cleared.join('、') + '）' : '') + '。');
   }
 
   function detApply() {
@@ -444,7 +457,7 @@
   function renderLifecycle(host) {
     const C2 = window.RoadmapCore;
     const cat = state.chart.category;
-    const ps = (state.products || []).filter(p => !cat || p.category === cat);
+    const ps = (state.products || []).filter(p => !cat || catMatch(p.category, cat));
     const rows = C2.ganttRows(ps);
     if (!rows.length) {
       host.innerHTML = '<div class="g-empty"><div class="g-empty__icon" data-icon="roadmap" data-icon-class="g-ico g-ico--lg"></div>'
@@ -540,7 +553,7 @@
   }
   function chartProducts() {
     let ps = state.products;
-    if (state.chart.category) ps = ps.filter(p => p.category === state.chart.category);
+    if (state.chart.category) ps = ps.filter(p => catMatch(p.category, state.chart.category));
     ps = RoadmapChart.filterByYear(ps, state.chart.year);
     if (state.chart.explode) ps = RoadmapChart.explodeBySku(ps);
     return ps;
@@ -1087,6 +1100,8 @@
   const ROM_OPTS = ['', '64GB', '128GB', '256GB', '512GB', '1TB', '2TB'];
   const inp = (id, val, w) => '<input id="' + id + '" value="' + esc(val) + '" style="border:1px solid var(--c-line);border-radius:7px;padding:6px 9px;width:' + (w || 200) + 'px">';
   const CATEGORIES = ['手机', '穿戴', '平板', '音频'];
+  // 品类比对按「归一后相等」：老数据里存的「音频与智能配件」也能落进「音频」页签
+  function catMatch(pc, cat) { if (!cat) return true; if (pc === cat) return true; const RD = window.RoadmapDetect; return !!(RD && RD.lineToCategory && RD.lineToCategory(pc) === cat); }
   const reqStar = ' <span style="color:var(--c-brand)">*</span>';
   const bord = (v) => String(v == null ? '' : v).trim() ? '#E6E8EB' : '#C7000B';
   const inpReq = (id, val, w) => '<input id="' + id + '" value="' + esc(val) + '" style="border:1px solid ' + bord(val) + ';border-radius:7px;padding:6px 9px;width:' + (w || 200) + 'px">';

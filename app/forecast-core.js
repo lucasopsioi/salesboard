@@ -83,9 +83,13 @@
   function rollInventory(openInv, periods, gran) {
     let inv = n0(openInv) || 0;
     return (periods || []).map(p => {
+      const siG = n0(p.si) != null, soG = n0(p.so) != null;
       const si = n0(p.si) || 0, so = n0(p.so) || 0;
       inv = inv + si - so;
-      return { si: si, so: so, inv: inv, days: periodDays(gran, p.days), missing: (n0(p.si) == null || n0(p.so) == null) };
+      /* siGiven/soGiven 是「这格用户填了没有」。库存滚动里未填按 0（库存必须连续、原地不动），
+         但**日销窗口里绝不能按 0**——未填 ≠ 卖 0 台。见 trailingDailyRate。 */
+      return { si: si, so: so, inv: inv, days: periodDays(gran, p.days),
+        siGiven: siG, soGiven: soG, missing: !(siG && soG) };
     });
   }
 
@@ -96,6 +100,11 @@
     let need = W, sum = 0, got = false;
     for (let i = idx; i >= 0 && need > 0; i--) {
       const r = rows[i]; if (!r) break;
+      /* 未填的期直接跳过：窗口继续往前回看，天数也不消耗。
+         （2026-09-07：用户要求不做预测，未填的推演期 SO 为空；旧代码把空当 0 累进窗口，
+           几期之后近28天日销就被摊成 0 → DOS 全线塌成「—」。这就是「缺数不补零」。）
+         注意：用户显式填 0 时 soGiven=true，那是真的「卖 0 台」，照常参与。 */
+      if (r.soGiven === false) continue;
       const d = Math.min(r.days, need);
       if (r.days > 0) { sum += (n0(r.so) || 0) * (d / r.days); got = true; }
       need -= d;
@@ -152,19 +161,24 @@
     const siMap = {}; models.forEach(m => { siMap[m.key] = n0(m.histSi) || 0; });
     const shares = siShares(siMap) || equalShares(models.map(m => m.key));
     const pps = opt.productPeriods || [];
-    const soSplit = pps.map(p => splitInt(n0(p.so) || 0, shares));
+    // 产品级没填 → 型号也是「没填」（null），不能变成 0，否则日销窗口又被 0 污染
+    const soSplit = pps.map(p => (n0(p.so) == null ? null : splitInt(n0(p.so), shares)));
     /* SI 绝不默认等于 SO（2026-09-07 用户：「我调整SO的时候库存为什么不会变化」）——
        让 SI 跟着 SO 走会使 期末 = 期初 + SI − SO 的增减恰好抵消，库存永远不动，
        整个推演的因果链就断了。没给 SI 就按 0 处理，由调用方显式传入默认发货量。 */
-    const siSplit = pps.map((p, i) => splitInt(n0(p.si) != null ? n0(p.si) : 0, shares));
+    const siSplit = pps.map(p => (n0(p.si) == null ? null : splitInt(n0(p.si), shares)));
     const byModel = {};
     models.forEach(m => {
-      const periods = pps.map((p, i) => ({ so: soSplit[i][m.key] || 0, si: siSplit[i][m.key] || 0, days: p.days }));
+      const periods = pps.map((p, i) => ({
+        so: soSplit[i] ? (soSplit[i][m.key] || 0) : null,
+        si: siSplit[i] ? (siSplit[i][m.key] || 0) : null,
+        days: p.days,
+      }));
       byModel[m.key] = simulate({ openInv: m.openInv, histDaily: m.histDaily, periods: periods, gran: opt.gran });
     });
     const totals = pps.map((p, i) => ({
-      so: models.reduce((a, m) => a + (soSplit[i][m.key] || 0), 0),
-      si: models.reduce((a, m) => a + (siSplit[i][m.key] || 0), 0),
+      so: models.reduce((a, m) => a + (soSplit[i] ? (soSplit[i][m.key] || 0) : 0), 0),
+      si: models.reduce((a, m) => a + (siSplit[i] ? (siSplit[i][m.key] || 0) : 0), 0),
     }));
     return { shares: shares, byModel: byModel, totals: totals };
   }
@@ -186,6 +200,7 @@
     const hist = (opt.histRows || []).map(r => ({
       si: n0(r.si), so: n0(r.so), inv: n0(r.inv),
       days: periodDays(gran, r.days), hist: true,
+      siGiven: n0(r.si) != null, soGiven: n0(r.so) != null,
     }));
     const openInv = hist.length ? hist[hist.length - 1].inv : n0(opt.openInv);
     const fc = rollInventory(openInv, opt.periods || [], gran);
@@ -204,14 +219,19 @@
     const siMap = {}; models.forEach(m => { siMap[m.key] = n0(m.histSi) || 0; });
     const shares = siShares(siMap) || equalShares(models.map(m => m.key));
     const pps = opt.productPeriods || [];
-    const soSplit = pps.map(p => splitInt(n0(p.so) || 0, shares));
+    // 产品级没填 → 型号也是「没填」（null），不能变成 0，否则日销窗口又被 0 污染
+    const soSplit = pps.map(p => (n0(p.so) == null ? null : splitInt(n0(p.so), shares)));
     /* SI 绝不默认等于 SO（2026-09-07 用户：「我调整SO的时候库存为什么不会变化」）——
        让 SI 跟着 SO 走会使 期末 = 期初 + SI − SO 的增减恰好抵消，库存永远不动，
        整个推演的因果链就断了。没给 SI 就按 0 处理，由调用方显式传入默认发货量。 */
-    const siSplit = pps.map((p, i) => splitInt(n0(p.si) != null ? n0(p.si) : 0, shares));
+    const siSplit = pps.map(p => (n0(p.si) == null ? null : splitInt(n0(p.si), shares)));
     const byModel = {};
     models.forEach(m => {
-      const periods = pps.map((p, i) => ({ so: soSplit[i][m.key] || 0, si: siSplit[i][m.key] || 0, days: p.days }));
+      const periods = pps.map((p, i) => ({
+        so: soSplit[i] ? (soSplit[i][m.key] || 0) : null,
+        si: siSplit[i] ? (siSplit[i][m.key] || 0) : null,
+        days: p.days,
+      }));
       byModel[m.key] = simulateWithHistory({ gran: opt.gran, histRows: m.histRows, openInv: m.openInv, periods: periods });
     });
     return { shares: shares, byModel: byModel };

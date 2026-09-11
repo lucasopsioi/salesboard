@@ -1,0 +1,18 @@
+真值摘要：top cum=SonicBuds SE3/Slate SE 11/Slate 11；top yoy=SonicBuds SE4 ANC89242%/Slate 11 Pro214%/SonicBuds SE3117%；最高DOS=Slate SE 10(461)；同比为负=SonicBuds SE2/Slate SE 10；周走势下滑=SonicBuds SE3/Slate SE 11/Slate 11/Slate 11 Pro/SonicBuds SE2/SonicBuds Pro 4/SonicArc/Slate SE 10；去库存=Slate 11/SonicBuds Pro 4；Slate 11 最强国家=Mexico；贡献最大=SonicBuds SE4 ANC/SonicBuds SE3；收入最高=Slate 11 Pro
+
+【1】Slate 11 和 Slate 11 Pro 哪个卖得更好？收入、利润和销量综合考虑，我应该多卖哪个？
+   ✅ 正确  33s  | 真值：两款累计SO 34714/25589 + 明确建议
+   答：**一句话结论：2026 年至今（截至 2026-09）Slate 11 Pro 卖得更好、应主推 Slate 11 Pro——它在销量增速、收入体量增速上全面领先，单台收益（NSIP）更高，库存健康度与 Slate 11 基本持平；Slate 11 已进入低增长/微降阶段，适合作为基本盘维持。** ## 对比表 | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | Slate 11 | 34,714（口径：sell-out 累计，2026 W1–W34，groupDim=model
+
+【2】现在哪个产品未来能卖得更多？给我一个排序。
+   ✅ 正确  26s  | 真值：开头点名同比前三或放量期产品
+   答：**结论：基于 2026 年当前销售动量（YTD 截至 W34），产业看板中音频线的 SonicBuds SE3 潜力最强，Slate SE 11 次之，Slate 11 Pro 具备追赶动能；这是基于实际同比、库存周转与上市阶段的定性判断，不是未来销量预测。** --- **一、依据表（口径：YTD 累计 SO，report groupDim=product，截至 W34；库存为最新期快照）** | 产品 | 线 | 累计 SO | 同比 | 渠道库存 | 渠道 DOS | 全流程 DOS | 上市阶段 | |---|---|---|---|---|---|---|---| | SonicBuds SE3 | 音频 | 45,72
+
+【3】哪个产品的库存风险最大？为什么？
+   🟡 有分析但不准  32s  | 真值：DOS 最高=Slate SE 10 461
+   答：**结论：在产业看板中，2026 年库存风险最大的产品是 Slate SE 10（平板 / Slate SE 系列），属于「卖不动 + 库存几乎没消化 + 周转天数畸高」的滞销积压型风险，而非「卖得好但备货多」型风险。** **关键数字（口径均为产业看板 `industryTrend`，gran=month，2026 年 1–8 月，渠道快照口径，非全流程）** - **动销断崖**：Slate SE 10 月 sellOut 为 1 月 584 → 2 月 1117 → 3 月 369 → **4 月起连续为 0（4/5/6/7/8 月全为 0）**，是所列产品中唯一出货完全断档的。 - **进货近乎停止**：月 sellIn 为
+
+==================== 汇总 ====================
+题数 3｜能分析出来 3/3（100%）｜结论正确 2/3（67%）
+未通过：#3(不准)
+结果文件：eval/runs/run-30-smoke.txt

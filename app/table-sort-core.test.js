@@ -108,4 +108,42 @@ ok('国家看板 rows 为空/缺失不炸', keys(cbSortRows({}, CB_COLS)) === ''
 /* ============ 7. 两个看板交互一致（同一内核、同一文案） ============ */
 ok('开关文案两边一致', TS.btnLabel(true) === '⇅ 自定义排序：开' && TS.btnLabel(false) === '⇅ 自定义排序：关');
 
+// —— 三态循环：表头常驻可点（2026-09-08 用户：每一列都要能正序/倒序排）——
+const NUMCOL = { key: 'cumCur', label: '累计SO' };
+const TXTCOL = { key: 'key', label: '产品系列', left: true };
+ok('C1 数值列首点降序（看数习惯：高→低）', (() => {
+  const n = TS.nextSort3({ custom: false }, 'cumCur', NUMCOL);
+  return n.key === 'cumCur' && n.dir === TS.DESC && n.custom === true;
+})(), TS.nextSort3({ custom: false }, 'cumCur', NUMCOL));
+ok('C2 同列再点翻成升序', (() => {
+  const n = TS.nextSort3({ key: 'cumCur', dir: TS.DESC, custom: true }, 'cumCur', NUMCOL);
+  return n.dir === TS.ASC && n.custom === true;
+})());
+ok('C3 同列第三次点回默认（custom=false，key/dir 保留）', (() => {
+  const n = TS.nextSort3({ key: 'cumCur', dir: TS.ASC, custom: true }, 'cumCur', NUMCOL);
+  return n.custom === false && n.key === 'cumCur';
+})());
+ok('C4 回默认后再点该列，重新从降序开始（循环闭合）', (() => {
+  const n = TS.nextSort3({ key: 'cumCur', dir: TS.ASC, custom: false }, 'cumCur', NUMCOL);
+  return n.dir === TS.DESC && n.custom === true;
+})());
+ok('C5 文本列首点升序，第二次降序，第三次回默认（不能只有两态）', (() => {
+  const a = TS.nextSort3({ custom: false }, 'key', TXTCOL);
+  const b = TS.nextSort3(Object.assign({}, a), 'key', TXTCOL);
+  const c = TS.nextSort3(Object.assign({}, b), 'key', TXTCOL);
+  return a.dir === TS.ASC && a.custom === true && b.dir === TS.DESC && b.custom === true && c.custom === false;
+})(), [TS.nextSort3({ custom: false }, 'key', TXTCOL)]);
+ok('C6 换一列点：从该列的首选方向重新开始', (() => {
+  const n = TS.nextSort3({ key: 'cumCur', dir: TS.ASC, custom: true }, 'inv', { key: 'inv' });
+  return n.key === 'inv' && n.dir === TS.DESC && n.custom === true;
+})());
+ok('C7 当前排序列出方向箭头，其余列出淡 ⇅ 提示', (() => {
+  const st = { custom: true, key: 'inv', dir: TS.DESC };
+  return TS.arrowHint('inv', st).indexOf('▼') > 0 && TS.arrowHint('dos', st).indexOf('ts-hint') > 0;
+})(), [TS.arrowHint('inv', { custom: true, key: 'inv', dir: TS.DESC }), TS.arrowHint('dos', { custom: true, key: 'inv', dir: TS.DESC })]);
+ok('C8 默认态每一列都只出 ⇅ 提示', (() => {
+  const st = { custom: false, key: 'inv', dir: TS.DESC };
+  return TS.arrowHint('inv', st).indexOf('ts-hint') > 0 && TS.arrowHint('inv', st).indexOf('▼') < 0;
+})());
+
 console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS'); process.exit(f ? 1 : 0);

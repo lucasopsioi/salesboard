@@ -1,3 +1,5 @@
+/* PptTableFit：浏览器取全局、Node 单测走 require —— 两边都要能拿到，否则单测一 require 就炸 */
+function _fitLib(){ return (typeof window!=='undefined'&&window.PptTableFit)?window.PptTableFit:(typeof require!=='undefined'?require('../../ppt-table-fit.js'):null); }
 (function (root, factory) {
   const api = factory();
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -56,7 +58,9 @@
       const rows = [header.length ? header : [{ text: '', options: { bold: true, fill: { color: 'F2F3F5' } } }]];
       (r.rows || []).forEach(row => rows.push((row || []).map(c => ({ text: String(c == null ? '' : c) }))));
       if (rows.length === 1) rows.push([{ text: '(空)' }]);
-      s.addTable(rows, { x: el.x, y: el.y, w: el.w, fontFace: '微软雅黑', fontSize: 8, border: { type: 'solid', color: 'E6E8EB', pt: 0.5 }, valign: 'middle', autoPage: false });
+      const frg = _fitLib().fit(rows, { availIn: el.w, fontSize: 8, minFontSize: 5.5, minColIn: 0.22 });
+      s.addTable(frg.rows, _fitLib().tableOpts(frg, { x: el.x, y: el.y, fontFace: '微软雅黑',
+        border: { type: 'solid', color: 'E6E8EB', pt: 0.5 }, autoPage: false }));
       return;
     }
     const cats = (r && r.cats) || [], series = (r && r.series) || [];
@@ -64,7 +68,9 @@
     const rows = [head];
     cats.forEach((c, ci) => rows.push([{ text: String(c) }].concat(series.map(se => ({ text: String(Math.round(se.values[ci] || 0)) })))));
     if (rows.length === 1) rows.push([{ text: '(空)' }]);
-    s.addTable(rows, { x: el.x, y: el.y, w: el.w, fontFace: '微软雅黑', fontSize: 9, border: { type: 'solid', color: 'E6E8EB', pt: 0.5 }, valign: 'middle' });
+    const frc = _fitLib().fit(rows, { availIn: el.w, fontSize: 9, minFontSize: 5.5, minColIn: 0.22 });
+    s.addTable(frc.rows, _fitLib().tableOpts(frc, { x: el.x, y: el.y, fontFace: '微软雅黑',
+      border: { type: 'solid', color: 'E6E8EB', pt: 0.5 } }));
   }
   const CHART_MAP = {
     column:{type:'bar',barDir:'col',barGrouping:'clustered'},

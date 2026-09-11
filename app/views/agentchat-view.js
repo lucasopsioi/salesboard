@@ -324,7 +324,9 @@
         ss.msgs.push({ role: 'file', file: e.file });
         if (AC.cur === sid) renderChat();
       }
-      const label = e.type === 'plan' ? ('🧭 路由：' + (e.tasks || []).join(' → '))
+      const label = e.type === 'understand' ? ('🧠 结合上文理解为：' + e.to)
+        : e.type === 'planner' ? ('🧭 规划 ' + (e.tasks || []).length + ' 个子任务：' + (e.tasks || []).map(t => t.agent + (t.label ? '·' + t.label : '')).join(' / '))
+        : e.type === 'plan' ? ('🧭 路由：' + (e.tasks || []).join(' → '))
         : e.type === 'agentStart' ? ('🤖 ' + e.agent + ' 分析中…')
         : e.type === 'tool' ? ('　🔧 ' + e.tool)
         : e.type === 'toolDone' ? null
@@ -588,10 +590,37 @@
           '<div class="ac-top" id="acTop"></div>' +
           '<div class="ac-msgs" id="acMsgs"></div>' +
           '<div class="ac-input"><textarea id="acInput" rows="2" placeholder="问数据、要分析、让我出 PPT/Excel……可把 Excel/PPT/文档直接拖进来；Ctrl+Enter 发送"></textarea>' +
-          '<button class="btn primary" id="acSend">发送</button></div>' +
+          '<button class="btn primary" id="acSend">发送</button>' +
+          '<button class="btn ghost" id="acDiag" title="输入框打不了字时点这里：自动检查是谁挡住了输入，并把结果复制到剪贴板">🩺</button></div>' +
         '</div>' +
       '</div>';
     document.getElementById('acSend').onclick = send;
+    /* 输入自检（2026-09-10 用户报「根本无法输入文字」，测试实例里复现不了）：
+       点一下就把「谁盖在输入框上面 / 焦点落在哪 / 键盘事件有没有被拦 / 有没有全局遮罩」查一遍，
+       结果弹出来并复制到剪贴板，用户贴回来就能定位，不用再猜。 */
+    document.getElementById('acDiag').onclick = () => {
+      const t = document.getElementById('acInput'); const out = [];
+      try {
+        const r = t.getBoundingClientRect(); const cs = getComputedStyle(t);
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        out.push('输入框可见: ' + (r.width > 0 && r.height > 0) + ' disabled=' + t.disabled + ' readOnly=' + t.readOnly + ' pointer-events=' + cs.pointerEvents + ' display=' + cs.display);
+        out.push('盖在上面的元素: ' + (top === t ? '就是输入框本身（正常）' : (top ? (top.tagName + '#' + top.id + '.' + String(top.className).slice(0, 60)) : '无')));
+        t.focus();
+        out.push('focus() 之后焦点在: ' + (document.activeElement === t ? '输入框（正常）' : (document.activeElement ? document.activeElement.tagName + '#' + document.activeElement.id : '无')));
+        const e = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }); t.dispatchEvent(e);
+        out.push('keydown 被谁 preventDefault: ' + (e.defaultPrevented ? '是（有脚本在拦键盘）' : '否（正常）'));
+        const bi = new InputEvent('beforeinput', { inputType: 'insertText', data: 'a', bubbles: true, cancelable: true }); t.dispatchEvent(bi);
+        out.push('beforeinput 被拦: ' + (bi.defaultPrevented ? '是' : '否（正常）'));
+        const masks = [...document.querySelectorAll('.modal:not(.hidden), .pv-mask, .ai-mask, #loading:not(.hidden)')].map(m => m.id || m.className);
+        out.push('当前打开的遮罩/弹窗: ' + (masks.length ? masks.join(', ') : '无'));
+        out.push('body class: ' + (document.body.className || '(空)') + '；视图 active: ' + !!document.getElementById('view-agentchat').classList.contains('active'));
+        out.push('窗口尺寸: ' + window.innerWidth + '×' + window.innerHeight + '；输入框位置: ' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + '×' + Math.round(r.height));
+      } catch (err) { out.push('自检本身出错: ' + String(err && err.message || err)); }
+      const txt = out.join(String.fromCharCode(10));
+      // writeText 返回的是 Promise，窗口没焦点时是 reject 而不是 throw —— 必须 .catch，否则冒烟里报 unhandledrejection
+      try { if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {}); } catch (e2) {}
+      alert('输入自检结果（已复制到剪贴板，贴给我即可）：' + String.fromCharCode(10) + String.fromCharCode(10) + txt);
+    };
     document.getElementById('acInput').addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }
     });

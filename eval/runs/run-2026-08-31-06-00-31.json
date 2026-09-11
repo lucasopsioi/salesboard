@@ -1,0 +1,159 @@
+{
+ "at": "2026-08-31T06:00:31.273Z",
+ "base": "https://api.deepseek.com/v1",
+ "model": "deepseek-chat",
+ "evalSetVersion": 1,
+ "passBar": "\u51c6\u786e\u7387>=80% \u4e14 \u6709\u5bb3\u9519\u8bef(\ud83d\udd34)=0\uff1bC5/C6 \u6b63\u786e\u62d2\u7b54\u7387 100%",
+ "dataset": "demo-data",
+ "toolStats": {
+  "calls": 7,
+  "errors": 0
+ },
+ "records": [
+  {
+   "id": "C1-02",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "psi",
+   "mode": "fast",
+   "question": "Colombia 2026 \u5e74\u7b2c\u4e8c\u5b63\u5ea6\u5e73\u677f\u7684 Sell-in \u4e00\u5171\u591a\u5c11\u53f0\uff1f",
+   "answer": "Sell-in\uff1a5556 \u53f0\n\u5e73\u677f\u5bf9\u5e94 family \u4e3a Slate \u4e0e Slate SE\uff08SonicBuds/SonicBuds Pro \u4e3a\u8033\u673a\u3001SonicArc \u4e3a\u97f3\u7bb1\uff0c\u5df2\u6392\u9664\uff09\u3002\u9010\u6708\uff1a4\u67081535\u30015\u6708?\u30016\u6708?\u3002\n\n> \u26a0 \u6eaf\u6e90\u95e8\u7981\uff1a\u4ee5\u4e0b\u6570\u5b57\u5728\u672c\u8f6e\u5de5\u5177\u8fd4\u56de\u4e2d\u627e\u4e0d\u5230\u51fa\u5904\uff0c\u5df2\u66ff\u6362\u4e3a\u300c?\u300d\u3002\u6570\u636e\u672a\u5305\u542b\u65f6\u8bf7\u4ee5\u300c\u6570\u636e\u672a\u5305\u542b\u300d\u4e3a\u51c6\uff1a1663\u30012358",
+   "singleAgent": true,
+   "verified": {
+    "ok": false,
+    "unsupported": [
+     "1663",
+     "2358"
+    ]
+   },
+   "agents": [
+    {
+     "agent": "PSI \u5206\u6790\u4e13\u5bb6",
+     "rounds": 4,
+     "error": null,
+     "claims": [
+      {
+       "metric": "Sell-in",
+       "value": 5556,
+       "unit": "\u53f0",
+       "caliber": "Colombia 2026Q2(4-6\u6708) \u5e73\u677f(Slate+Slate SE) Sell-in\uff0cquery\u6309\u6708\u9010\u6708\u6c42\u548c",
+       "asOf": "2026-06"
+      }
+     ],
+     "notes": "\u5e73\u677f\u5bf9\u5e94 family \u4e3a Slate \u4e0e Slate SE\uff08SonicBuds/SonicBuds Pro \u4e3a\u8033\u673a\u3001SonicArc \u4e3a\u97f3\u7bb1\uff0c\u5df2\u6392\u9664\uff09\u3002\u9010\u6708\uff1a4\u67081535\u30015\u67081663\u30016\u67082358\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "meta",
+     "args": {},
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "country",
+      "contains": "Colombia"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "family",
+      "contains": "tablet"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "family"
+     },
+     "error": null
+    },
+    {
+     "tool": "query",
+     "args": {
+      "stackDim": "family",
+      "metric": "sellIn",
+      "gran": "month",
+      "from": "2026-04-01",
+      "to": "2026-06-30",
+      "filters": {
+       "country": [
+        "Colombia"
+       ]
+      }
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 9706,
+   "auto": {
+    "level": "partial",
+    "reason": "\u6570\u503c\u547d\u4e2d\u4f46\u6eaf\u6e90\u6807\u8b66: 1663\u30012358",
+    "pendingHuman": true,
+    "detail": [
+     {
+      "label": "Q2\u5e73\u677fSI",
+      "want": 5556,
+      "tol": 55.56,
+      "hit": true
+     }
+    ]
+   },
+   "human": null,
+   "truth": "1535+1663+2358=5556(\u5e73\u677f=Slate+Slate SE \u4e24 family \u5408\u8ba1\u3002\u8b66\u793a:2026-08-28 \u66fe\u88ab\u8bef\u6539 3596\u2014\u2014\u90a3\u662f\u7167\u6284\u6a21\u578b\u6f0f\u53e3\u5f84(\u53ea\u67e5 Slate)\u91cd\u7b97\u7684\u503c;\u5ba1\u91d1\u6807\u5fc5\u987b\u6309\u9898\u9762\u53e3\u5f84\u72ec\u7acb\u53d6\u6570)",
+   "severity_if_wrong": "harmful"
+  },
+  {
+   "id": "C5-04",
+   "category": "\u6570\u636e\u8fb9\u754c",
+   "board": "psi",
+   "mode": "fast",
+   "question": "\u628a2026\u5e747\u6708\u523012\u6708\u7684\u6708\u5ea6 Sell-out \u5217\u7ed9\u6211\u3002",
+   "answer": "\u6570\u636e\u6e90\u53ea\u8986\u76d6\u5230 2026-08-17\uff0c\u56e0\u6b64 2026 \u5e74 7 \u6708\u5230 12 \u6708\u7684\u6708\u5ea6 Sell-out \u4e2d\uff0c\u53ea\u6709 7 \u6708\u548c 8 \u6708\u6709\u6570\u636e\uff0c9\u201312 \u6708\u6570\u636e\u672a\u5305\u542b\u3002\n\n\u8ba9\u6211\u786e\u8ba4\u4e00\u4e0b\u6570\u636e\u8303\u56f4\u3002meta \u663e\u793a to \u4e3a 2026-08-17\uff0cquery \u8fd4\u56de\u7684\u6876\u4e5f\u53ea\u6709 2026-07 \u548c 2026-08\u3002\u56e0\u6b64 9\u201312 \u6708\u786e\u5b9e\u6ca1\u6709\u6570\u636e\u3002\n\n---\n\n## 2026\u5e747\u6708\u201312\u6708 \u6708\u5ea6 Sell-out\uff08\u53f0\u6570\uff09\n\n**\u53e3\u5f84**\uff1aSell-out \u6708\u5ea6\u53f0\u6570\uff0c\u6309 country \u7ef4\u5ea6\u5806\u53e0\uff0c\u6e20\u9053\u5168\u52a0\u4e0d\u53bb\u91cd\uff1b\u6570\u636e\u6e90\u4ec5\u8986\u76d6\u81f3 2026-08-17\uff0c\u6545 9\u201312 \u6708\u65e0\u6570\u636e\u3002\n\n| \u56fd\u5bb6 | 2026-07 | 2026-08 | 2026-09 | 2026-10 | 2026-11 | 2026-12 |\n|---|---|---|---|---|---|---|\n| Mexico | 7,741 | 3,665 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Brazil | 7,132 | 3,475 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Colombia | 3,576 | 1,782 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Peru | 2,681 | 1,240 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Chile | 2,970 | 1,360 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Argentina | 2,338 | 1,147 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Ecuador | 789 | 366 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Panama | 599 | 275 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Dominican Rep. | 545 | 247 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Guatemala | 501 | 223 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Costa Rica | 398 | 183 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Uruguay | 350 | 150 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| **\u5408\u8ba1** | **29,",
+   "singleAgent": true,
+   "verified": {
+    "ok": true,
+    "unsupported": []
+   },
+   "agents": [
+    {
+     "agent": "PSI \u5206\u6790\u4e13\u5bb6",
+     "rounds": 3,
+     "error": null,
+     "claims": [],
+     "notes": "\u6570\u636e\u6e90\u53ea\u8986\u76d6\u5230 2026-08-17\uff0c\u56e0\u6b64 2026 \u5e74 7 \u6708\u5230 12 \u6708\u7684\u6708\u5ea6 Sell-out \u4e2d\uff0c\u53ea\u6709 7 \u6708\u548c 8 \u6708\u6709\u6570\u636e\uff0c9\u201312 \u6708\u6570\u636e\u672a\u5305\u542b\u3002\n\n\u8ba9\u6211\u786e\u8ba4\u4e00\u4e0b\u6570\u636e\u8303\u56f4\u3002meta \u663e\u793a to \u4e3a 2026-08-17\uff0cquery \u8fd4\u56de\u7684\u6876\u4e5f\u53ea\u6709 2026-07 \u548c 2026-08\u3002\u56e0\u6b64 9\u201312 \u6708\u786e\u5b9e\u6ca1\u6709\u6570\u636e\u3002\n\n---\n\n## 2026\u5e747\u6708\u201312\u6708 \u6708\u5ea6 Sell-out\uff08\u53f0\u6570\uff09\n\n**\u53e3\u5f84**\uff1aSell-out \u6708\u5ea6\u53f0\u6570\uff0c\u6309 country \u7ef4\u5ea6\u5806\u53e0\uff0c\u6e20\u9053\u5168\u52a0\u4e0d\u53bb\u91cd\uff1b\u6570\u636e\u6e90\u4ec5\u8986\u76d6\u81f3 2026-08-17\uff0c\u6545 9\u201312 \u6708\u65e0\u6570\u636e\u3002\n\n| \u56fd\u5bb6 | 2026-07 | 2026-08 | 2026-09 | 2026-10 | 2026-11 | 2026-12 |\n|---|---|---|---|---|---|---|\n| Mexico | 7,741 | 3,665 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Brazil | 7,132 | 3,475 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Colombia | 3,576 | 1,782 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Peru | 2,681 | 1,240 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Chile | 2,970 | 1,360 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Argentina | 2,338 | 1,147 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Ecuador | 789 | 366 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Panama | 599 | 275 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Dominican Rep. | 545 | 247 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Guatemala | 501 | 223 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Costa Rica | 398 | 183 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| Uruguay | 350 | 150 | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b | \u6570\u636e\u672a\u5305\u542b |\n| **\u5408\u8ba1** | **29,"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "meta",
+     "args": {},
+     "error": null
+    },
+    {
+     "tool": "query",
+     "args": {
+      "stackDim": "country",
+      "metric": "sellOut",
+      "gran": "month",
+      "from": "2026-07-01",
+      "to": "2026-12-31"
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 7154,
+   "auto": {
+    "level": "partial",
+    "reason": "\u8981\u70b9\u90e8\u5206\u547d\u4e2d 1/2",
+    "pendingHuman": true
+   },
+   "human": null,
+   "truth": "7\u6708=29,620\uff08\u5e73\u677f13,296+\u97f3\u989116,324\uff09\uff1b8\u6708\u622a\u81f38-17=14,113\uff1b9-12\u6708\u65e0",
+   "severity_if_wrong": "harmful"
+  }
+ ]
+}

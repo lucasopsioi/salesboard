@@ -1,0 +1,355 @@
+/* ============================================================
+   Salesboard · 玻璃材质 + 基础组件库（阶段二）
+   依赖 design-tokens.css。只写视觉，不含任何业务逻辑。
+
+   材质四级（规范二）：
+     .glass-subtle    普通容器
+     .glass-regular   导航栏 / 工具栏 / 主卡片
+     .glass-elevated  弹窗 / 菜单 / 浮层
+     .glass-solid     高密度表格与重要区（近实色，保证读数）
+   每级 = backdrop-filter + 半透明底 + 半透明描边 + 左上内高光 + 外柔阴影。
+   ============================================================ */
+
+/* ---------- 0. 降级（规范二强制）----------
+   backdrop-filter 不可用时，一律换成高不透明度纯色，保证可读。 */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .glass-subtle, .glass-regular, .glass-elevated, .glass-solid {
+    background: var(--c-bg-elev) !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* ---------- 1. 材质 ---------- */
+.glass-subtle, .glass-regular, .glass-elevated, .glass-solid {
+  position: relative;
+  border: 1px solid var(--glass-border-2);
+  -webkit-backdrop-filter: saturate(140%) blur(var(--blur-1));
+  backdrop-filter: saturate(140%) blur(var(--blur-1));
+}
+.glass-subtle   { background: var(--glass-subtle-bg);   box-shadow: var(--sh-1); }
+.glass-regular  { background: var(--glass-regular-bg);  box-shadow: var(--sh-glass);
+  -webkit-backdrop-filter: saturate(150%) blur(var(--blur-2));
+  backdrop-filter: saturate(150%) blur(var(--blur-2)); }
+.glass-elevated { background: var(--glass-elevated-bg); box-shadow: var(--sh-3);
+  -webkit-backdrop-filter: saturate(160%) blur(var(--blur-3));
+  backdrop-filter: saturate(160%) blur(var(--blur-3)); }
+.glass-solid    { background: var(--glass-solid-bg);    box-shadow: var(--sh-2);
+  -webkit-backdrop-filter: saturate(120%) blur(var(--blur-1));
+  backdrop-filter: saturate(120%) blur(var(--blur-1)); }
+
+/* 玻璃的边缘感：**纯色**一像素高光描边，不用任何渐变（用户明确要求无渐变）。 */
+.glass-subtle, .glass-regular, .glass-elevated, .glass-solid {
+  box-shadow: inset 0 1px 0 0 var(--glass-inner-hi), var(--sh-glass);
+}
+/* hover 只做整体亮度/阴影变化，不做渐变高光 */
+.glass-hl { transition: background var(--dur-ui) var(--ease-glass), box-shadow var(--dur-ui) var(--ease-glass); }
+
+/* ---------- 2. 应用背景层（低饱和缓动光斑，克制）---------- */
+.app-bg {
+  position: fixed; inset: 0; z-index: -1; overflow: hidden;
+  background: var(--amb-canvas);
+  pointer-events: none;
+}
+.app-bg i {
+  position: absolute; display: block; border-radius: 50%;
+  filter: blur(70px); will-change: transform;
+}
+.app-bg i:nth-child(1) { width: 46vw; height: 46vw; left: -8vw;  top: -12vw; background: var(--amb-1);
+  animation: amb-a var(--amb-loop) ease-in-out infinite alternate; }
+.app-bg i:nth-child(2) { width: 40vw; height: 40vw; right: -6vw; top: 8vh;   background: var(--amb-2);
+  animation: amb-b calc(var(--amb-loop) * 1.35) ease-in-out infinite alternate; }
+.app-bg i:nth-child(3) { width: 34vw; height: 34vw; left: 32vw;  bottom: -14vw; background: var(--amb-3);
+  animation: amb-c calc(var(--amb-loop) * 1.7) ease-in-out infinite alternate; }
+/* 极轻噪点，消除大面积渐变的色带 */
+.app-bg::after {
+  content: ""; position: absolute; inset: 0; opacity: .035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
+}
+@keyframes amb-a { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(4vw,3vh,0) scale(1.08); } }
+@keyframes amb-b { from { transform: translate3d(0,0,0) scale(1.05); } to { transform: translate3d(-3vw,5vh,0) scale(1); } }
+@keyframes amb-c { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(3vw,-4vh,0) scale(1.1); } }
+/* Balanced / Performance：静态渐变，不做背景动画（省 GPU） */
+:root[data-perf="balanced"] .app-bg i,
+:root[data-perf="performance"] .app-bg i { animation: none; }
+:root[data-perf="performance"] .app-bg::after { display: none; }
+
+/* ---------- 3. 无障碍：减少动态（规范十 / 六）---------- */
+@media (prefers-reduced-motion: reduce) {
+  .app-bg i { animation: none !important; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+  .glass-hl::after { display: none; }
+}
+
+/* 统一 Focus Ring（键盘可见、鼠标不打扰） */
+.ui-focusable:focus-visible,
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--c-focus); outline-offset: 2px; border-radius: var(--r-xs);
+}
+
+/* ============================================================
+   4. 基础组件库
+   命名统一 .g-*；每个组件覆盖 默认/hover/active/focus/disabled/loading/error。
+   清单（28）：GlassCard / GlassPanel / GlassToolbar / GlassSidebar /
+   Button(Primary,Secondary,Ghost,Icon) / Input / SearchInput / Select /
+   MultiSelect / Checkbox / Radio / Switch / Slider / Tabs / SegmentedControl /
+   Tooltip / Dropdown / ContextMenu / Modal / Drawer / Toast / Notification /
+   Badge / StatusBadge / ProgressBar / Skeleton / EmptyState / ErrorState /
+   Table / Pagination / KPI Card / ChartCard
+   —— MultiSelect/Modal/Toast/Table 沿用既有 .ms/.modal/.toast/.rep-table 结构，
+      这里只补玻璃皮肤，避免改动它们的 JS 行为。
+   ============================================================ */
+
+/* 4.1 容器 */
+.g-card    { border-radius: var(--r-lg); padding: var(--sp-4); }
+.g-panel   { border-radius: var(--r-xl); padding: var(--sp-5); }
+.g-toolbar { border-radius: var(--r-lg); padding: var(--sp-2) var(--sp-3);
+             display: flex; align-items: center; gap: var(--sp-2); }
+.g-card:hover, .g-panel:hover { box-shadow: var(--sh-2); }
+.g-card, .g-panel { transition: box-shadow var(--dur-ui) var(--ease-glass),
+                                transform var(--dur-ui) var(--ease-glass); }
+
+/* 4.2 按钮 */
+.g-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  height: 32px; padding: 0 var(--sp-3);
+  font-family: inherit; font-size: var(--fs-13); font-weight: var(--fw-medium);
+  border-radius: var(--r-md); border: 1px solid var(--glass-border-2);
+  background: var(--glass-regular-bg); color: var(--c-ink-1);
+  cursor: pointer; user-select: none; white-space: nowrap;
+  transition: transform var(--dur-micro) var(--ease-glass),
+              box-shadow var(--dur-micro) var(--ease-glass),
+              background var(--dur-micro) var(--ease-glass);
+}
+.g-btn:hover:not(:disabled)  { transform: translateY(-1px); box-shadow: var(--sh-2); }
+.g-btn:active:not(:disabled) { transform: scale(.97); box-shadow: var(--sh-1); }
+.g-btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.g-btn--primary { background: var(--c-brand); border-color: transparent; color: var(--c-ink-on-brand); }
+.g-btn--primary:hover:not(:disabled) { background: var(--c-brand-hover); }
+.g-btn--primary:active:not(:disabled) { background: var(--c-brand-active); }
+.g-btn--ghost { background: transparent; border-color: transparent; color: var(--c-ink-2); }
+.g-btn--ghost:hover:not(:disabled) { background: var(--c-brand-soft); color: var(--c-brand); }
+.g-btn--danger { background: transparent; border-color: var(--c-bad); color: var(--c-bad); }
+.g-btn--icon { width: 32px; padding: 0; }
+.g-btn.is-loading { color: transparent !important; position: relative; pointer-events: none; }
+.g-btn.is-loading::after {
+  content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent; color: var(--c-ink-2);
+  animation: g-spin .7s linear infinite;
+}
+@keyframes g-spin { to { transform: rotate(360deg); } }
+
+/* 4.3 表单 */
+.g-input, .g-select, .g-search {
+  height: 32px; padding: 0 var(--sp-3); font-family: inherit; font-size: var(--fs-12);
+  color: var(--c-ink-1); background: var(--glass-subtle-bg);
+  border: 1px solid var(--c-line); border-radius: var(--r-sm); outline: none;
+  transition: border-color var(--dur-micro) var(--ease-glass),
+              box-shadow var(--dur-micro) var(--ease-glass);
+}
+.g-input:hover, .g-select:hover { border-color: var(--c-ink-3); }
+.g-input:focus, .g-select:focus { border-color: var(--c-brand); box-shadow: 0 0 0 3px var(--c-brand-soft); }
+.g-input:disabled { opacity: .5; cursor: not-allowed; }
+.g-input.is-error { border-color: var(--c-bad); box-shadow: 0 0 0 3px rgba(199,0,11,.12); }
+.g-search { padding-left: 30px; }
+.g-field { display: flex; flex-direction: column; gap: var(--sp-1); }
+.g-field > label { font-size: var(--fs-11); color: var(--c-ink-3); }
+
+.g-switch { position: relative; width: 38px; height: 21px; flex: none;
+  background: var(--c-line); border-radius: var(--r-pill); cursor: pointer;
+  transition: background var(--dur-ui) var(--ease-glass); }
+.g-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px;
+  border-radius: 50%; background: #fff; box-shadow: var(--sh-1);
+  transition: transform var(--dur-ui) var(--ease-glass); }
+.g-switch[aria-checked="true"] { background: var(--c-brand); }
+.g-switch[aria-checked="true"]::after { transform: translateX(17px); }
+
+.g-slider { -webkit-appearance: none; height: 4px; border-radius: var(--r-pill);
+  background: var(--c-line); accent-color: var(--c-brand); }
+
+/* 4.4 分段控件 / 标签页 */
+.g-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-md);
+  background: var(--glass-subtle-bg); border: 1px solid var(--glass-border-2); }
+.g-seg > button {
+  border: 0; background: transparent; color: var(--c-ink-2);
+  font-family: inherit; font-size: var(--fs-12); padding: 5px 12px;
+  border-radius: var(--r-xs); cursor: pointer;
+  transition: background var(--dur-micro) var(--ease-glass), color var(--dur-micro) var(--ease-glass);
+}
+.g-seg > button:hover { background: var(--c-brand-soft); color: var(--c-brand); }
+.g-seg > button.on { background: var(--c-brand); color: var(--c-ink-on-brand); }
+
+.g-tabs { position: relative; display: flex; gap: var(--sp-4); border-bottom: 1px solid var(--c-line); }
+.g-tabs > button { border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: var(--fs-13); color: var(--c-ink-2); padding: var(--sp-2) 2px; }
+.g-tabs > button.on { color: var(--c-brand); font-weight: var(--fw-semibold); }
+.g-tabs .g-tabs__ink { position: absolute; bottom: -1px; height: 2px; background: var(--c-brand);
+  border-radius: 2px; transition: transform var(--dur-ui) var(--ease-glass),
+                                  width var(--dur-ui) var(--ease-glass); }
+
+/* 4.5 徽标 / 状态 / 进度 */
+.g-badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 var(--sp-2);
+  font-size: var(--fs-11); border-radius: var(--r-pill);
+  background: var(--c-brand-soft); color: var(--c-brand); }
+.g-status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-12); color: var(--c-ink-2); }
+.g-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c-ink-3); }
+.g-status--good::before { background: var(--c-good); }
+.g-status--warn::before { background: var(--c-warn); }
+.g-status--bad::before  { background: var(--c-bad); }
+.g-progress { height: 6px; border-radius: var(--r-pill); background: var(--c-line); overflow: hidden; }
+.g-progress > i { display: block; height: 100%; background: var(--c-brand);
+  transition: width var(--dur-panel) var(--ease-glass); }
+
+/* 4.6 骨架屏 / 空态 / 错误态 */
+/* 骨架屏：纯色呼吸，不用扫光渐变 */
+.g-skeleton { border-radius: var(--r-xs); background: var(--c-line);
+  animation: g-pulse 1.4s ease-in-out infinite; }
+@keyframes g-pulse { 0%,100% { opacity: .45; } 50% { opacity: .9; } }
+.g-empty, .g-errorstate { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--sp-3); padding: var(--sp-8) var(--sp-4); color: var(--c-ink-3); text-align: center; }
+.g-empty .g-empty__icon, .g-errorstate .g-empty__icon { opacity: .5; }
+.g-errorstate { color: var(--c-bad); }
+
+/* 4.7 浮层：Tooltip / Dropdown / ContextMenu / Drawer / Notification */
+.g-tooltip { position: fixed; z-index: var(--z-pop); max-width: 260px;
+  padding: 6px var(--sp-2); border-radius: var(--r-xs);
+  font-size: var(--fs-11); line-height: var(--lh-base);
+  background: var(--glass-elevated-bg); color: var(--c-ink-1);
+  border: 1px solid var(--glass-border-2); box-shadow: var(--sh-2);
+  -webkit-backdrop-filter: blur(var(--blur-2)); backdrop-filter: blur(var(--blur-2));
+  opacity: 0; transform: translateY(4px);
+  transition: opacity var(--dur-micro) var(--ease-glass), transform var(--dur-micro) var(--ease-glass);
+  pointer-events: none; }
+.g-tooltip.show { opacity: 1; transform: translateY(0); }
+
+.g-menu { border-radius: var(--r-md); padding: var(--sp-1); min-width: 160px; z-index: var(--z-pop); }
+.g-menu__item { display: flex; align-items: center; gap: var(--sp-2);
+  padding: 7px var(--sp-2); border-radius: var(--r-xs); font-size: var(--fs-12);
+  color: var(--c-ink-1); cursor: pointer; }
+.g-menu__item:hover { background: var(--c-brand-soft); color: var(--c-brand); }
+
+.g-drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(460px, 92vw);
+  z-index: var(--z-modal); border-radius: var(--r-xl) 0 0 var(--r-xl);
+  transform: translateX(100%); transition: transform var(--dur-panel) var(--ease-glass); }
+.g-drawer.open { transform: translateX(0); }
+
+/* 4.8 KPI / ChartCard */
+.g-kpi { border-radius: var(--r-lg); padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: 2px; }
+.g-kpi__label { font-size: var(--fs-11); color: var(--c-ink-3); }
+.g-kpi__value { font-size: var(--fs-26); font-weight: var(--fw-semibold);
+  font-variant-numeric: var(--fnum); letter-spacing: -.4px; color: var(--c-ink-1); }
+.g-kpi__delta { font-size: var(--fs-12); font-variant-numeric: var(--fnum); }
+.g-chartcard { border-radius: var(--r-lg); padding: var(--sp-3); }
+.g-chartcard__head { display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-13); font-weight: var(--fw-semibold); margin-bottom: var(--sp-2); }
+
+/* 4.9 分页 */
+.g-pagination { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.g-pagination button { min-width: 28px; height: 28px; border-radius: var(--r-xs);
+  border: 1px solid var(--glass-border-2); background: var(--glass-subtle-bg);
+  color: var(--c-ink-2); font-size: var(--fs-12); cursor: pointer; }
+.g-pagination button.on { background: var(--c-brand); color: var(--c-ink-on-brand); border-color: transparent; }
+
+/* 4.10 图标 */
+.g-ico { width: 18px; height: 18px; flex: none; display: inline-block; vertical-align: -3px;
+  stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.g-ico--sm { width: 15px; height: 15px; }
+.g-ico--lg { width: 22px; height: 22px; }
+
+/* ---------- 5. 进入动效 ---------- */
+@keyframes g-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.g-enter { animation: g-fade-up var(--dur-page) var(--ease-out) both; }
+
+/* ============================================================
+   6. 产品销售生命周期（类甘特图）——路标管理 · 阶段三
+   ============================================================ */
+.lc-head { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.lc-legend { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-11); color: var(--c-ink-3); }
+.lc-lg { display: inline-block; }
+.lc-lg--bar { width: 16px; height: 8px; border-radius: 4px; background: var(--c-brand); opacity: .75; }
+.lc-lg--start { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--c-good); }
+.lc-lg--eom { width: 8px; height: 8px; transform: rotate(45deg); background: var(--c-warn); }
+.lc-lg--eom180 { width: 2px; height: 12px; background: var(--c-bad); }
+
+.lc-wrap { position: relative; padding-top: 22px; }
+.lc-ticks { position: absolute; inset: 0 0 0 var(--lc-name-w, 170px); pointer-events: none; }
+.lc-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--c-line-soft); }
+.lc-tick > span { position: absolute; top: 0; left: 4px; font-size: var(--fs-11);
+  color: var(--c-ink-3); font-variant-numeric: var(--fnum); }
+
+.lc-group { font-size: var(--fs-11); color: var(--c-ink-3); letter-spacing: .5px;
+  margin: var(--sp-3) 0 var(--sp-1); padding-left: 2px; }
+.lc-row { display: flex; align-items: center; gap: var(--sp-2); height: 30px; border-radius: var(--r-xs);
+  transition: background var(--dur-micro) var(--ease-glass); }
+.lc-row:hover { background: var(--c-table-hover); }
+.lc-name { width: var(--lc-name-w, 170px); flex: none; font-size: var(--fs-12); color: var(--c-ink-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-track { position: relative; flex: 1; height: 100%; }
+
+.lc-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 12px; border-radius: var(--r-pill);
+  background: var(--lc-c, var(--c-brand)); opacity: .85; overflow: hidden;
+  transition: opacity var(--dur-micro) var(--ease-glass), height var(--dur-micro) var(--ease-glass); }
+.lc-row:hover .lc-bar { opacity: 1; height: 15px; }
+/* 仍在售：不用渐隐（无渐变），改成右端加一个纯色箭头尖表示"持续中" */
+.lc-bar--open { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.lc-bar--open::after {
+  content: ""; position: absolute; right: -9px; top: 0; width: 0; height: 100%;
+  border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+  border-left: 9px solid var(--lc-c, var(--c-brand));
+}
+.lc-row:hover .lc-bar--open::after { border-top-width: 7.5px; border-bottom-width: 7.5px; }
+
+.lc-mk { position: absolute; top: 50%; }
+.lc-mk--start { transform: translate(-50%, -50%); width: 0; height: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--c-good);
+  margin-top: -4px; }
+.lc-mk--eom { transform: translate(-50%, -50%) rotate(45deg); width: 9px; height: 9px;
+  background: var(--c-warn); border-radius: 2px; }
+.lc-mk--eom180 { transform: translate(-50%, -50%); width: 0; height: 20px;
+  border-left: 2px dashed var(--c-bad); }
+
+/* ---------- 阶段四：Performance 档彻底关掉 backdrop-filter ----------
+   仅把 --blur-* 置 0 是不够的：blur(0px) 视觉无效，但合成器仍会为该元素
+   建立独立图层并执行滤镜，等于白付一遍 GPU 开销。这里直接 none 掉。 */
+:root[data-perf="performance"] .glass-subtle,
+:root[data-perf="performance"] .glass-regular,
+:root[data-perf="performance"] .glass-elevated,
+:root[data-perf="performance"] .glass-solid,
+:root[data-perf="performance"] .sidebar,
+:root[data-perf="performance"] .topbar,
+:root[data-perf="performance"] .card,
+:root[data-perf="performance"] .modal,
+:root[data-perf="performance"] .modal-box,
+:root[data-perf="performance"] .toast,
+:root[data-perf="performance"] .g-tooltip,
+:root[data-perf="performance"] .loading {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* 性能档：容器改用不透明底，保证读数（降级同 @supports 分支） */
+:root[data-perf="performance"] .sidebar { background: var(--c-nav-bg); }
+:root[data-perf="performance"] .topbar,
+:root[data-perf="performance"] .card,
+:root[data-perf="performance"] .modal-box,
+:root[data-perf="performance"] .toast { background: var(--c-bg-elev); }
+/* 性能档：连玻璃内高光一起省掉 */
+:root[data-perf="performance"] .glass-subtle::before,
+:root[data-perf="performance"] .glass-regular::before,
+:root[data-perf="performance"] .glass-elevated::before,
+:root[data-perf="performance"] .glass-solid::before { display: none; }
+
+/* ============================================================
+   7. 纯色背景（用户明确要求：不要渐变，浅色=纯白、深色=纯黑）
+   —— 关掉环境光斑、噪点、玻璃面板的渐变内高光、Logo 渐变。
+      玻璃的"透明+模糊+描边+投影"保留，只是底不再是渐变。
+   ============================================================ */
+.app-bg { background: var(--amb-canvas); }
+.app-bg i { display: none !important; }
+.app-bg::after { display: none !important; }
+.glass-subtle, .glass-regular, .glass-elevated, .glass-solid {
+  border-color: var(--glass-border-2);
+}

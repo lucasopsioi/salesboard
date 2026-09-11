@@ -1,0 +1,192 @@
+{
+ "at": "2026-08-31T23:17:09.658Z",
+ "base": "https://api.deepseek.com/v1",
+ "model": "deepseek-chat",
+ "evalSetVersion": 1,
+ "passBar": "\u51c6\u786e\u7387>=80% \u4e14 \u6709\u5bb3\u9519\u8bef(\ud83d\udd34)=0\uff1bC5/C6 \u6b63\u786e\u62d2\u7b54\u7387 100%",
+ "dataset": "demo-data",
+ "toolStats": {
+  "calls": 8,
+  "errors": 0
+ },
+ "records": [
+  {
+   "id": "C1-01",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "psi",
+   "mode": "fast",
+   "question": "2026\u5e741\u6708\u52306\u6708\uff0cMexico Slate 11 Pro \u7684\u7d2f\u8ba1 Sell-out \u662f\u591a\u5c11\u53f0\uff1f",
+   "answer": "\u7d2f\u8ba1Sell-out\uff1a5645 \u53f0\n\u9010\u6708\uff1a1\u6708638\u30012\u6708752\u30013\u67081069\u30014\u6708837\u30015\u6708901\u30016\u67081448\uff0c\u5408\u8ba15645\u53f0\u3002",
+   "singleAgent": true,
+   "verified": {
+    "ok": true,
+    "unsupported": []
+   },
+   "agents": [
+    {
+     "agent": "PSI \u5206\u6790\u4e13\u5bb6",
+     "rounds": 3,
+     "error": null,
+     "claims": [
+      {
+       "metric": "\u7d2f\u8ba1Sell-out",
+       "value": 5645,
+       "unit": "\u53f0",
+       "caliber": "2026\u5e741-6\u6708\uff0cMexico\u00d7Slate 11 Pro\uff0c\u9010\u6708Sell-out\u6c42\u548c",
+       "asOf": "2026-06"
+      }
+     ],
+     "notes": "\u9010\u6708\uff1a1\u6708638\u30012\u6708752\u30013\u67081069\u30014\u6708837\u30015\u6708901\u30016\u67081448\uff0c\u5408\u8ba15645\u53f0\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "meta",
+     "args": {},
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "contains": "Slate 11 Pro"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "country",
+      "contains": "Mexico"
+     },
+     "error": null
+    },
+    {
+     "tool": "query",
+     "args": {
+      "stackDim": "country",
+      "metric": "sellOut",
+      "gran": "month",
+      "from": "2026-01-01",
+      "to": "2026-06-30",
+      "filters": {
+       "country": [
+        "Mexico"
+       ],
+       "product": [
+        "Slate 11 Pro"
+       ]
+      }
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 6049,
+   "auto": {
+    "level": "full",
+    "reason": "\u5168\u90e8\u6570\u503c\u547d\u4e2d [\"\u7d2f\u8ba1SO\"]",
+    "pendingHuman": false,
+    "detail": [
+     {
+      "label": "\u7d2f\u8ba1SO",
+      "want": 5645,
+      "tol": 56.45,
+      "hit": true
+     }
+    ]
+   },
+   "human": null,
+   "truth": "638+752+1069+837+901+1448=5645\uff08ground-truth C1-01\uff09",
+   "severity_if_wrong": "harmful"
+  },
+  {
+   "id": "C1-02",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "psi",
+   "mode": "fast",
+   "question": "Colombia 2026 \u5e74\u7b2c\u4e8c\u5b63\u5ea6\u5e73\u677f\u7684 Sell-in \u4e00\u5171\u591a\u5c11\u53f0\uff1f",
+   "answer": "Sell-in\uff1a5556 \u53f0\n\u9010\u6708\uff1a4\u67081535\u30015\u67081663\u30016\u67082358\uff0c\u5408\u8ba15556\u53f0\u3002",
+   "singleAgent": true,
+   "verified": {
+    "ok": true,
+    "unsupported": []
+   },
+   "agents": [
+    {
+     "agent": "PSI \u5206\u6790\u4e13\u5bb6",
+     "rounds": 3,
+     "error": null,
+     "claims": [
+      {
+       "metric": "Sell-in",
+       "value": 5556,
+       "unit": "\u53f0",
+       "caliber": "2026\u5e74Q2(4-6\u6708)\u9010\u6708\u6c42\u548c\uff0ccountry=Colombia\uff0cline=\u5e73\u677f",
+       "asOf": "2026-06"
+      }
+     ],
+     "notes": "\u9010\u6708\uff1a4\u67081535\u30015\u67081663\u30016\u67082358\uff0c\u5408\u8ba15556\u53f0\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "meta",
+     "args": {},
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "country",
+      "contains": "Colombia"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "line",
+      "contains": "\u5e73\u677f"
+     },
+     "error": null
+    },
+    {
+     "tool": "query",
+     "args": {
+      "stackDim": "country",
+      "metric": "sellIn",
+      "gran": "month",
+      "from": "2026-04-01",
+      "to": "2026-06-30",
+      "filters": {
+       "country": [
+        "Colombia"
+       ],
+       "line": [
+        "\u5e73\u677f"
+       ]
+      }
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 4683,
+   "auto": {
+    "level": "full",
+    "reason": "\u5168\u90e8\u6570\u503c\u547d\u4e2d [\"Q2\u5e73\u677fSI\"]",
+    "pendingHuman": false,
+    "detail": [
+     {
+      "label": "Q2\u5e73\u677fSI",
+      "want": 5556,
+      "tol": 55.56,
+      "hit": true
+     }
+    ]
+   },
+   "human": null,
+   "truth": "1535+1663+2358=5556(\u5e73\u677f=Slate+Slate SE \u4e24 family \u5408\u8ba1\u3002\u8b66\u793a:2026-08-28 \u66fe\u88ab\u8bef\u6539 3596\u2014\u2014\u90a3\u662f\u7167\u6284\u6a21\u578b\u6f0f\u53e3\u5f84(\u53ea\u67e5 Slate)\u91cd\u7b97\u7684\u503c;\u5ba1\u91d1\u6807\u5fc5\u987b\u6309\u9898\u9762\u53e3\u5f84\u72ec\u7acb\u53d6\u6570)",
+   "severity_if_wrong": "harmful"
+  }
+ ]
+}

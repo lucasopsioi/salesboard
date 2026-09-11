@@ -1,0 +1,58 @@
+{
+  "name": "salesboard-v2",
+  "version": "1.0.0",
+  "description": "Salesboard",
+  "main": "main.js",
+  "author": "lucasopsioi",
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "start": "electron .",
+    "test": "node scripts/run-tests.js",
+    "bump": "node scripts/bump-version.js",
+    "dist": "electron-builder --win portable",
+    "release": "node scripts/release.js"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "node-llama-cpp": "^3.19.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "pptxgenjs": "^4.0.1"
+  },
+  "build": {
+    "appId": "io.lucasopsioi.salesboard",
+    "productName": "Salesboard",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "version.json",
+      "engine*.js",
+      "app/**/*",
+      "!app/**/*.test.js",
+      "node_modules/**/*",
+      "!node_modules/@node-llama-cpp/win-x64-cuda*/**",
+      "!node_modules/@node-llama-cpp/win-arm64*/**",
+      "!node_modules/@node-llama-cpp/mac*/**",
+      "!node_modules/@node-llama-cpp/linux*/**"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}.exe"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/xlsx/**"
+    ]
+  }
+}

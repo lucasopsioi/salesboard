@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+
+# 造出来的演示数据体积大，不进仓库（用 scripts/make-demo-data.js 重新生成）
+demo-data/**/*.csv
+demo-data/**/*.xlsx
+!demo-data/README.md
+
+# 评测的引擎解析缓存（可再生）
+eval/.engine-cache/
+dist-interview/
+
+# 云端评测密钥（SONG 手工粘贴，绝不入库）
+eval/*.key
+
+# 真实数据的评测记录与解析缓存（绝不入库）
+eval/runs-real/
+eval/.engine-cache-real/
+scripts/ui-smoke/*.out
+scripts/ui-smoke/*.err

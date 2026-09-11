@@ -1,0 +1,24 @@
+{
+ "model": "deepseek-chat",
+ "base": "https://api.deepseek.com/v1",
+ "results": [
+  {
+   "scen": "F",
+   "turn": 1,
+   "q": "\u5e2e\u6211\u5206\u6790\u8fd9\u4e2a\u4ef7\u683c\u76d1\u6d4b\u8868\uff0c\u5e73\u677f\u548c\u97f3\u9891\u5404\u81ea\u6700\u4fbf\u5b9c\u7684\u7ade\u54c1\u662f\u54ea\u4e2a\uff1f",
+   "ok": false,
+   "fails": [
+    "\u7a7a\u56de\u590d\u00d73",
+    "\u7f3a\u5fc5\u7b54: /\u8fb0\u661f.{0,20}X11|X11/",
+    "\u7f3a\u5fc5\u7b54: /\u661f\u6f6e.{0,20}Buds|\u661f\u6f6e/"
+   ],
+   "softMiss": [
+    "179",
+    "29"
+   ],
+   "latencyS": 40,
+   "answer": "",
+   "ctxPct": 0
+  }
+ ]
+}

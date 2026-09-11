@@ -1,0 +1,208 @@
+{
+ "at": "2026-08-31T23:07:30.955Z",
+ "base": "https://api.deepseek.com/v1",
+ "model": "deepseek-chat",
+ "evalSetVersion": 1,
+ "passBar": "\u51c6\u786e\u7387>=80% \u4e14 \u6709\u5bb3\u9519\u8bef(\ud83d\udd34)=0\uff1bC5/C6 \u6b63\u786e\u62d2\u7b54\u7387 100%",
+ "dataset": "demo-data",
+ "toolStats": {
+  "calls": 6,
+  "errors": 0
+ },
+ "records": [
+  {
+   "id": "C1-01",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "psi",
+   "mode": "fast",
+   "question": "2026\u5e741\u6708\u52306\u6708\uff0cMexico Slate 11 Pro \u7684\u7d2f\u8ba1 Sell-out \u662f\u591a\u5c11\u53f0\uff1f",
+   "answer": "\u7d2f\u8ba1Sell-out\uff1a5645 \u53f0\n\u9010\u6708\uff1a638/752/1069/837/901/1448\uff0c\u5408\u8ba15645\u53f0\u3002",
+   "singleAgent": true,
+   "verified": {
+    "ok": true,
+    "unsupported": []
+   },
+   "agents": [
+    {
+     "agent": "PSI \u5206\u6790\u4e13\u5bb6",
+     "rounds": 4,
+     "error": null,
+     "claims": [
+      {
+       "metric": "\u7d2f\u8ba1Sell-out",
+       "value": 5645,
+       "unit": "\u53f0",
+       "caliber": "2026-01\u81f32026-06\uff0cMexico\u00d7Slate 11 Pro\uff0cquery\u6309\u6708\u6c42\u548c",
+       "asOf": "2026-06"
+      }
+     ],
+     "notes": "\u9010\u6708\uff1a638/752/1069/837/901/1448\uff0c\u5408\u8ba15645\u53f0\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "meta",
+     "args": {},
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "contains": "Slate 11"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "country",
+      "contains": "Mexico"
+     },
+     "error": null
+    },
+    {
+     "tool": "query",
+     "args": {
+      "stackDim": "country",
+      "metric": "sellOut",
+      "gran": "month",
+      "from": "2026-01-01",
+      "to": "2026-06-30",
+      "filters": {
+       "country": [
+        "Mexico"
+       ],
+       "product": [
+        "Slate 11 Pro"
+       ]
+      }
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 7256,
+   "auto": {
+    "level": "full",
+    "reason": "\u5168\u90e8\u6570\u503c\u547d\u4e2d [\"\u7d2f\u8ba1SO\"]",
+    "pendingHuman": false,
+    "detail": [
+     {
+      "label": "\u7d2f\u8ba1SO",
+      "want": 5645,
+      "tol": 56.45,
+      "hit": true
+     }
+    ]
+   },
+   "human": null,
+   "truth": "638+752+1069+837+901+1448=5645\uff08ground-truth C1-01\uff09",
+   "severity_if_wrong": "harmful"
+  },
+  {
+   "id": "C4-01",
+   "category": "\u5224\u5b9a\u4e0e\u751f\u547d\u5468\u671f",
+   "board": "report",
+   "mode": "fast",
+   "question": "Slate 12 Pro \u4eca\u5e74\u7684\u540c\u6bd4\u589e\u957f\u600e\u4e48\u6837\uff1f",
+   "answer": "\u7d2f\u8ba1SO\uff1a1998 \u53f0\n\u7d2f\u8ba1SI\uff1a4692 \u53f0\n\u540c\u6bd4\uff1anull \u2014\n\u5f53\u524d\u5e93\u5b58\uff1a2709 \u53f0\n\u6e20\u9053DOS\uff1a56 \u5929\n\u5168\u6d41\u7a0b\u5e93\u5b58\uff1a3066 \u53f0\n\u5168\u6d41\u7a0bDOS\uff1a64 \u5929\nSlate 12 Pro \u4e3a2026\u5e74\u65b0\u54c1(Tarpon\u7cfb\u5217/\u5e73\u677f),2025\u5e74\u540c\u671f\u65e0\u9500\u91cf,\u540c\u6bd4\u65e0\u6cd5\u8ba1\u7b97(null)\u3002\u5468\u5ea6\u9500\u91cf\u4eceW26\u768426\u53f0\u9010\u5468\u722c\u5761\u81f3W34\u7684?\u53f0,\u5448\u65b0\u54c1\u4e0a\u5e02\u653e\u91cf\u66f2\u7ebf\u3002\u6e20\u9053DOS 56\u5929\u3001\u5168\u6d41\u7a0b64\u5929,\u5e93\u5b58\u5065\u5eb7\u3002\n\n> \u26a0 \u6eaf\u6e90\u95e8\u7981\uff1a\u4ee5\u4e0b\u6570\u5b57\u5728\u672c\u8f6e\u5de5\u5177\u8fd4\u56de\u4e2d\u627e\u4e0d\u5230\u51fa\u5904\uff0c\u5df2\u66ff\u6362\u4e3a\u300c?\u300d\u3002\u6570\u636e\u672a\u5305\u542b\u65f6\u8bf7\u4ee5\u300c\u6570\u636e\u672a\u5305\u542b\u300d\u4e3a\u51c6\uff1a410",
+   "singleAgent": true,
+   "verified": {
+    "ok": false,
+    "unsupported": [
+     "410"
+    ]
+   },
+   "agents": [
+    {
+     "agent": "\u6c47\u603b/\u56fd\u5bb6/\u4ea7\u4e1a\u4e13\u5bb6",
+     "rounds": 3,
+     "error": null,
+     "claims": [
+      {
+       "metric": "\u7d2f\u8ba1SO",
+       "value": 1998,
+       "unit": "\u53f0",
+       "caliber": "\u5e74\u521d\u81f3\u4eca(2026)",
+       "asOf": "W34"
+      },
+      {
+       "metric": "\u7d2f\u8ba1SI",
+       "value": 4692,
+       "unit": "\u53f0",
+       "caliber": "\u5e74\u521d\u81f3\u4eca(2026)",
+       "asOf": "W34"
+      },
+      {
+       "metric": "\u540c\u6bd4",
+       "value": null,
+       "unit": "\u2014",
+       "caliber": "\u53bb\u5e74\u540c\u671f\u4e3a0,\u65e0\u6cd5\u8ba1\u7b97",
+       "asOf": "W34"
+      },
+      {
+       "metric": "\u5f53\u524d\u5e93\u5b58",
+       "value": 2709,
+       "unit": "\u53f0",
+       "caliber": "\u6700\u65b0\u671f\u5feb\u7167",
+       "asOf": "W34"
+      },
+      {
+       "metric": "\u6e20\u9053DOS",
+       "value": 56,
+       "unit": "\u5929",
+       "caliber": "\u6e20\u9053\u5e93\u5b58\u5468\u8f6c",
+       "asOf": "W34"
+      },
+      {
+       "metric": "\u5168\u6d41\u7a0b\u5e93\u5b58",
+       "value": 3066,
+       "unit": "\u53f0",
+       "caliber": "\u542b\u5728\u9014",
+       "asOf": "W34"
+      },
+      {
+       "metric": "\u5168\u6d41\u7a0bDOS",
+       "value": 64,
+       "unit": "\u5929",
+       "caliber": "\u5168\u6d41\u7a0b\u5468\u8f6c",
+       "asOf": "W34"
+      }
+     ],
+     "notes": "Slate 12 Pro \u4e3a2026\u5e74\u65b0\u54c1(Tarpon\u7cfb\u5217/\u5e73\u677f),2025\u5e74\u540c\u671f\u65e0\u9500\u91cf,\u540c\u6bd4\u65e0\u6cd5\u8ba1\u7b97(null)\u3002\u5468\u5ea6\u9500\u91cf\u4eceW26\u768426\u53f0\u9010\u5468\u722c\u5761\u81f3W34\u7684410\u53f0,\u5448\u65b0\u54c1\u4e0a\u5e02\u653e\u91cf\u66f2\u7ebf\u3002\u6e20\u9053DOS 56\u5929\u3001\u5168\u6d41\u7a0b64\u5929,\u5e93\u5b58\u5065\u5eb7\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "contains": "Slate 12"
+     },
+     "error": null
+    },
+    {
+     "tool": "report",
+     "args": {
+      "groupDim": "product",
+      "filters": {
+       "product": [
+        "Slate 12 Pro"
+       ]
+      }
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 7630,
+   "auto": {
+    "level": "pending",
+    "reason": "\u8981\u70b9\u672a\u547d\u4e2d\uff0c\u4eba\u5de5\u5224",
+    "pendingHuman": true
+   },
+   "human": null,
+   "truth": "cumCur=1,998\u3001cumPrev=0\uff1b\u6708\u5ea6\u5e8f\u5217\u81ea2026-07\u8d77\u624d\u6709\u91cf",
+   "severity_if_wrong": "harmful"
+  }
+ ]
+}

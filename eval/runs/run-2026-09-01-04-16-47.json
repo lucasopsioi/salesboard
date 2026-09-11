@@ -1,0 +1,103 @@
+{
+ "at": "2026-09-01T04:16:47.672Z",
+ "base": "https://api.deepseek.com/v1",
+ "model": "deepseek-chat",
+ "evalSetVersion": 1,
+ "passBar": "\u51c6\u786e\u7387>=80% \u4e14 \u6709\u5bb3\u9519\u8bef(\ud83d\udd34)=0\uff1bC5/C6 \u6b63\u786e\u62d2\u7b54\u7387 100%",
+ "dataset": "demo-data",
+ "toolStats": {
+  "calls": 4,
+  "errors": 0
+ },
+ "records": [
+  {
+   "id": "C1-01",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "psi",
+   "mode": "fast",
+   "question": "2026\u5e741\u6708\u52306\u6708\uff0cMexico Slate 11 Pro \u7684\u7d2f\u8ba1 Sell-out \u662f\u591a\u5c11\u53f0\uff1f",
+   "answer": "\u7d2f\u8ba1Sell-out\uff1a5645 \u53f0\n\u9010\u6708\uff1a1\u6708638\u30012\u6708752\u30013\u67081069\u30014\u6708837\u30015\u6708901\u30016\u67081448\uff0c\u5408\u8ba15645\u53f0\u3002",
+   "singleAgent": true,
+   "verified": {
+    "ok": true,
+    "unsupported": []
+   },
+   "agents": [
+    {
+     "agent": "PSI \u5206\u6790\u4e13\u5bb6",
+     "rounds": 3,
+     "error": null,
+     "claims": [
+      {
+       "metric": "\u7d2f\u8ba1Sell-out",
+       "value": 5645,
+       "unit": "\u53f0",
+       "caliber": "2026-01\u81f32026-06\uff0cMexico\u00d7Slate 11 Pro\uff0c\u9010\u6708Sell-out\u6c42\u548c",
+       "asOf": "2026-06"
+      }
+     ],
+     "notes": "\u9010\u6708\uff1a1\u6708638\u30012\u6708752\u30013\u67081069\u30014\u6708837\u30015\u6708901\u30016\u67081448\uff0c\u5408\u8ba15645\u53f0\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "meta",
+     "args": {},
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "contains": "Slate 11 Pro"
+     },
+     "error": null
+    },
+    {
+     "tool": "options",
+     "args": {
+      "field": "country",
+      "contains": "Mexico"
+     },
+     "error": null
+    },
+    {
+     "tool": "query",
+     "args": {
+      "stackDim": "country",
+      "metric": "sellOut",
+      "gran": "month",
+      "from": "2026-01-01",
+      "to": "2026-06-30",
+      "filters": {
+       "country": [
+        "Mexico"
+       ],
+       "product": [
+        "Slate 11 Pro"
+       ]
+      }
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 4956,
+   "auto": {
+    "level": "full",
+    "reason": "\u5168\u90e8\u6570\u503c\u547d\u4e2d [\"\u7d2f\u8ba1SO\"]",
+    "pendingHuman": false,
+    "detail": [
+     {
+      "label": "\u7d2f\u8ba1SO",
+      "want": 5645,
+      "tol": 56.45,
+      "hit": true
+     }
+    ]
+   },
+   "human": null,
+   "truth": "638+752+1069+837+901+1448=5645\uff08ground-truth C1-01\uff09",
+   "severity_if_wrong": "harmful"
+  }
+ ]
+}

@@ -1,0 +1,25 @@
+const T = require('./templates/latam-phone-review.js');
+const P = require('./presets-default.js');
+let f=0; const ok=(n,c)=>{console.log((c?'PASS ':'FAIL ')+n); if(!c)f++;};
+ok('模板 4 个 KPI', T.kpis.length===4);
+ok('KPI 含 label/value/yoy shape', T.kpis.every(k=>k.labelShape&&k.valueShape&&k.yoyShape));
+ok('2 张图表', T.charts.length===2);
+ok('图表绑定 legend', T.charts[0].legend==='line' && T.charts[1].legend==='country');
+ok('图表指向 chart2/chart3', T.charts[0].chartFile.endsWith('chart2.xml') && T.charts[1].chartFile.endsWith('chart3.xml'));
+['手机','平板','音频与智能配件'].forEach(cat=>{
+  ok(cat+' 预设含 familyFilter', !!(P[cat]&&P[cat].familyFilter));
+  ok(cat+' 4 个分组与 KPI 对齐', T.kpis.every(k=>P[cat].groups[k.id]&&typeof P[cat].groups[k.id].label==='string'));
+});
+ok('preset 平板 idcCat', P['平板'].idcCat==='平板');
+ok('preset 音频 idcCat 映射到 音频', P['音频与智能配件'].idcCat==='音频');
+ok('preset 手机 idcCat', P['手机'].idcCat==='手机');
+ok('4 个页面登记', T.pages.length===4 && T.pages.map(p=>p.id).join(',')==='P4,P5,P6,P7');
+ok('P4 needDims', T.p4.needDims.includes('line')&&T.p4.needDims.includes('model')&&T.p4.needDims.includes('channel'));
+ok('P5 周粒度产品图', T.p5.chart.catGran==='week' && T.p5.chart.legend==='product' && T.p5.chart.chartFile.endsWith('chart4.xml'));
+ok('P5 两条可编辑叙述(tIndex=1)', T.p5.narratives.length===2 && T.p5.narratives.every(n=>n.tIndex===1));
+ok('P6 两图 share', T.p6.charts.length===2 && T.p6.charts.every(c=>c.share===true) && T.p6.charts[0].chartFile.endsWith('chart5.xml'));
+ok('P7 五国 chart7..11', T.p7.countries.length===5 && T.p7.countries[0].countryValue==='Mexico' && T.p7.countries[4].chartFile.endsWith('chart11.xml'));
+ok('P7 国家英文值映射', T.p7.countries.map(c=>c.countryValue).join(',')==='Mexico,Chile,Argentina,Colombia,Peru');
+ok('P6 分档位用 pbStd', T.p6.charts[1].catField==='pbStd');
+ok('P7 用 pbStd', T.p7.catField==='pbStd');
+console.log(f?('\n'+f+' FAILED'):'\nALL PASS'); process.exit(f?1:0);

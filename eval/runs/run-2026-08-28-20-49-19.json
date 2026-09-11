@@ -1,0 +1,88 @@
+{
+ "at": "2026-08-28T20:49:19.480Z",
+ "base": "https://api.minimax.chat/v1/text/chatcompletion_v2",
+ "model": "MiniMax-M2.5",
+ "evalSetVersion": 1,
+ "passBar": "\u51c6\u786e\u7387>=80% \u4e14 \u6709\u5bb3\u9519\u8bef(\ud83d\udd34)=0\uff1bC5/C6 \u6b63\u786e\u62d2\u7b54\u7387 100%",
+ "dataset": "demo-data",
+ "toolStats": {
+  "calls": 2,
+  "errors": 0
+ },
+ "records": [
+  {
+   "id": "C1-03",
+   "category": "\u5355\u770b\u677f\u53d6\u6570",
+   "board": "report",
+   "mode": "fast",
+   "question": "Brazil Slate 11 \u73b0\u5728\u7684\u6e20\u9053\u5e93\u5b58\u662f\u591a\u5c11\u53f0\uff1f",
+   "answer": "\u6e20\u9053\u5e93\u5b58\uff1a1559 \u53f0\n\u8be5\u4ea7\u54c1\u4e3a Marlinn \u7cfb\u5217\u5e73\u677f\uff0c\u65e0\u97f3\u9891(-hasAu=0)\uff0c\u6e20\u9053DOS=47\u5929(\u5728?\u5929\u7eff\u706f\u533a\u95f4\u5185)\uff0c\u5168\u6d41\u7a0b\u5e93\u5b581875\u53f0(\u542bCDC+FDC)\u3002\n\n> \u26a0 \u6eaf\u6e90\u95e8\u7981\uff1a\u4ee5\u4e0b\u6570\u5b57\u5728\u672c\u8f6e\u5de5\u5177\u8fd4\u56de\u4e2d\u627e\u4e0d\u5230\u51fa\u5904\uff0c\u5df2\u66ff\u6362\u4e3a\u300c?\u300d\u3002\u6570\u636e\u672a\u5305\u542b\u65f6\u8bf7\u4ee5\u300c\u6570\u636e\u672a\u5305\u542b\u300d\u4e3a\u51c6\uff1a90",
+   "singleAgent": true,
+   "verified": {
+    "ok": false,
+    "unsupported": [
+     "90"
+    ]
+   },
+   "agents": [
+    {
+     "agent": "\u6c47\u603b/\u56fd\u5bb6/\u4ea7\u4e1a\u4e13\u5bb6",
+     "rounds": 3,
+     "error": null,
+     "claims": [
+      {
+       "metric": "\u6e20\u9053\u5e93\u5b58",
+       "value": 1559,
+       "unit": "\u53f0",
+       "caliber": "\u622a\u81f32026\u5e74maxYmd(\u5168\u5e74\u6700\u65b0\u65e5)\uff0c\u6e20\u9053\u5e93\u5b58=\u5f53\u5929\u6240\u6709Slate 11\u884c\u7684\u5e93\u5b58\u4e4b\u548c",
+       "asOf": "2026\u5e74"
+      }
+     ],
+     "notes": "\u8be5\u4ea7\u54c1\u4e3a Marlinn \u7cfb\u5217\u5e73\u677f\uff0c\u65e0\u97f3\u9891(-hasAu=0)\uff0c\u6e20\u9053DOS=47\u5929(\u572890\u5929\u7eff\u706f\u533a\u95f4\u5185)\uff0c\u5168\u6d41\u7a0b\u5e93\u5b581875\u53f0(\u542bCDC+FDC)\u3002"
+    }
+   ],
+   "toolLog": [
+    {
+     "tool": "options",
+     "args": {
+      "field": "product",
+      "contains": "Slate"
+     },
+     "error": null
+    },
+    {
+     "tool": "report",
+     "args": {
+      "groupDim": "product",
+      "filters": {
+       "country": [
+        "Brazil"
+       ],
+       "product": [
+        "Slate 11"
+       ]
+      }
+     },
+     "error": null
+    }
+   ],
+   "latencyMs": 12341,
+   "auto": {
+    "level": "partial",
+    "reason": "\u6570\u503c\u547d\u4e2d\u4f46\u6eaf\u6e90\u6807\u8b66: 90",
+    "pendingHuman": true,
+    "detail": [
+     {
+      "label": "\u6e20\u9053\u5e93\u5b58",
+      "want": 1559,
+      "tol": 5,
+      "hit": true
+     }
+    ]
+   },
+   "human": null,
+   "truth": "inv=1559\uff08\u6700\u65b0\u671f\u5feb\u7167\uff1b\u987a\u5e26 DOS=47 \u53ef\u4f5c\u52a0\u5206\uff09",
+   "severity_if_wrong": "harmful"
+  }
+ ]
+}

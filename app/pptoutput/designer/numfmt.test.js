@@ -1,0 +1,14 @@
+const N=require('./numfmt.js');
+let f=0; const ok=(n,c)=>{console.log((c?'PASS ':'FAIL ')+n); if(!c)f++;};
+ok('none 整数+千分位', N.formatNum(12345,'none',0)==='12,345');
+ok('none 2位', N.formatNum(12345.678,'none',2)==='12,345.68');
+ok('万 1位', N.formatNum(85780,'w',1)==='8.6万');
+ok('千 0位', N.formatNum(8578,'k',0)==='9千');
+ok('百万 2位', N.formatNum(2500000,'m',2)==='2.50百万');
+ok('K', N.formatNum(8578,'K',1)==='8.6K');
+ok('W', N.formatNum(85780,'W',1)==='8.6W');
+ok('Million→M', N.formatNum(2500000,'Million',1)==='2.5M');
+ok('auto 万', N.formatNum(85780,'auto',1)==='8.6万');
+ok('auto 亿', /亿$/.test(N.formatNum(250000000,'auto',1)));
+ok('null→0', N.formatNum(null,'none',0)==='0');
+console.log(f?('\n'+f+' FAILED'):'\nALL PASS'); process.exit(f?1:0);

@@ -1,0 +1,13 @@
+const S=require('./store.js'); const D=require('./doc-model.js');
+let f=0; const ok=(n,c)=>{console.log((c?'PASS ':'FAIL ')+n); if(!c)f++;};
+const mem={}; const storage={getItem:k=>k in mem?mem[k]:null, setItem:(k,v)=>{mem[k]=String(v);}, removeItem:k=>{delete mem[k];}};
+const doc=D.newPresentation('模板A'); const el=D.newElement('text',{text:'hi'}); D.addElement(doc,0,el);
+S.saveTemplate(storage,doc);
+ok('索引含1项', S.listTemplates(storage).length===1 && S.listTemplates(storage)[0].name==='模板A');
+const back=S.loadTemplate(storage,doc.id);
+ok('载回元素一致', back.slides[0].elements[0].text==='hi');
+const doc2=D.newPresentation('模板B'); S.saveTemplate(storage,doc2);
+ok('索引2项', S.listTemplates(storage).length===2);
+S.deleteTemplate(storage,doc.id);
+ok('删后1项', S.listTemplates(storage).length===1 && S.loadTemplate(storage,doc.id)===null);
+console.log(f?('\n'+f+' FAILED'):'\nALL PASS'); process.exit(f?1:0);

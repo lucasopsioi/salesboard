@@ -1,0 +1,32 @@
+题数 56
+
+【18】S3断货｜哪个国家的渠道库存最先见底？还能撑几周？
+   ✅ 正确  14s  1638字 | 真值：最先 Mexico 6.4 周（并列同值算对）
+   答：**总体判断：按 2026 年当前时点（数据截至 2026-08-17）的渠道库存周转看，Mexico 和 Peru 的渠道库存最先见底，两者并列最短，都只能支撑约 6.4 周；12 国全部落在「8 周内需补货」区间，没有任何国家进入硬断货区。** **关键数字（分点）** - **最先见底：Mexico、Peru 并列第一，各 6.4 周**（口径：渠道库存 ÷ 近4周周均，升序；截至 2026-08-17）。其中 Mexico 渠道库存 12,519 台、近4周周均 1,945 台；Peru 渠道库存 4,293 台、近4周周均 671 台。 - **紧随其后：Colombia 6.5 周、Chile 6.5 周**（口径同上；
+   工具：📐preoutlook {"type":"preoutlook","dim":"country","weeks":12,"top":{"name":"Mexico","中性":23334},"dosTarget":null,"filters":{}}
+
+【22】S4DOS目标｜哪个国家最该去库存？要把渠道 DOS 降到 40 天各需要减多少？
+   ✅ 正确  21s  1872字 | 真值：最该 Brazil 需减 1683
+   答：【系统核对】按代码计算，把渠道 DOS 压到 40 天需减库存最多的是 Brazil（需减 1683 台，当前 DOS 46 天）；1. Brazil 需减 1683 2. Mexico 需减 1408 3. Colombia 需减 766。上文点名的 Uruguay 不是需减最多的（DOS 天数最高不等于要减的台数最多）。 **总体判断：2026 年渠道 DOS 最高、最该去库存的是 Uruguay、Costa Rica、Guatemala、Dominican Rep.、Panama、Ecuador 这 6 个国家（渠道 DOS 均为 53 天，红灯）；但若按「降到 40 天需减的绝对库存台数」排，减量最大的是 Brazil（16
+   工具：📐prediag {"type":"prediag","dim":"country","keys":["渠道去库存","报量延迟提示"],"counts":["渠道去库存 6","报量延迟提示 0"],"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"country","weeks":12,"top":{"name":"Mexico","中性":23334},"dosTarget":40,"filters":{}} ｜ 🛡verify {"ok":false} ｜ 🛡verify {"ok":false,"pinned":true,"expected":null}
+
+【26】S5主推｜下半年主推组合选 3 个，并说明理由。
+   ✅ 正确  22s  2222字 | 真值：候选 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc
+   答：【系统核对】代码判定 SonicBuds SE2（SO同比下滑(-26.3%)） 不满足主推条件（非退市、渠道DOS非红、SO同比非负、近4周有销量），不能列为主推。主推候选（按预测量）：SonicBuds SE3 30619、Slate SE 11 22358、SonicBuds SE4 ANC 19641、Slate 11 19451、Slate 11 Pro 16278、SonicBuds Pro 4 8194、Slate 12 Pro 6413、SonicArc 5429。请以此为准。 **总体判断：2026 年下半年（H2）主推产品组合建议锁定 3 个——SonicBuds SE3、Slate SE 11、SonicBud
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{}} ｜ 🛡verify {"ok":false} ｜ 🛡verify {"ok":false,"pinned":true,"expected":null}
+
+【50】S9综合策略｜给平板线做一个到年底的规划：谁冲量、谁清库存、库存缺口在哪？
+   🟡 有分析但不准  16s  1774字 | 真值：候选 Slate SE 11/Slate 11/Slate 11 Pro/Slate 12 Pro；剔除 Slate SE 10；最紧 Slate SE 11 5.9 周；点名冲 Slate SE 11/Slate 11/Slate 11 Pro 清 Slate SE 10/Slate 12 Pro
+   答：**结论：平板线（line=平板）到 2026 年底，唯一需要清库存的是 Slate SE 10（渠道 DOS 461 天，红灯档，>120 即红）；冲量主力是 Slate SE 11、Slate 11、Slate 11 Pro，库存缺口出在「畅销机补货」而不是「滞销机压库」。** --- ## 一、风险最大 / 最该清库存的产品 **Slate SE 10 —— 渠道 DOS 461 天，红灯档（判据：渠道 DOS >120 为红），是全平板线唯一红灯机型（平板线红灯机型数：1 个，口径：渠道 DOS>120，截至 2026-08-17）。** ## 二、按渠道 DOS 降序的产品表 | 名次 | 机型 | 渠道DOS | 灯 |
+   工具：📐prerank {"type":"prerank","dim":"product","by":"渠道DOS","order":"降序","top":"Slate SE 10","value":461,"unit":"天","n":5,"filters":{"line":["平板"]}} ｜ 📐prediag {"type":"prediag","dim":"product","keys":["库存风险_按渠道DOS降序","红灯","报量延迟提示"],"counts":["库存风险_按渠道DOS降序 5","红灯 1","报量延迟提示 0"],"filters":{"line":["平板"]}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"Slate SE 11","中性":22358},"dosTarget":null,"filters":{"line":["平板"]}}
+
+【56】S9综合策略｜如果 Q4 预算只够主推两个产品，选谁？它们各自未来 13 周预计多少台？有没有断货风险？
+   ✅ 正确  22s  1851字 | 真值：候选 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3/Slate SE 11；SonicBuds SE3 13周 20950/撑 6.2，Slate SE 11 13周 15298/撑 5.9
+   答：**结论：2026 年 Q4 预算只够主推两个产品，应选 SonicBuds SE3 与 Slate SE 11——这是基于当前动量的定性判断，不是未来销量预测。** **一、总体判断** 在产业看板口径下（数据截至 2026-08-17），SonicBuds SE3 与 Slate SE 11 是未来 13 周中性预测排名第 1、第 2 的产品，且均未命中断货风险清单；但两者近周动量都在走弱，库存可支撑周数偏紧，属于「量级最大、动量转弱、需提前补货」的组合。 **二、关键数字（每个数字均标口径与截至时间）** - 主推产品1：**SonicBuds SE3**（口径：未来13周中性预测排名第1，截至 2026-08-17） - 主
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":13,"top":{"name":"SonicBuds SE3","中性":20950},"dosTarget":null,"filters":{}} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product"} ｜ 路标与上市专家:rankItems{"dim":"product","by":"yoy","limit":15} ｜ 路标与上市专家:healthCheck{"dim":"product"} ｜ 路标与上市专家:outlook{"dim":"product","weeks":12} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product"} ｜ 路标与上市专家:rankItems{"dim":"product","by":"cumCur","limit":15} ｜ 路标与上市专家:outlook{"dim":"product","weeks":12}
+
+==================== 汇总 ====================
+题数 5｜能分析出来 5/5（100%）｜结论正确 4/5（80%）｜平均 1871 字/题
+分场景：S3断货 1/1｜S4DOS目标 1/1｜S5主推 1/1｜S9综合策略 1/2
+未通过：#50(不准)
+结果文件：eval/runs/run-strategy-p3.txt

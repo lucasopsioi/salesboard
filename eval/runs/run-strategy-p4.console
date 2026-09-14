@@ -1,0 +1,22 @@
+题数 56
+
+【26】S5主推｜下半年主推组合选 3 个，并说明理由。
+   ✅ 正确  19s  1999字 | 真值：候选 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC
+   答：**结论：2026 年下半年（H2）主推产品组合，建议选 SonicBuds SE3、Slate SE 11、SonicBuds SE4 ANC 这三个产品**——它们是代码前瞻「主推候选（按预测量）」清单的前 3 名，预测量级最大、渠道 DOS 均未触红灯、SO 同比非负，且库存可支撑周数都在 6 周上下、无断货风险（数据截至 2026-08-17，到年底剩余 19 周）。 **关键数字（每个都标口径）** - **SonicBuds SE3（第 1 主推）**：未来 19 周中性预测 **30,619 台**（口径：近 4 周周均×19 周线性外推，候选第 1）；全年预测中性 **76,346 台**（口径：累计 SO＋近 4 
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{}}
+
+【49】S9综合策略｜综合同比、周走势、库存和未来 12 周预测，给音频线一个下半年策略：主推谁、清谁、为什么？
+   ✅ 正确  26s  2548字 | 真值：候选 SonicBuds SE3/SonicBuds SE4 ANC/SonicBuds Pro 4/SonicArc；剔除 SonicBuds SE2；点名推 SonicBuds SE3/SonicBuds SE4 ANC/SonicBuds Pro 4/SonicArc 清 SonicBuds SE2
+   答：底表数据只读，无法执行写入/修改/删除/清理等操作；以下为基于已查得数字的策略结论，不涉及任何底表改动。 **一句话结论：音频与智能配件线（line=音频与智能配件）2026 年下半年应主推 SonicBuds SE3、SonicBuds SE4 ANC，其次维持 SonicBuds Pro 4、SonicArc；清理（停止加投、去库存）SonicBuds SE2。** ## 对比表（数据截至 2026-08-17；预测窗口未来 12 周，到年底剩余 19 周） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|--
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{"line":["音频与智能配件"]}} ｜ PSI 分析专家:query{"stackDim":"line","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"line":["音频与智能配件"]}} ｜ PSI 分析专家:query{"stackDim":"line","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"line":["音频与智能配件"]}} ｜ PSI 分析专家:query{"stackDim":"line","metric":"inv","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"line":["音频与智能配件"]}} ｜ PSI 分析专家:query{"stackDim":"line","metric":"dos","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"line":["音频与智能配件"]}}
+
+【50】S9综合策略｜给平板线做一个到年底的规划：谁冲量、谁清库存、库存缺口在哪？
+   🟡 有分析但不准  18s  2055字 | 真值：候选 Slate SE 11/Slate 11/Slate 11 Pro/Slate 12 Pro；剔除 Slate SE 10；最紧 Slate SE 11 5.9 周；点名冲 Slate SE 11/Slate 11 Pro/Slate 12 Pro 清 Slate SE 10/Slate 11
+   答：**平板线（平板电脑产品线）到 2026 年底规划结论：唯一要清库存的是 Slate SE 10（渠道 DOS 461 天，红灯）；冲量主力是 Slate SE 11、Slate 11、Slate 11 Pro，Slate 12 Pro 走强可加码；库存缺口不在总量而在结构——三款主力可支撑周数仅 5.9–7.7 周，8 周内需补货。** --- **① 风险最大 / 最该清库存的产品** **Slate SE 10**：渠道 DOS **461 天**（口径：库存×28÷近4周SO，渠道口径，红灯>120；截至 2026-08-17），全流程 DOS 同为 **461 天**（全流程口径，红灯>150），是平板线唯一红灯机型。 *
+   工具：📐prerank {"type":"prerank","dim":"product","by":"渠道DOS","order":"降序","top":"Slate SE 10","value":461,"unit":"天","n":5,"filters":{"line":["平板"]}} ｜ 📐prediag {"type":"prediag","dim":"product","keys":["库存风险_按渠道DOS降序","红灯","报量延迟提示"],"counts":["库存风险_按渠道DOS降序 5","红灯 1","报量延迟提示 0"],"filters":{"line":["平板"]}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"Slate SE 11","中性":22358},"dosTarget":null,"filters":{"line":["平板"]}} ｜ 路标与上市专家:healthCheck{"dim":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:dataCatalog{}
+
+==================== 汇总 ====================
+题数 3｜能分析出来 3/3（100%）｜结论正确 2/3（67%）｜平均 2201 字/题
+分场景：S5主推 1/1｜S9综合策略 1/2
+未通过：#50(不准)
+结果文件：eval/runs/run-strategy-p4.txt

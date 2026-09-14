@@ -586,6 +586,30 @@
         } else if (e.type === 'synth') {
           if (detail) prog._synth = push({ k: 'synth', label: '综合各专家结论', state: 'run' });
           setProg('正在综合各专家结论…');
+        } else if (e.type === 'prerank') {
+          if (detail) push({ k: 'plan', label: '代码预排名：' + e.by + e.order + '，第 1 名 ' + e.top + '（' + e.value + ' ' + e.unit + '）', state: 'ok' });
+          setProg('代码已算好排名：' + e.top + ' 第 1');
+        } else if (e.type === 'prediag') {
+          if (detail) push({ k: 'plan', label: '代码预诊断：' + (e.counts || []).join('，'), state: 'ok' });
+          setProg('代码已算好清单：' + (e.keys || []).join('/'));
+        } else if (e.type === 'preest') {
+          if (detail) push({ k: 'plan', label: '代码预估：' + e.product + (e.countries.length ? ' → ' + e.countries.join('/') : ' 未进入国家排名') + (e.top ? '，' + e.top.国家 + ' 中位 ' + e.top.中位 + ' 台（' + e.top.区间低 + '–' + e.top.区间高 + '）' : ''), state: 'ok' });
+          setProg('代码已算好预估：' + e.product);
+        } else if (e.type === 'preoutlook') {
+          if (detail) push({ k: 'plan', label: '代码前瞻：未来 ' + e.weeks + ' 周' + (e.top ? '，第 1 名 ' + e.top.name + ' 中性 ' + e.top.中性 + ' 台' : '') + (e.dosTarget ? '，DOS 目标 ' + e.dosTarget + ' 天' : ''), state: 'ok' });
+          setProg('代码已算好前瞻推演');
+        } else if (e.type === 'precmp') {
+          if (detail) push({ k: 'plan', label: '代码预对比：' + e.names.join(' vs '), state: 'ok' });
+          setProg('代码已算好对比表');
+        } else if (e.type === 'verify') {
+          // 结论核对闸：结论点名 ≠ 代码排名第 1 名 → 先让模型改，改不对就把代码排名钉在最前面
+          if (detail) {
+            if (e.pinned) { if (prog._verify) { prog._verify.state = 'err'; prog._verify.label = '结论仍与代码排名不一致，已把代码排名钉在答案最前面（第 1 名：' + e.expected + '）'; } }
+            else if (e.ok) { if (prog._verify) { prog._verify.state = 'ok'; prog._verify.label = '结论已按代码排名改正（' + e.expected + '）'; } else push({ k: 'verify', label: '结论核对通过', state: 'ok' }); }
+            else prog._verify = push({ k: 'verify', label: '结论与代码排名不一致，要求改正…', state: 'run' });
+            paintFlow();
+          }
+          setProg(e.pinned ? '结论核对：已用代码排名纠正' : e.ok ? '结论核对通过' : '结论核对：与代码排名不一致，正在改正…');
         }
       },
     };

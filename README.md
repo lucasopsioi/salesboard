@@ -85,9 +85,11 @@ Eval-driven iteration, same 30 questions, human-reviewed grading on every run:
 
 Findings that shaped the design: guardrail behavior varies up to 40pp between identical runs (single-run evals can't certify safety); prompts plateau where determinism is required — the fixes that held were all mechanism-level (validation, tool-side math, the gate). **Full methodology, grading rubric and findings: [docs/EVALUATION.md](docs/EVALUATION.md)** · raw run records in `eval/runs/`.
 
+**Since release 150 — analysis moved out of the model.** A 30-question set of *complex* questions (rankings, attribution, what-to-push decisions) showed the model getting the sign of a YoY wrong, answering totals instead of products, calling DOS 46 "high". Rankings, comparisons, health diagnostics, outlook and opportunity sizing now live in a deterministic analytics layer (`app/analytics-core.js`); a conclusion gate (`app/conclusion-check.js`) rejects any answer whose named winner disagrees with the computed ranking. Three code-graded suites on the synthetic dataset (truth values computed by that layer; logs in `eval/runs/`): complex analysis **30/30**, composite questions (A vs B, "would it sell in country X", sizing from a reference product) **52/54**, strategy and outlook (12-week forecast, stock-out risk, push/drop lists) **55/56**.
+
 ## Engineering
 
-Electron + a pure-function analytics core (**87 test files** in this repo's suite, all green — `npm test`), streaming responses, per-request token/latency budgets tuned for on-device inference, bilingual UI (中/EN runtime toggle). `node scripts/make-demo-data.js` regenerates the full synthetic world (43k rows, 12 countries, deliberately embedded edge cases: EOL tail inventory, pre-launch demo units, late-reporting channels, seasonality).
+Electron + a pure-function analytics core (**89 test files** in this repo's suite, all green — `npm test`), streaming responses, per-request token/latency budgets tuned for on-device inference, bilingual UI (中/EN runtime toggle). `node scripts/make-demo-data.js` regenerates the full synthetic world (43k rows, 12 countries, deliberately embedded edge cases: EOL tail inventory, pre-launch demo units, late-reporting channels, seasonality).
 
 ## Run it
 

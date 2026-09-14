@@ -31,7 +31,16 @@ async function mountEngine(opt) {
   return engine;
 }
 
+const AC = require(path.join(__dirname, '..', 'app', 'analytics-core.js'));
 function buildRegistry(engine) {
+  let _at = null;
+  const analytics = () => _at || (_at = AC.build({
+    report: async p => engine.report(p),
+    financeProductBoard: async p => engine.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, p)),
+    financeOverview: async p => engine.financeOverview(p || {}),
+    roadmapProducts: () => [], today: () => null,
+    asOf: async () => { try { return engine.catalog().to; } catch (e) { return null; } },
+  }));
   const DIM = AD.DIM_KEYS;
   /* 与 app/ai-context.js 的 checkFilterDims 保持一致（改那边记得同步这里） */
   function checkFilterDims(filters) {
@@ -72,6 +81,12 @@ function buildRegistry(engine) {
     },
     searchDim: async (a) => engine.searchDim(a || {}),
     rawRows: async (a) => engine.rawRows(a || {}),
+    // 确定性分析工具（与 app/ai-context.js 同一份 analytics-core）
+    rankItems: async (a) => analytics().rankItems(a || {}),
+    compareItems: async (a) => analytics().compareItems(a || {}),
+    healthCheck: async (a) => analytics().healthCheck(a || {}),
+    opportunity: async (a) => analytics().opportunity(a || {}),
+    outlook: async (a) => analytics().outlook(a || {}),
     options: async (a) => {
       a = a || {};
       const f = a.field;

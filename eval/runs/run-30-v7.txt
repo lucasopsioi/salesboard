@@ -1,0 +1,162 @@
+真值摘要：top cum=SonicBuds SE3/Slate SE 11/Slate 11；top yoy=SonicBuds SE4 ANC89242%/Slate 11 Pro214%/SonicBuds SE3117%；最高DOS=Slate SE 10(461)；同比为负=SonicBuds SE2/Slate SE 10；周走势下滑=Slate 11/Slate SE 10；去库存=Slate 11/SonicBuds Pro 4；Slate 11 最强国家=Mexico；贡献最大=SonicBuds SE4 ANC/SonicBuds SE3；收入最高=Slate 11 Pro
+
+【1】Slate 11 和 Slate 11 Pro 哪个卖得更好？收入、利润和销量综合考虑，我应该多卖哪个？
+   ✅ 正确  33s  | 真值：两款累计SO 34714/25589 + 明确建议
+   答：**结论：2026 年综合收入、利润和销量看，应该多卖 Slate 11 Pro。** 它收入是 Slate 11 的 1.5 倍、销毛额 1.5 倍、单台 NSIP 高 88.7 USD，且增量几乎全部由它贡献；Slate 11 只在「累计销量台数」这一项领先，属于存量基本盘。 ## 一、对比表（行=产品，口径：PSI 累计截至数据截止日；财经为 2026 年 1–6 月实际、产品级 lv4） | 指标 | Slate 11 | Slate 11 Pro | 谁领先 | |---|---|---|---| | 累计 SO | 34,714 台 | 25,589 台 | Slate 11（多 9,125 台，1.4 倍） | | 去
+   工具：路标与上市专家:compareItems{"dim":"product","names":["Slate 11","Slate 11 Pro"]} ｜ 路标与上市专家:dataCatalog{} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["平板"]} ｜ 经营分析专家:compareItems{"dim":"product","names":["Slate 11","Slate 11 Pro"]} ｜ 汇总/国家/产业专家:compareItems{"dim":"product","names":["Slate 11","Slate 11 Pro"]} ｜ 汇总/国家/产业专家:options{"field":"product","contains":"Slate 11"} ｜ 路标与上市专家:options{"field":"product","contains":"Slate 11"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","contains":"Slate"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","contains":"Slate 11"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","contains":"Slate 11"} ｜ 路标与上市专家:options{"field":"product","contains":"Slate 11"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","contains":"Slate 11"}
+
+【2】现在哪个产品未来能卖得更多？给我一个排序。
+   ✅ 正确  21s  | 真值：开头点名同比前三或放量期产品
+   答：**结论：2026 年未来销量潜力最大的产品是 SonicBuds SE3，最该清库存、风险最大的是 Slate SE 10（渠道 DOS 461 天，红灯档）。** 以下给业务同事看的完整结论。 --- ## 一、总体判断 10 个产品（口径：report，年初至今累计，渠道口径，数据截至日以 meta 为准）整体 SO 21.82 万台、同比 +43.0%，SI 22.68 万台、同比 +19.6%——**SI 增速低于 SO，整体在去库存**，但结构分化极大：一头是 SonicBuds SE3 这类高增长成熟品，另一头是 Slate SE 10 这种已进入清尾、库存几乎不动的红灯品。**潜力排序看的是"同比增速 + 周走势 +
+   工具：汇总/国家/产业专家:rankItems{"dim":"product","by":"yoy","minCum":1000} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 汇总/国家/产业专家:report{"groupDim":"product"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:healthCheck{"dim":"product"} ｜ 路标与上市专家:options{"field":"product"} ｜ 路标与上市专家:rankItems{"dim":"product","by":"cumCur","order":"desc"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","contains":"Slate"} ｜ 路标与上市专家:options{"field":"series"}
+
+【3】哪个产品的库存风险最大？为什么？
+   ✅ 正确  15s  | 真值：DOS 最高=Slate SE 10(461)
+   答：**结论：产业看板中库存风险最大、最该清库存的产品是平板「Slate SE 10」——渠道 DOS 461 天、全流程 DOS 461 天，双双红灯（渠道红灯阈值>120、全流程红灯阈值>150），是全表唯一红灯产品。** --- **① 一句话点名** Slate SE 10（平板）：渠道 DOS **461 天**（口径：库存×28÷近4周SO，近4周按真实日期回看28天、以 maxYmd 那周收尾；红灯阈值>120），全流程 DOS **461 天**（口径：全流程库存=渠道库存+CDC+FDC；红灯阈值>150），两项均红灯，为全表唯一红灯产品（截至 2026年最新数据日）。 **② 按 DOS 降序的产品表**（口径统一为
+   工具：路标与上市专家:healthCheck{"dim":"product"} ｜ 路标与上市专家:dataCatalog{} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"dos","order":"desc","limit":20} ｜ 路标与上市专家:options{"field":"product"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","contains":"Slate"} ｜ 路标与上市专家:rankItems{"dim":"product","by":"dos","order":"desc","limit":20}
+
+【4】如果要加大市场投入，哪个国家最值得？
+   ✅ 正确  17s  | 真值：点名同比前六国家之一
+   答：**结论：2026 年若要加大市场投入，从产业看板数据看最值得投的是 Mexico（墨西哥）——它是累计 SO 规模第一、贡献量第一、库存与周转全绿灯的国家；但要注意 12 国近期周销普遍走弱，投入节奏建议分批释放。** --- **一、总体判断** 拉美 Marlin 平板（12 国）当前是「高增长 + 低库存 + 近期动能回落」的组合：累计 SO 同比全部为正（+16.5%~+48.1%，口径：年初至今 2026-01-01 至 maxYmd，产业看板口径），渠道 DOS 全部绿灯（45–53 天，口径：库存×28÷近 4 周 SO，绿灯<90 天，maxYmd 当天快照），但 12 国全部标记「周销走弱」（口径：剔除末端 0 
+   工具：汇总/国家/产业专家:rankItems{"dim":"country","by":"cumCur","order":"desc"} ｜ 汇总/国家/产业专家:report{"groupDim":"country"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:options{"field":"country"} ｜ PSI 分析专家:query{"stackDim":"country","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-09-11"} ｜ PSI 分析专家:query{"stackDim":"country","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-09-11"} ｜ PSI 分析专家:query{"stackDim":"country","metric":"dos","gran":"month","from":"2026-01-01","to":"2026-09-11"} ｜ PSI 分析专家:rankItems{"dim":"country","by":"yoy","order":"desc"} ｜ PSI 分析专家:rankItems{"dim":"country","by":"cumCur","order":"desc"} ｜ PSI 分析专家:rankItems{"dim":"country","by":"dos","order":"asc"} ｜ PSI 分析专家:healthCheck{"dim":"country"}
+
+【5】哪个产品系列在拖整体的后腿？
+   ✅ 正确  16s  | 真值：同比最低的系列或其产品（前 600 字内点名）
+   答：**结论：2026年至今（截至 2026-09-11）拖累产业看板整体的是 Anchovy（Slate SE 10，平板线）——累计SO 2,761台、同比 −82.6%、贡献量 −13,075台，是全部系列中负贡献最大、且唯一库存红灯的系列；Otter（SonicBuds SE2）为第二拖累，贡献量 −8,265台、同比 −26.3%。** **关键数字（口径均标注）** - **Anchovy（Slate SE 10）**：累计SO 2,761台（口径：2026年初至今累计SO，产业看板系列级，截至 2026-09-11）；SO同比 −82.6%（口径：(今年累计−去年同期)/去年同期，去年同期15,836台）；贡献量 −13,
+   工具：汇总/国家/产业专家:report{"groupDim":"series"} ｜ 汇总/国家/产业专家:rankItems{"dim":"series","by":"yoy","order":"asc"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:healthCheck{"dim":"series"} ｜ PSI 分析专家:rankItems{"dim":"series","by":"contribution","order":"asc"} ｜ PSI 分析专家:rankItems{"dim":"product","by":"contribution","order":"asc"} ｜ PSI 分析专家:rankItems{"dim":"series","by":"yoy","order":"asc"}
+
+【6】平板和音频两条产品线，哪条增长更快？快多少？
+   🟡 有分析但不准  14s  | 真值：音频与智能配件 82% vs 15%
+   答：# 结论：音频与智能配件增长更快，收入增速 112.3%，比平板（51.9%）快 60.4 个百分点 **对象**：平板产品线 vs 音频与智能配件产品线（拉美 12 国，财经口径）。 ## 一、收入增长率对比（财经口径，2026年1-6月 vs 2025年1-6月） | 产品线 | 2025收入 | 2026收入 | 收入同比 | 2025销毛 | 2026销毛 | 销毛同比 | |---|---|---|---|---|---|---| | **音频与智能配件** | 1,762,395 | 3,742,032 | **+112.3%** | 374,484 | 800,860 | +113.9% | | **平板** | 8,
+   门禁拦下：58,115
+   工具：产业周报专家:dataCatalog{} ｜ 产业周报专家:options{"field":"line"} ｜ 产业周报专家:financeProductBoard{"fromM":1,"toM":6,"lv1":["平板","音频与智能配件"]} ｜ 产业周报专家:query{"stackDim":"line","metric":"sellOut","gran":"month","from":"2025-01-01","to":"2026-08-31"}
+
+【7】哪些产品今年同比在下滑？分别下滑多少？
+   ✅ 正确  8s  | 真值：全部下滑产品 SonicBuds SE2/Slate SE 10 及其同比
+   答：# 2026年截至目前，产业看板中销量同比下滑的产品 **结论：2026年年初至今（截至数据最新日），10个产品中有 2 个产品销量同比 2025 年同期下滑——Slate SE 10 下滑 82.6%（少卖 13,075 台）、SonicBuds SE2 下滑 26.3%（少卖 8,265 台）。其余产品同比为正，另有 2 个产品因去年同期为 0 不可比。** ## 一、同比下滑产品（逐项列出） | 产品 | 所属产品线 | 2026累计SO | 2025同期SO | 同比 | 下滑数量（贡献量） | 渠道DOS | 全流程DOS | |---|---|---|---|---|---|---|---| | **Slate SE 1
+   工具：汇总/国家/产业专家:options{"field":"product"} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"yoy","order":"asc","limit":50}
+
+【8】库存周转最健康的产品是哪个？
+   ✅ 正确  15s  | 真值：有量产品里 DOS 最低=SonicBuds SE2
+   答：# 结论 **2026 年当前，产业看板中库存周转最健康的产品是「SonicBuds SE2」**——渠道 DOS 37 天、全流程 DOS 47 天，双双绿灯，是全部产品中 DOS 最低的一个；但它的 SO 同比 −26.3%（口径：2026 年初至今累计 SO vs 2025 同期），属于「库存最轻」而非「需求最旺」。 --- ## 一、关键数字（每个都带口径与截至时间） - **SonicBuds SE2 渠道 DOS：37 天**（口径：渠道库存 3573×28÷近4周SO，绿灯 <90；截至 2026-09-11） - **SonicBuds SE2 全流程 DOS：47 天**（口径：全流程库存 4617×28÷近4周S
+   工具：路标与上市专家:healthCheck{"dim":"product"} ｜ 路标与上市专家:options{"field":"product","contains":"SonicBuds SE2"} ｜ 路标与上市专家:dataCatalog{} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"dos","order":"asc","limit":20}
+
+【9】哪个产品应该考虑清库存或者退市了？
+   ✅ 正确  29s  | 真值：Slate SE 10
+   答：**结论：产业看板里当前唯一触发库存红灯、该优先清库存并评估退市的产品是 Slate SE 10（渠道 DOS 461 天、全流程 DOS 461 天，双红灯，SO 同比 −82.6%）。其余平板产品 DOS 全部绿灯，属「盯动销」而非「清库存」对象。** --- **① 风险最大 / 最该清库存的产品** **Slate SE 10**（line=平板，series=Anchovy） - 渠道 DOS **461 天** 🔴（口径：渠道库存 247 台，红绿灯阈值 渠道<90绿 / 90–120黄 / >120红） - 全流程 DOS **461 天** 🔴（口径：全流程库存 247 台，阈值 全流程<120绿 / 120–1
+   工具：汇总/国家/产业专家:healthCheck{"dim":"product","filters":{"line":["平板"]}} ｜ 汇总/国家/产业专家:options{"field":"line"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:healthCheck{"dim":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:options{"field":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:options{"field":"line"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","contains":"Slate"} ｜ 路标与上市专家:options{"field":"series","contains":"Slate"} ｜ 路标与上市专家:options{"field":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:options{"field":"series","filters":{"line":["平板"]}} ｜ 路标与上市专家:options{"field":"model","filters":{"line":["平板"]}} ｜ 路标与上市专家:rankItems{"dim":"product","by":"dos","filters":{"line":["平板"]},"order":"desc"}
+
+【10】哪个国家的库存周转最差？
+   ✅ 正确  13s  | 真值：DOS 最高的国家之一
+   答：# 2026 年库存周转最差的国家：Ecuador（厄瓜多尔），渠道 DOS 53 天 **结论**：按渠道库存周转天数（DOS）从高到低排，2026 年库存周转最差的是 **Ecuador**，渠道 DOS **53 天**，与 Panama、Dominican Rep.、Guatemala、Costa Rica、Uruguay 并列第 1（距第 1 名 0 天）；第 7 名起为 Mexico / Brazil / Colombia / Chile / Argentina（46 天，距第 1 名 7 天）、Peru（45 天，距第 1 名 8 天）。 需要说明的是：**这 12 个国家的渠道 DOS 全部落在绿灯区间（<90 天）
+   工具：汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 汇总/国家/产业专家:rankItems{"dim":"country","by":"dos","order":"desc","limit":30}
+
+【11】卖得最好的三个产品是哪三个？各卖了多少？
+   ✅ 正确  5s  | 真值：top3 + 各自累计
+   答：**2026 年（年初至今）产业看板卖得最好的三个产品是：SonicBuds SE3、Slate SE 11、Slate 11。** 依据代码预排名（rankItems，dim=product，by=cumCur 降序，单位：台）： | 名次 | 产品 | 累计SO（台） | 距第1名（台） | 标记 | |---|---|---|---|---| | 1 | SonicBuds SE3 | 45,727 | 0 | 周销走弱；末端2周为0（报量延迟，已剔除） | | 2 | Slate SE 11 | 37,064 | 8,663 | 周销走弱 | | 3 | Slate 11 | 34,714 | 11,013 | 渠道去库存（
+   工具：
+
+【12】哪个产品增速很快但库存偏高，需要提防压货？
+   ✅ 正确  28s  | 真值：同比>100%且DOS>中位：Slate 11 Pro；或 SI/SO>1.3 压货嫌疑：SonicArc/Slate 12 Pro
+   答：**结论：2026 年「增速快 + 库存偏高、需提防压货」的产品是 SonicArc 和 Slate 12 Pro。** 这两款被 healthCheck 明确列入「压货嫌疑」清单（累计 SI 明显大于累计 SO），但渠道 DOS 都还在绿灯档（55 天、56 天），所以风险性质是「进货快于出货」而非「DOS 超标」。真正亮红灯的 Slate SE 10（渠道 DOS 461 天）是「高库存 + 大幅下滑」的清尾型，不属于增速快。 --- ### 一、压货嫌疑产品（healthCheck「压货嫌疑」清单原文） | 产品 | 累计 SI | 累计 SO | 渠道 DOS | 灯 | 全流程 DOS | 全流程灯 | 周走势 | SO 
+   门禁拦下：1.42
+   工具：汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 汇总/国家/产业专家:dataCatalog{} ｜ 路标与上市专家:healthCheck{"dim":"product"} ｜ 路标与上市专家:dataCatalog{}
+
+【13】Slate 11 在哪个国家卖得最好？
+   ✅ 正确  17s  | 真值：Mexico
+   答：**结论：Slate 11（产品，family=Slate / series=Marlin / line=平板）在 2026 年卖得最好的国家是 Mexico（墨西哥），累计 SO 8,606 台，比第 2 名 Brazil 多 716 台。** --- ## 一、Slate 11 分国家排名（口径：累计 SO，单位台，2026 年初至今，截至全局最新日） | 名次 | 国家 | 累计SO(台) | 去年同期SO(台) | SO同比 | 距第1名(台) | 渠道DOS | 全流程DOS | 周走势 | |---|---|---|---|---|---|---|---|---| | **1** | **Mexico** | **8,6
+   工具：汇总/国家/产业专家:compareItems{"dim":"product","names":["Slate 11"]} ｜ 汇总/国家/产业专家:rankItems{"dim":"country","by":"cumCur","order":"desc","limit":20,"filters":{"product":["Slate 11"]}}
+
+【14】Slate 11 和 Slate 11 Pro 今年的收入和单台净售价（NSIP）分别是多少？
+   ✅ 正确  10s  | 真值：收入 5.37M/3.52M，NSIP 270/182(±1)
+   答：**结论：2026 年 1–9 月，Slate 11 收入 352.09 万 USD、单台净售价（NSIP）181.64 USD/台；Slate 11 Pro 收入 537.01 万 USD、NSIP 270.28 USD/台。** 两者收入一降一升（Slate 11 同比 −34.5%，Slate 11 Pro 同比 +66.8%），但 NSIP 都基本走平（Slate 11 −1.3%、Slate 11 Pro −3.5%）。 **逐项数字（口径：净销售收入 / 收入量_终端，2026 年 1–9 月累计，Region working draft 版本）** | 产品 | 2026 收入（净销售收入） | 2025 同期收入 |
+   门禁拦下：75.0、75
+   工具：经营分析专家:dataCatalog{} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["平板"]}
+
+【15】音频这条线里，哪个产品最值得主推？
+   ✅ 正确  34s  | 真值：音频同比前二
+   答：**总体判断：音频产品线 2026 年最值得主推的是 SonicBuds SE3**——它是唯一同时满足「规模第一 + 同比高增 + 库存绿灯 + 财经回报为正」的产品；次选 SonicBuds SE4 ANC 增速更猛但基数极低，参考意义有限。 **关键数字（逐条标口径）** - **规模**：SonicBuds SE3 年初至今累计 SO **45,727 台**，是第 2 名 SonicBuds SE4 ANC（27,696 台）的 **1.65 倍**；贡献量 **+24,703 台**，为全产品线最高（口径：2026 年初至今累计 SO，单位台）。 - **同比**：SE3 累计 SO 同比 **+117.5%**（去年同
+   工具：汇总/国家/产业专家:searchDim{"q":"音频"} ｜ 汇总/国家/产业专家:dataCatalog{} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:searchDim{"q":"音频"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"line"} ｜ 汇总/国家/产业专家:options{"field":"line"} ｜ 汇总/国家/产业专家:options{"field":"product","filters":{"line":["音频与智能配件"]}} ｜ 路标与上市专家:options{"field":"product","filters":{"line":["音频与智能配件"]}} ｜ 路标与上市专家:options{"field":"series","filters":{"line":["音频与智能配件"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-12-31","filters":{"line":["音频与智能配件"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-12-31","filters":{"line":["音频与智能配件"]}} ｜ 汇总/国家/产业专家:report{"groupDim":"product","filters":{"line":["音频与智能配件"]}} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"cumCur","filters":{"line":["音频与智能配件"]}} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product","fi
+
+【16】从近 9 周的周销量走势看，哪些产品在持续走弱？
+   🟡 有分析但不准  11s  | 真值：周走势下滑：Slate 11/Slate SE 10，不能把放量中的 Slate 12 Pro 算进去
+   答：# 音频产业（音频与智能配件）近9周周销量走势：4 款产品持续走弱 **结论：截至 2026-09-11，音频产业 5 款在售产品中有 4 款周销量持续走弱——SonicBuds SE2（-12.7%）、SonicBuds Pro 4（-10.6%）、SonicArc（-10.6%）、SonicBuds SE3（-10.3%）；仅 SonicBuds SE4 ANC 走平（-7.9%，未达走弱阈值）。** ## 一、走弱产品清单（healthCheck 代码判定，周走势口径） | 产品 | 周均·前段 | 周均·后段 | 周变化 | 累计SO | SO同比 | 渠道DOS | 判定 | |---|---|---|---|---|--
+   工具：产业周报专家:dataCatalog{} ｜ 产业周报专家:options{"field":"line","contains":"音频"} ｜ 产业周报专家:query{"stackDim":"product","metric":"sellOut","gran":"week","from":"2026-07-13","to":"2026-09-11","filters":{"line":["音频与智能配件"]}} ｜ 产业周报专家:healthCheck{"dim":"product","filters":{"line":["音频与智能配件"]}}
+
+【17】整体今年同比增长多少？哪个产品贡献最大？
+   ✅ 正确  15s  | 真值：整体 43%，贡献最大 SonicBuds SE4 ANC/SonicBuds SE3
+   答：**结论：2026 年至今（1/1 起至数据截至日），产业看板整体销量（SO）同比增长 +42.97%，增量贡献最大的产品是 SonicBuds SE4 ANC，贡献 +27,665 台，排名第 1。** **关键数字（每个都带口径）** - **整体销量同比 +42.97%**：口径为累计 SO，2026-01-01 至 maxYmd vs 2025 同期同日历 MMDD 截取，渠道全加不去重，截至 2026-09-11。同一份数据在另一处汇总里被表述为「43.0%」，属同一结论的取整写法，不是两个不同结果。 - **今年累计 SO 218,230 台**（口径：累计 SO，年初至今，截至 2026-09-11）；**去年同期 1
+   工具：汇总/国家/产业专家:industryBoard{"metric":"sellOut"} ｜ 汇总/国家/产业专家:report{"groupDim":"product"} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"contribution","order":"desc","limit":20} ｜ 汇总/国家/产业专家:report{"groupDim":"product"}
+
+【18】如果只能保留 5 个产品，应该砍掉哪些？
+   ✅ 正确  20s  | 真值：砍的应在末五 Slate 12 Pro/Slate SE 10/SonicArc/SonicBuds Pro 4/SonicBuds SE2 之内且含 Slate SE 10
+   答：**结论：产业看板当前 10 个产品（口径：产业看板当前全部产品，截至 2026 年至今），若只能保留 5 个，建议砍掉 Slate SE 10、SonicArc、Slate 12 Pro、SonicBuds SE2、Slate 11 这 5 个；但两个看板给出的"该砍几个"并不一致，下面把口径差异说清楚。** **一、总体判断** - 汇总/国家/产业专家给出的建议是砍 5 个：Slate SE 10、SonicArc、Slate 12 Pro、SonicBuds SE2、Slate 11（口径：综合同比/库存DOS/压货/周走势，截至 2026 年至今）。 - PSI 分析专家给出的结论是"应砍掉 Slate SE 10，其余 
+   工具：汇总/国家/产业专家:boardState{"boardId":"industry"} ｜ 汇总/国家/产业专家:options{"field":"product"} ｜ 经营分析专家:dataCatalog{} ｜ 经营分析专家:boardState{"boardId":"industry"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:options{"field":"product","limit":100} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"cumCur","order":"asc","limit":20} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":6} ｜ 经营分析专家:financeOverview{"year":2026,"fromM":1,"toM":6} ｜ PSI 分析专家:report{"groupDim":"product"} ｜ PSI 分析专家:rankItems{"dim":"product","by":"dos","order":"desc"} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":6,"lv1":["平板"]} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":6,"lv1":["音频与智能配件"]}
+
+【19】哪个系列的 Sell-in 明显超过 Sell-out，有压货嫌疑？
+   ✅ 正确  28s  | 真值：SI/SO>1.3：Kelp/Tarpon
+   答：**结论：2026 年至今，产业看板中压货（Sell-in 明显超过 Sell-out）嫌疑最大的是 Kelp（SonicArc）——累计 SI 9,614 台 vs 累计 SO 6,776 台，SI/SO≈1.42 倍，且周销持续走弱（周均 323→289，−10.6%）。Tarpon（Slate 12 Pro）SI/SO 倍数更极端（≈2.35 倍），但周销大幅走强（+419.8%）、DOS 绿灯，属新品爬坡铺货，不算压货。** 口径：2026 年初至今、全渠道加总不去重（report 口径，累计恒为年初至今）；DOS 为 report 口径「库存×28÷近4周SO」，渠道 <90 绿 / 90–120 黄 / >120 红，全
+   工具：汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 汇总/国家/产业专家:industryBoard{} ｜ 汇总/国家/产业专家:dataCatalog{} ｜ 路标与上市专家:healthCheck{"dim":"series"} ｜ 路标与上市专家:dataCatalog{}
+
+【20】全流程 DOS 最高的是哪个产品？多少天？
+   ✅ 正确  9s  | 真值：Slate SE 10 461
+   答：**全流程 DOS 最高的产品是 Slate SE 10（平板 / Slate SE / Anchovy 系列），全流程 DOS = 461 天。** 依据（口径：全流程 DOS = 全流程库存 × 28 ÷ 近 4 周 SO，年初至今累计口径，数据截至 2026-08-17）： | 产品 | 全流程库存(台) | 全流程 DOS(天) | 渠道 DOS(天) | 近4周SO(台) | 灯 | |---|---|---|---|---|---| | **Slate SE 10** | **247** | **461** | 461 | 15 | 红（>150） | | Slate 12 Pro | 3,066 | 64 | 56 |
+   工具：PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:options{"field":"product"} ｜ PSI 分析专家:report{"groupDim":"product"} ｜ PSI 分析专家:rankItems{"dim":"product","by":"flowDos","order":"desc","limit":10}
+
+【21】Slate 11 的销量趋势是上升还是下降？
+   ✅ 正确  16s  | 真值：结论句说下降（周序列 1280→1026）
+   答：**结论：Slate 11（产品，⊂ Marlin 系列 ⊂ Slate 家族 ⊂ 平板线）2026 年 1–8 月的 Sell-in 与 Sell-out 走势都是「先升后降」——上半年逐月爬坡、6 月见顶，7–8 月明显回落，整体不是单调上升，而是冲高回落。** **Sell-in（出货，台数，product=Slate 11，2026 年逐月）** | 月份 | 1月 | 2月 | 3月 | 4月 | 5月 | 6月 | 7月 | 8月 | |---|---|---|---|---|---|---|---|---| | Sell-in | 1,295 | 3,671 | 5,625 | 4,629 | 4,904 | 6,66
+   门禁拦下：40
+   工具：PSI 分析专家:searchDim{"q":"Slate 11"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-09-11","filters":{"product":["Slate 11"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-09-11","filters":{"product":["Slate 11"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"product":["Slate 11"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"product":["Slate 11"]}}
+
+【22】哪个国家办今年表现最好？
+   ✅ 正确  17s  | 真值：累计或同比前二国家办
+   答：**一句话结论：2026 年表现最好的国家办是 Mexico Office（墨西哥国家办）——Marlin 平板系列年初至今累计 SO 56,808 台、同比 +47.3%，量、增速双第一；2026 年 1–6 月净销售收入 4,347,468 USD、同比 +70.0%，收入规模、销毛率、NSIP 均为五家最高，多卖/主推应指向 Mexico Office。** ## 对比表（行=国家办） | 国家办 | 累计SO(台) | SO同比 | 近3个月环比趋势 | 收入(USD) | 销毛率 | NSIP(USD/台) | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | *
+   工具：经营分析专家:dataCatalog{} ｜ 经营分析专家:rankItems{"dim":"repOffice","by":"rev","order":"desc","limit":30} ｜ 汇总/国家/产业专家:options{"field":"repOffice"} ｜ 汇总/国家/产业专家:report{"groupDim":"repOffice"} ｜ 经营分析专家:financeRepBoard{"fromM":1,"toM":6} ｜ 经营分析专家:financeOverview{"year":2026,"fromM":1,"toM":6} ｜ 汇总/国家/产业专家:rankItems{"dim":"repOffice","by":"cumCur","order":"desc"} ｜ 汇总/国家/产业专家:rankItems{"dim":"repOffice","by":"yoy","order":"desc"} ｜ 汇总/国家/产业专家:healthCheck{"dim":"repOffice"}
+
+【23】墨西哥和巴西，哪个市场更值得继续投入？
+   ✅ 正确  28s  | 真值：两国累计 56808/52379 + 建议
+   答：**结论：2026 年墨西哥（Mexico）比巴西（Brazil）更值得继续投入——墨西哥在销量规模、增速、单台收益上全面小幅领先，库存健康度与巴西持平，属于「墨西哥优先、巴西维持」，不是二选一砍掉。** --- ### 一、对比表（行=市场） | 市场 | 累计SO | SO同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | Mexico | 56,808 台 | +47.3% | 数据未包含（仅有周变化 −42.3%，口径：周列最后两周之比，标记周销走弱） | 4,347,468 USD | 21.61%
+   工具：经营分析专家:dataCatalog{} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"country","contains":"墨西哥"} ｜ 汇总/国家/产业专家:compareItems{"dim":"country","names":["墨西哥","巴西"]} ｜ 汇总/国家/产业专家:options{"field":"country"} ｜ 汇总/国家/产业专家:compareItems{"dim":"country","names":["Mexico","Brazil"]} ｜ 路标与上市专家:compareItems{"dim":"country","names":["Mexico","Brazil"]} ｜ 路标与上市专家:options{"field":"country","contains":"Mex"} ｜ 经营分析专家:financeRepBoard{"fromM":1,"toM":9,"reps":["Mexico Office","Brazil Office"]} ｜ 经营分析专家:compareItems{"dim":"repOffice","names":["Mexico Office","Brazil Office"]} ｜ 汇总/国家/产业专家:dataCatalog{} ｜ 汇总/国家/产业专家:rankItems{"dim":"country","by":"rev","filters":{"country":["Mexico","Brazil"]}} ｜ 路标与上市专家:options{"field":"product","filters":{"country":["Mexico"]}} ｜ 路标与上市专家:options{"field":"product","filters":{"country":["Brazil"]}} ｜ 路标与上市专家:rankItems{"dim":"p
+
+【24】收入最高的产品是哪个？
+   ✅ 正确  17s  | 真值：Slate 11 Pro
+   答：**结论：2026年（截至当前）产业看板中收入最高的产品是「Slate 11 Pro」，收入 5,370,107 USD（口径：产业看板·产品维度·收入·2026年年初至今累计，单位 USD，截至 2026-09-11）。** 给业务同事的关键数字： - **第1名 Slate 11 Pro：5,370,107 USD**（口径：产业看板·产品维度·收入·2026年年初至今累计，截至 2026-09-11），领先第2名 **1,849,166 USD**，约为其 1.53 倍；但带「周销走弱」标记，累计居首、近期动能转弱。 - **第2名 Slate 11：3,520,941 USD**（同口径、同截至日），标记为「渠道去库存（SI
+   工具：经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["Slate"]} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["SonicBuds"]} ｜ 经营分析专家:dataCatalog{} ｜ 经营分析专家:boardState{"boardId":"industry"} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":6,"lv1":["平板"]} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":6,"lv1":["音频与智能配件"]}
+
+【25】单台净售价（NSIP）最高的产品是哪个？
+   ✅ 正确  10s  | 真值：Slate 11 Pro 270
+   答：在产业看板中，单台净售价（NSIP）最高的产品是 **Slate 11 Pro**。 **总体判断**：按产业看板 NSIP 降序排名，Slate 11 Pro 以 270.3 USD/台居首，是本次排名中唯一超过 200 USD/台的产品，领先优势明显。 **关键数字（均标注口径）**： - **Slate 11 Pro：270.3 USD/台**（口径：产业看板产品级 NSIP 降序排名第 1 名；定价专家口径截至 2026-08-17，汇总/经营分析口径为 2026 年 1 月—当前月累计、截至 2026-09-11）。 - **Slate 11：181.6 USD/台**（口径：产业看板产品级 NSIP 降序第 2 名），距
+   工具：定价专家:meta{} ｜ 定价专家:pricingLibRecords{}
+
+【26】综合销量增速和收入规模，最值得加码的一个产品是哪个？
+   ✅ 正确  18s  | 真值：增速与收入兼备的三者之一
+   答：**结论：2026 年最值得加码的一个产品是 Slate 11 Pro（平板线）——它是唯一同时具备高收入增速与大收入体量的产品。** 以下按看板分点说明，每个数字均标注口径与截至时间。 **一、产业看板（Sell-out 销量口径，2026 年 1–8 月 vs 2025 年 1–8 月）** - Slate 11 Pro：2026 年 1–8 月 Sell-out 25,589 台，2025 年同期 8,150 台，同比 +214.0%，是全部产品中增速最高的之一。 - 对比参照：SonicBuds SE3 同比 +117.5%（45,727 台 vs 21,024 台）；SonicBuds SE4 ANC 为新品（27,696
+   工具：经营分析专家:dataCatalog{} ｜ 汇总/国家/产业专家:options{"field":"line"} ｜ 汇总/国家/产业专家:dataCatalog{} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:options{"field":"product","limit":100} ｜ 汇总/国家/产业专家:options{"field":"product"} ｜ 汇总/国家/产业专家:report{"groupDim":"product"} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":6,"lv1":["平板"]} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":6,"lv1":["音频与智能配件"]} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2025-01-01","to":"2026-08-31"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2025-01-01","to":"2026-08-31"} ｜ 汇总/国家/产业专家:options{"field":"line"} ｜ PSI 分析专家:options{"field":"product","filters":{"family":["SonicBuds"]}} ｜ PSI 分析专家:rankItems{"dim":"product","by":"cumCur","order":"desc"} ｜ 汇总/国家/产业专家:dataCatalog{} ｜ PSI 分析专家:dataCatalog{}
+
+【27】哪些产品 Sell-in 同比下降但 Sell-out 没降，说明渠道在去库存？
+   ✅ 正确  25s  | 真值：Slate 11/SonicBuds Pro 4
+   答：## 结论 **2026 年 1–8 月，Sell-in 同比下降、Sell-out 没有下降（即渠道在去库存）的产品有 3 个：** | 产品 | Sell-in 同比 | Sell-out 同比 | 判定 | |---|---|---|---| | **Slate 11** | **−22.6%** | **+0.5%** | 典型去库存 | | **SonicBuds SE2** | **−37.8%** | **−(未取到)%** | 双降，但 SI 降幅远大于 SO，渠道在消化库存 | | **SonicBuds Pro 4** | **−8.7%** | **+11.3%** | 典型去库存 | 其余产品均为 SI、SO
+   门禁拦下：26.3、88.6、82.6、89242、56,094
+   工具：PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:options{"field":"product","limit":100} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-09-11"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2025-01-01","to":"2025-09-11"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-09-11"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2025-01-01","to":"2025-09-11"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:options{"field":"country"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-08-31"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-08-31"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026
+
+【28】音频和平板两条线，哪条的库存更健康？
+   ✅ 正确  27s  | 真值：音频与智能配件 DOS 音频45/平板49
+   答：【系统核对】按代码计算的「渠道DOS」升序排名：1. 音频与智能配件（45） 2. 平板（49）。结论应以第 1 名 音频与智能配件 为准；上文点名的 平板 不是第 1 名。 **结论：音频产品线和平板产品线相比，平板更健康——平板 5 个产品 DOS 全绿、最高仅 56 天，但平板有 1 个红灯产品 Slate SE 10（渠道 DOS 461 天，🔴红档）；音频 5 个产品 DOS 全绿、最高 55 天、0 个红灯，但音频 5 个产品全部存在「末端 2 周为 0」的报量延迟，其 DOS 与周走势可信度低于平板。所以「红灯风险最低」是音频，「周转最合理且数据最干净」是平板。** --- **① 风险最大 / 最该清库存的产品：S
+   工具：路标与上市专家:healthCheck{"dim":"line"} ｜ 路标与上市专家:dataCatalog{} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product","filters":{"line":["平板"]}} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product","filters":{"line":["音频与智能配件"]}} ｜ 汇总/国家/产业专家:options{"field":"line"} ｜ 路标与上市专家:options{"field":"line"} ｜ 路标与上市专家:options{"field":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:options{"field":"product","filters":{"line":["音频与智能配件"]}} ｜ 路标与上市专家:options{"field":"series","filters":{"line":["平板"]}} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:compareItems{"dim":"line","names":["平板","音频与智能配件"]} ｜ 路标与上市专家:rankItems{"dim":"product","by":"dos","order":"desc","limit":20} ｜ 路标与上市专家:healthCheck{"dim":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:healthCheck{"dim":"product","filters":{"line":["音频与智能配件"]}} ｜ 🛡verify {"ok":false} ｜ 🛡verify {"ok":false,"pinned":true,"expected":"音频与智能配
+
+【29】SonicBuds SE3 最近两周的销量是 0，是断货了吗？
+   ✅ 正确  15s  | 真值：音频报量延迟 + 库存 10009/DOS 44，不是断货
+   答：**结论：SonicBuds SE3 最近两周销量为 0，不是断货，而是音频产业报量人工延迟导致的「未录入」——库存充足、出货正常，缺的只是 Sell-out 这一列。** **关键数字（均针对 product=SonicBuds SE3，截至 2026-09-11）** - **Sell-out 销量：0 台**（口径：2026-W33 / W34 周粒度，渠道全加）。但需注意口径差异：PSI 分析专家按周桶给出的是「0」，数据源与口径专家查 PSI 底表原始行时，这两周（对应 2026-08-10、2026-08-17 两个周桶）的 sellOut 字段是 **null（未录入）**，而非数值 0。两边不是谁错，是「0」与「nu
+   工具：PSI 分析专家:options{"field":"product","contains":"SonicBuds SE3"} ｜ PSI 分析专家:dataCatalog{} ｜ 数据源与口径专家:dataCatalog{} ｜ 数据源与口径专家:options{"field":"product","contains":"SonicBuds SE3"} ｜ 数据源与口径专家:rawRows{"filters":{"product":["SonicBuds SE3"]},"from":"2026-08-01","to":"2026-09-11","limit":500} ｜ 数据源与口径专家:options{"field":"country"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"week","from":"2026-08-01","to":"2026-09-11","filters":{"product":["SonicBuds SE3"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"week","from":"2026-08-01","to":"2026-09-11","filters":{"product":["SonicBuds SE3"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"inv","gran":"week","from":"2026-08-01","to":"2026-09-11","filters":{"product":["SonicBuds SE3"]}} ｜ PSI 分析专家:report{"groupDim":"product","filters":{"product":["SonicBuds SE3"]}} ｜ 数据源与口径专家:rawRows{"filters":{"product":["SonicBu
+
+【30】给我一个下半年的主推产品组合建议，选 3 个并说明理由。
+   ✅ 正确  39s  | 真值：结论句推荐 ≥3 个且不含同比为负的产品（SonicBuds SE2/Slate SE 10）
+   答：**结论：2026 年下半年主推产品组合建议为 SonicBuds SE3、Slate SE 11、SonicBuds SE4 ANC 三个产品。** 但必须先说明口径边界：本轮产业看板返回的逐月序列只到 **8 月**（periods: 1月–8月），**没有 9–12 月数据**，因此「2026 年下半年（7–12 月）」无法按完整期间取数；下面凡涉及期间的数字，均按**已返回的 7–8 月两个月**口径给出，并逐月列出加数，其余为年初至今累计口径，均标明。 --- ## 一、总体判断（口径：年初至今累计，产业看板 industryBoard） | 指标 | 今年 | 去年同期 | 同比 | |---|---|---|---| 
+   门禁拦下：46,834
+   工具：汇总/国家/产业专家:dataCatalog{} ｜ 汇总/国家/产业专家:industryBoard{"metric":"sellOut"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:options{"field":"product"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","limit":100} ｜ 汇总/国家/产业专家:options{"field":"product"} ｜ 汇总/国家/产业专家:options{"field":"line"} ｜ PSI 分析专家:healthCheck{"dim":"product"} ｜ PSI 分析专家:rankItems{"dim":"product","by":"cumCur","order":"desc"} ｜ PSI 分析专家:rankItems{"dim":"product","by":"dos","order":"asc"} ｜ PSI 分析专家:rankItems{"dim":"product","by":"yoy","order":"desc"} ｜ 路标与上市专家:options{"field":"series"} ｜ 路标与上市专家:options{"field":"line"} ｜ 路标与上市专家:options{"field":"family"} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"cumCur","order":"desc","limit":10}
+
+==================== 汇总 ====================
+题数 30｜能分析出来 30/30（100%）｜结论正确 28/30（93%）
+未通过：#6(不准) #16(不准)
+结果文件：eval/runs/run-30-v7.txt

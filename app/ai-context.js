@@ -50,6 +50,10 @@ const FILTERS_SCHEMA = {
   description: '筛选，如 {"country":["巴西"]}。键限 ' + DIM_ENUM.join('/') + '；取值先用 options 查。',
   additionalProperties: true,
 };
+function _ANALYTICS() {
+  if (typeof window !== 'undefined' && window.AnalyticsCore) return window.AnalyticsCore;
+  try { return require('./analytics-core.js'); } catch (e) { return { SCHEMAS: {}, build: () => ({}) }; }
+}
 const TOOL_SCHEMAS = {
   meta: { description: '数据源元信息：维度、日期范围、有无财经/IDC/全流程库存。开头先调。', properties: {}, required: [] },
   options: {
@@ -92,6 +96,13 @@ const TOOL_SCHEMAS = {
   searchDim: {
     description: '跨全维度定位一个名称属于哪个维度、精确写法是什么。取不到数/拿不准维度时第一时间用（常见病：把系列名当产品名）。',
     properties: { q: { type: 'string', description: '要定位的名称(如「低成本TWS耳机」)' } }, required: ['q'] },
+  /* 确定性分析层（2026-09-11 用户：「收回代码，我要 100% 的数据准确性」）：排名/对比/健康诊断由 analytics-core 算好，
+     模型只解读。schema 从 AnalyticsCore.SCHEMAS 来，两边不会漂。 */
+  rankItems: _ANALYTICS().SCHEMAS.rankItems,
+  compareItems: _ANALYTICS().SCHEMAS.compareItems,
+  healthCheck: _ANALYTICS().SCHEMAS.healthCheck,
+  opportunity: _ANALYTICS().SCHEMAS.opportunity,
+  outlook: _ANALYTICS().SCHEMAS.outlook,
   rawRows: {
     description: '直查 PSI 底表原始行(未聚合：全维度+日期+SI/SO/INV)。聚合工具查不到/怀疑数据异常时下钻到最底层看记录；默认200行上限500，大范围请用聚合工具。',
     properties: { filters: FILTERS_SCHEMA, from: { type: 'string', description: 'YYYY-MM-DD' }, to: { type: 'string' }, limit: { type: 'number' } }, required: [] },
@@ -556,6 +567,19 @@ const AIData = (function () {
   }
 
   /* ---------- 全局工具集：全部只读、走现有 IPC/window，零新算逻辑 ---------- */
+  let _AT = null;
+  function _analyticsTools(api) {
+    if (_AT) return _AT;
+    _AT = _ANALYTICS().build({
+      report: p => api.report(p),
+      financeProductBoard: p => api.financeProductBoard(Object.assign({ finUnits: FIN_UNITS, finQtyUnits: FIN_QTY }, p)),
+      financeOverview: p => api.financeOverview(p || {}),
+      roadmapProducts: () => { try { const o = JSON.parse(localStorage.getItem('sb.roadmap.products.v1') || 'null'); return (o && o.products) || []; } catch (e) { return []; } },
+      asOf: async () => { try { const c = await api.psiCatalog(); return c && !c.error ? c.to : null; } catch (e) { return null; } },
+      today: () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); },
+    });
+    return _AT;
+  }
   function buildToolRegistry() {
     const api = A();
     const wrap = fn => async (args) => {
@@ -831,6 +855,12 @@ const AIData = (function () {
       }),
       searchDim: wrap(async (a) => api.searchDim(a || {})),
       rawRows: wrap(async (a) => api.rawRows(a || {})),
+      // 确定性分析工具：吃的是同一套 report/财经取数，路标从本地存档读（只读）
+      rankItems: wrap(async (a) => _analyticsTools(api).rankItems(a || {})),
+      compareItems: wrap(async (a) => _analyticsTools(api).compareItems(a || {})),
+      healthCheck: wrap(async (a) => _analyticsTools(api).healthCheck(a || {})),
+      opportunity: wrap(async (a) => _analyticsTools(api).opportunity(a || {})),
+      outlook: wrap(async (a) => _analyticsTools(api).outlook(a || {})),
       docSearch: wrap(a => api.docSearch(String(a.docId || ''), String(a.q || ''), { limit: a.limit, context: a.context })),
       docSlice: wrap(a => api.docSlice(String(a.docId || ''), a.from, a.to)),
       fsList: wrap(a => api.fsList(a)),

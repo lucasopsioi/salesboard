@@ -1,0 +1,282 @@
+题数 54｜可转国产品：SonicBuds SE4 ANC(6 国未进)、Slate 11 Pro(6 国未进)、SonicArc(6 国未进)、Slate SE 10(6 国未进)、Slate 12 Pro(6 国未进)｜全覆盖产品：SonicBuds SE3、Slate SE 11、Slate 11、SonicBuds SE2、SonicBuds Pro 4
+
+【1】T1对比+转国｜SonicBuds SE4 ANC 对比 SonicBuds SE3 表现怎么样？如果把 SonicBuds SE4 ANC 拿到厄瓜多尔去卖，有没有机会？预估能卖多少台？
+   ✅ 正确  18s  | 真值：SonicBuds SE4 ANC 27696 vs SonicBuds SE3 45727；Ecuador 预估 870–1351/中位1287
+   答：**总体判断：SonicBuds SE4 ANC 与 SonicBuds SE3 在 2026 年至今（截至 2026-09-12）的对比是「SE3 走量领先、SE4 ANC 单台更赚钱且动能更稳」；把 SonicBuds SE4 ANC 拿到厄瓜多尔（Ecuador）去卖有机会，预估年初至今累计量级 870–1,351 台、中位 1,287 台。** **一、两款产品对比（口径：2026 年初至今累计，渠道全加不去重，截至 2026-09-12）** - 累计 SO：SonicBuds SE3 45,727 台 vs SonicBuds SE4 ANC 27,696 台，SE3 领先 18,031 台（1.7 倍）。 - 累计 S
+   工具：📐precmp {"type":"precmp","names":["SonicBuds SE3","SonicBuds SE4 ANC"]} ｜ 📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Ecuador"],"analogs":[],"top":{"国家":"Ecuador","中位":1287,"区间低":870,"区间高":1351}}
+
+【2】T1对比+转国｜Slate 11 Pro 和 Slate 11 比，谁卖得更好？Slate 11 Pro 要是推到巴拿马，大概能卖多少？
+   ✅ 正确  16s  | 真值：Slate 11 Pro 25589 vs Slate 11 34714；Panama 预估 599–903/中位750
+   答：**结论：Slate 11 比 Slate 11 Pro 卖得更好（累计 SO 多 9,125 台）；若把 Slate 11 Pro 推向巴拿马，预计年初至今累计量级约 599–903 台，中位 750 台。** --- ## 一、对比表（口径：年初至今累计，截至 2026-09-12） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | Slate 11 | 34,714 台（年初至今累计，产品级，全产品第3名） | 数据未包含 | 数据未包含（仅有近9周周销走弱标记） | 数据
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":750,"区间低":599,"区间高":903}}
+
+【3】T1对比+转国｜综合销量和库存看，SonicArc 跟 SonicBuds SE2 谁更强？SonicArc 进入 Dominican Rep. 市场能不能卖出量，估个数。
+   ✅ 正确  23s  | 真值：SonicArc 6776 vs SonicBuds SE2 23105；Dominican Rep. 预估 145–218/中位215
+   答：**一句话结论：综合销量与库存，SonicBuds SE2 明显更强、应继续主推；SonicArc 是单台盈利质量更高的成长型新品，进入 Dominican Rep.（多米尼加共和国）有量可做但量级很小，年初至今累计预估 145–218 台（中位 215 台）。** ## 一、对比表（行=产品） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | SonicArc | 6,776 台（口径：2026年初至今累计，产品级） | —（口径：去年同期为0，不可比记null） | 数据未包
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Dominican Rep."],"analogs":[],"top":{"国家":"Dominican Rep.","中位":215,"区间低":145,"区间高":218}} ｜ 汇总/国家/产业专家:compareItems{"dim":"product","names":["SonicArc","SonicBuds SE2"]}
+
+【4】T1对比+转国｜帮我比一下 Slate SE 11 和 Slate SE 10，然后判断 Slate SE 10 拿去危地马拉卖有没有机会，能卖多少。
+   🟡 有分析但不准  19s  | 真值：Slate SE 10 2761 vs Slate SE 11 37064；Guatemala 预估 54–84/中位67
+   答：**总体判断：Slate SE 10（Anchovy 系列）与 Slate SE 11（Dorado 系列）同属 Slate SE 家族、平板线，是上一代与新一代的接续关系；Slate SE 10 目前未在危地马拉在售，存在进入机会，但本品整体处于下滑通道，机会量级偏小，建议谨慎小批量试水。** **一、Slate SE 11 vs Slate SE 10 产品表现（口径：年初至今累计，截至 2026-09-12）** - Slate SE 10 累计 SO 合计 2761 台（口径：6 个在售国年初至今累计），国家均量 460 台；Slate SE 11 重叠 6 国累计 SO 31121 台（口径：与本品重叠 6 国年初至今累计
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Guatemala"],"analogs":[],"top":{"国家":"Guatemala","中位":67,"区间低":54,"区间高":84}} ｜ PSI 分析专家:options{"field":"product","contains":"Slate SE"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","filters":{"product":["Slate SE 10","Slate SE 11"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","filters":{"product":["Slate SE 10","Slate SE 11"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"inv","gran":"month","filters":{"product":["Slate SE 10","Slate SE 11"]}}
+
+【5】T1对比+转国｜Slate 12 Pro 对比 Slate 11 表现怎么样？如果把 Slate 12 Pro 拿到哥斯达黎加去卖，有没有机会？预估能卖多少台？
+   ✅ 正确  18s  | 真值：Slate 12 Pro 1998 vs Slate 11 34714；Costa Rica 预估 31–46/中位39
+   答：**总体判断：Slate 12 Pro 对比 Slate 11，Slate 11 仍是绝对主力（累计 SO 领先 17.4 倍），Slate 12 Pro 属新品爬坡、周销走强但基数极小；把 Slate 12 Pro 拿到哥斯达黎加销售有机会，预估年初至今累计量级 31–46 台（中位 39 台）。** **关键数字（每个都带口径与截至时间）** - **Slate 11 累计 SO 34,714 台**（口径：年初至今累计，product=Slate 11，渠道全加；截至 2026-09-12）vs **Slate 12 Pro 累计 SO 1,998 台**（口径：年初至今累计，product=Slate 12 Pro，渠道全加
+   工具：📐precmp {"type":"precmp","names":["Slate 11","Slate 12 Pro"]} ｜ 📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Costa Rica"],"analogs":[],"top":{"国家":"Costa Rica","中位":39,"区间低":31,"区间高":46}} ｜ 定价专家:meta{} ｜ 定价专家:pricingLibRecords{} ｜ 定价专家:dataCatalog{}
+
+【6】T1对比+转国｜SonicBuds SE4 ANC 和 SonicBuds SE2 比，谁卖得更好？SonicBuds SE4 ANC 要是推到乌拉圭，大概能卖多少？
+   ✅ 正确  17s  | 真值：SonicBuds SE4 ANC 27696 vs SonicBuds SE2 23105；Uruguay 预估 380–582/中位565
+   答：**结论：SonicBuds SE4 ANC 比 SonicBuds SE2 卖得更好，主推 SonicBuds SE4 ANC；若推到乌拉圭，年初至今累计量级估计 380–582 台（中位 565 台），周销参考约 21 台/周。** ## 一、对比表（口径：年初至今累计，数据截至 2026-09-12） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | SonicBuds SE4 ANC | 27,696 台（年初至今累计SO，全产品第4名） | +89,241.9%（去年基
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Uruguay"],"analogs":[],"top":{"国家":"Uruguay","中位":565,"区间低":380,"区间高":582}}
+
+【7】T1对比+转国｜综合销量和库存看，Slate 11 Pro 跟 Slate SE 11 谁更强？Slate 11 Pro 进入 Ecuador 市场能不能卖出量，估个数。
+   ✅ 正确  19s  | 真值：Slate 11 Pro 25589 vs Slate SE 11 37064；Ecuador 预估 807–1239/中位1003
+   答：**一句话结论：Slate 11 Pro 与 Slate SE 11 相比，主推 Slate 11 Pro——它增速、单台收益、收入全面领先，Slate SE 11 只在绝对体量和库存周转上更优；Slate 11 Pro 进入厄瓜多尔（Ecuador）能卖出量，年初至今累计量级预估 807–1239 台（中位 1003 台）。** ## 一、对比表（行=产品） | 产品 | 累计SO | SO同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | Slate 11 Pro | 25,589 台（年初至今累计，全球
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Ecuador"],"analogs":[],"top":{"国家":"Ecuador","中位":1003,"区间低":807,"区间高":1239}} ｜ 经营分析专家:compareItems{"dim":"product","names":["Slate 11 Pro","Slate SE 11"]} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["平板"]} ｜ 汇总/国家/产业专家:compareItems{"dim":"product","names":["Slate 11 Pro","Slate SE 11"]}
+
+【8】T1对比+转国｜帮我比一下 SonicBuds Pro 4 和 SonicArc，然后判断 SonicArc 拿去巴拿马卖有没有机会，能卖多少。
+   ✅ 正确  19s  | 真值：SonicArc 6776 vs SonicBuds Pro 4 12800；Panama 预估 160–246/中位237
+   答：**结论：SonicBuds Pro 4 是当前主力（累计 SO 12,800 台、是 SonicArc 的 1.9 倍），但已现「渠道去库存 + 周销走弱」信号；SonicArc 是 2026 年 1 月新上市新品，爬坡快、库存健康，但 SI 明显大于 SO（压货嫌疑）。巴拿马方面，SonicBuds Pro 4 已在售（累计 SO 391 台），SonicArc 尚未进入（实际 SO 0 台），按同口径估计年初至今累计量级约 160–246 台（中位 237 台，周销参考约 10 台/周）——有机会，但量级有限，且需一并考虑本品近 9 周走弱（-10.6%）的动能风险。** --- ## 一、SonicBuds Pro 4 vs
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":237,"区间低":160,"区间高":246}} ｜ 定价专家:meta{} ｜ 定价专家:dataCatalog{} ｜ PSI 分析专家:searchDim{"q":"SonicArc"} ｜ PSI 分析专家:searchDim{"q":"SonicBuds Pro 4"} ｜ PSI 分析专家:dataCatalog{} ｜ 定价专家:options{"field":"product","contains":"Sonic"} ｜ 定价专家:options{"field":"country"} ｜ 定价专家:pricingLibRecords{} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2025-01-01","to":"2026-08-31","filters":{"product":["SonicArc","SonicBuds Pro 4"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2025-01-01","to":"2026-08-31","filters":{"product":["SonicArc","SonicBuds Pro 4"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"inv","gran":"month","from":"2025-01-01","to":"2026-08-31","filters":{"product":["SonicArc","SonicBuds Pro 4"]}} ｜ PSI 分析专家:query{"stack
+
+【9】T2类比｜参考 Slate SE 11 的历史销量，Slate 11 Pro 在多米尼加能不能卖出量？预估能卖多少台？
+   ✅ 正确  15s  | 真值：类比 Slate SE 11→847；区间 551–847/中位556
+   答：**结论：Slate 11 Pro 在多米尼加（Dominican Rep.）目前未在售，但存在进入机会，能卖出量——量级参考 551–847 台（年初至今累计口径，三法最小~最大），中位 556 台，周销参考约 19 台/周；参考类比品 Slate SE 11 在该国累计 SO 1030 台（年初至今累计口径）。** **关键数字（每个都标口径与截至时间，均为 2026-09-12）** - **Slate 11 Pro 多米尼加估计区间：551–847 台**（口径：份额法/规模法/类比法三法最小~最大，年初至今累计量级参考）。 - **Slate 11 Pro 多米尼加估计中位：556 台**（口径：三法中位数，年初至今累计）
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Dominican Rep."],"analogs":["Slate SE 11"],"top":{"国家":"Dominican Rep.","中位":556,"区间低":551,"区间高":847}} ｜ 路标与上市专家:options{"field":"product","contains":"Slate"} ｜ 路标与上市专家:dataCatalog{}
+
+【10】T2类比｜按 SonicBuds SE2 在危地马拉的销量类比，SonicArc 进危地马拉大概能卖多少？
+   ✅ 正确  21s  | 真值：类比 SonicBuds SE2→203；区间 133–203/中位133
+   答：**结论：SonicArc 进入危地马拉（Guatemala）市场，参考 SonicBuds SE2 在该国的实销类比，估计年初至今累计约 133–203 台，中位 133 台；周销参考约 6 台/周。属于「小体量试水」量级，不是承诺值。** **关键数字（均来自本轮 opportunity 工具返回，口径：年初至今累计，截至 2026-08-17）** - **类比法（SonicBuds SE2）**：203 台 —— 口径：类比品在危地马拉累计 SO 581 台 × 换算比 0.349 - **份额法**：133 台 —— 口径：本品在已售国家的产品线份额 6.6% × 目标国产品线 SO 2019 台 - **规模法**：13
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Guatemala"],"analogs":["SonicBuds SE2"],"top":{"国家":"Guatemala","中位":133,"区间低":133,"区间高":203}}
+
+【11】T2类比｜以 Slate SE 11 为参照，Slate SE 10 如果铺到 Costa Rica，年初至今口径能卖到什么量级？
+   ✅ 正确  10s  | 真值：类比 Slate SE 11→65；区间 43–65/中位43
+   答：**总体判断：Slate SE 10 目前尚未在 Costa Rica 上市销售，若铺到 Costa Rica，以 Slate SE 11 为参照，2026 年年初至今（YTD）口径的预估销量量级为 43–65 台，中位 43 台——这是量级参考，不是承诺值。** **关键数字（均截至 2026-09-12）** - **Slate SE 10 在 Costa Rica 实际累计 SO：0 台**（口径：年初至今累计，未在售，无空间值）。 - **Slate SE 10 在 Costa Rica 预估 YTD 区间：43–65 台，中位 43 台**（口径：年初至今累计；三法区间与中位）。 - 份额法：43 台（口径：本品在已售国家
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Costa Rica"],"analogs":["Slate SE 11"],"top":{"国家":"Costa Rica","中位":43,"区间低":43,"区间高":65}}
+
+【12】T2类比｜拿 Slate 11 的历史表现对标一下，Slate 12 Pro 打入乌拉圭有没有机会？能卖多少？
+   ✅ 正确  15s  | 真值：类比 Slate 11→41；区间 27–41/中位27
+   答：**总体判断：Slate 12 Pro 进入乌拉圭（Uruguay）有机会，但属小体量试水级市场——基于 Slate 11 在乌拉圭的历史表现对标，估计进入后年初至今累计量级约 27–41 台（中位 27 台），周销参考约 5 台/周；该产品目前在乌拉圭尚未在售。** **关键数字（均标明口径与截至时间，截至 2026-09-12）** - **对标基准**：Slate 11（product ⊂ Marlin series ⊂ Slate family ⊂ 平板 line）在乌拉圭累计 SO = **599 台**（口径：年初至今累计）。注意这是**年初至今累计**口径，不是某一年度值。 - **目标国市场环境**：乌拉圭平板产品线
+   工具：📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Uruguay"],"analogs":["Slate 11"],"top":{"国家":"Uruguay","中位":27,"区间低":27,"区间高":41}}
+
+【13】T2类比｜参考 SonicBuds SE2 的历史销量，SonicBuds SE4 ANC 在厄瓜多尔能不能卖出量？预估能卖多少台？
+   ✅ 正确  14s  | 真值：类比 SonicBuds SE2→1351；区间 870–1351/中位873
+   答：## 结论 **SonicBuds SE4 ANC 在厄瓜多尔「未在售、有进入机会」，量级参考 870–1351 台（年初至今累计口径，中位 873 台）；SonicBuds SE2 已填退市时间，处于生命周期后段。** 但两者的 shipLate / salesEnd 具体日期，路标存档里我这一轮没有取到——下面说明。 --- ## 一、上市/退市时间（shipLate / salesEnd） **数据未包含。** 本轮我调用的工具（options、dataCatalog）只返回了产品名清单与 PSI/财经层级树，**没有返回路标字段（shipLate、salesEnd、EOM）**。路标数据是手填在本地存档、不在 PSI 底表，
+   工具：📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Ecuador"],"analogs":["SonicBuds SE2"],"top":{"国家":"Ecuador","中位":873,"区间低":870,"区间高":1351}} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"yoy","minCum":1000} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 汇总/国家/产业专家:options{"field":"product","contains":"SonicBuds"} ｜ 汇总/国家/产业专家:options{"field":"country","contains":"Ecuador"} ｜ 路标与上市专家:options{"field":"product","contains":"SonicBuds"} ｜ 路标与上市专家:dataCatalog{}
+
+【14】T2类比｜按 Slate 11 在巴拿马的销量类比，Slate 11 Pro 进巴拿马大概能卖多少？
+   ✅ 正确  12s  | 真值：类比 Slate 11→897；区间 599–897/中位603
+   答：**结论：Slate 11 Pro 若进入巴拿马市场，参考 Slate 11 在巴拿马的销量类比，预估年初至今累计销量约 599–903 台、中位 750 台，周销参考约 25 台/周；但该产品目前尚未在巴拿马在售，实际累计 Sell-out 为 0 台，以上均为预估而非承诺。** **关键数字（每个都带口径与截至时间，均截至 2026-09-12）** - **类比基准——Slate 11 巴拿马累计 Sell-out：1025 台**（口径：product=Slate 11、年初至今累计）。这是本题类比的起点。 - **直接类比 Slate 11 的估计：897 台**（口径：年初至今累计；1025 × 换算比 0.875，换算
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":750,"区间低":599,"区间高":903}}
+
+【15】T2类比｜以 SonicBuds SE3 为参照，SonicArc 如果铺到 Dominican Rep.，年初至今口径能卖到什么量级？
+   ✅ 正确  15s  | 真值：类比 SonicBuds SE3→218；区间 145–218/中位146
+   答：**结论：SonicArc 若铺到 Dominican Rep.，2026 年年初至今（YTD）累计销量量级估计为 145–218 台，中位 146 台，周销参考约 6 台/周——这是「假设上市」的估计值，不是实际销量。** **关键数字（均标注口径与截至时间）** - **目标国现状**：SonicArc 在 Dominican Rep. 实际累计 SO = **0 台**（口径：YTD 累计，未在售）（截至 2026-09-12）。 - **三法估计区间**：**145–218 台**（口径：YTD 累计，份额法/规模法/类比法三法区间）（截至 2026-09-12）；中位 **146 台**（口径：YTD 累计，三法中位数）（
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Dominican Rep."],"analogs":["SonicBuds SE3"],"top":{"国家":"Dominican Rep.","中位":146,"区间低":145,"区间高":218}}
+
+【16】T2类比｜拿 Slate 11 的历史表现对标一下，Slate SE 10 打入危地马拉有没有机会？能卖多少？
+   ✅ 正确  30s  | 真值：类比 Slate 11→80；区间 54–80/中位54
+   答：**结论：按代码预估的 Slate SE 10 未进入国家排名（年初至今累计口径），第 1 名是 Ecuador（中位 108 台，区间 87–134 台），结论应以 Ecuador 为准；Guatemala 不是第 1 名，其估计区间为 54–80 台（中位 54 台），量级更小，建议谨慎小批量试水。** **关键数字（每个都带口径/截至时间）** - **潜在销量估计（Slate SE 10 → Guatemala，年初至今累计口径）**：区间 **54–80 台**，中位 **54 台**。三法拆解： - 份额法 **54 台**（本品在已售国家的产品线份额 3% × 目标国产品线 SO 1790） - 规模法 **54 台*
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Guatemala"],"analogs":["Slate 11"],"top":{"国家":"Guatemala","中位":54,"区间低":54,"区间高":80}} ｜ 🛡verify {"ok":false} ｜ 🛡verify {"ok":true,"fixed":true,"expected":"Ecuador"}
+
+【17】T3下一国｜SonicBuds SE4 ANC 下一个最应该进入哪个国家？大概能卖多少？
+   ✅ 正确  14s  | 真值：第一优先 Ecuador 870–1351/中位1287（结论点名 Ecuador）
+   答：**总体判断：SonicBuds SE4 ANC 下一个最应该进入的国家市场是 Ecuador（厄瓜多尔），进入后按年初至今累计口径预估可卖约 870–1351 台，中位 1287 台——这是全部未在售国家中预估量级最高的一档。** **关键数字（均标注口径与截至时间）** - **推荐国家**：Ecuador（口径：未在售国家中预估中位最高，排名第 1；截至 2026-09-12）。 - **预估销量**：870–1351 台（口径：份额法/规模法/类比法三法区间，年初至今累计量级参考；截至 2026-09-12）；中位 **1287 台**（口径：三法中位数；截至 2026-09-12）。 - **三法拆解**：份额法 870 
+   工具：📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":[],"analogs":[],"top":{"国家":"Ecuador","中位":1287,"区间低":870,"区间高":1351}}
+
+【18】T3下一国｜如果 Slate 11 Pro 只能再开一个国家，选哪个？预估销量是多少？
+   ✅ 正确  13s  | 真值：第一优先 Ecuador 807–1239/中位1003（结论点名 Ecuador）
+   答：**结论：如果 Slate 11 Pro 在 2026 年只能再新开一个国家市场，应选 Ecuador（厄瓜多尔），其 2026 年预估销量中位约 1003 台（区间 807–1239 台，年初至今累计口径，截至 2026-09-12）。** 给业务同事的关键数字如下： - **推荐国家**：Ecuador（口径：6 个未进入国家中预估量级最高，三法估计中位；截至 2026-09-12）。 - **预估销量中位**：1003 台（口径：年初至今累计，三法估计中位数；截至 2026-09-12）。 - **预估销量区间**：807–1239 台（口径：份额法 810 / 规模法 807 / 类比法 1239 与 1195，取最小~最大
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":[],"analogs":[],"top":{"国家":"Ecuador","中位":1003,"区间低":807,"区间高":1239}}
+
+【19】T3下一国｜SonicArc 还没进的国家里，哪个机会最大？给我一个量级。
+   ✅ 正确  13s  | 真值：第一优先 Ecuador 213–331/中位315（结论点名 Ecuador）
+   答：**结论：SonicArc（product，属 Kelp 系列 / SonicArc 家族 / 音频与智能配件产品线）尚未进入的国家中，机会最大的是 Ecuador（厄瓜多尔），机会量级约 213–331 台（中位 315 台，年初至今累计口径，截至 2026-09-12）。** 给业务同事的关键数字： - **未进入国家数 6 个**（口径：年初至今累计，已在售 6 国之外；截至 2026-09-12）。已在售 6 国为 Mexico 1946 台、Brazil 1832 台、Colombia 912 台、Chile 776 台、Peru 703 台、Argentina 607 台，**累计 SO 合计 6776 台**（口径：6
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":[],"analogs":[],"top":{"国家":"Ecuador","中位":315,"区间低":213,"区间高":331}}
+
+【20】T3下一国｜给 Slate SE 10 排一下还没覆盖的国家的优先级，第一优先的能卖多少？
+   ✅ 正确  16s  | 真值：第一优先 Ecuador 87–134/中位108（结论点名 Ecuador）
+   答：**结论：在 industry 看板中，Slate SE 10（product，属 Anchovy series ⊂ Slate SE family ⊂ 平板 line）尚未覆盖的国家/地区里，第一优先级是 Ecuador（厄瓜多尔），2026 年（年初至今累计口径）可销售量估计区间 87–134 台、中位 108 台——但这是机会量级参考，不是承诺量，且本品自身正处于下滑通道，进入前需先解决存量问题。** **关键数字（均标明口径与截至时间）** - **优先级排序（口径：按估计中位降序，opportunity 工具确定性预估；截至 2026 年年初至今）**：Ecuador 87–134 台（中位 108）＞ Panama 65
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":[],"analogs":[],"top":{"国家":"Ecuador","中位":108,"区间低":87,"区间高":134}}
+
+【21】T4空间｜SonicBuds SE3 在巴西还有没有增长空间？还能多卖多少？
+   ✅ 正确  19s  | 真值：已在售 实际 10358，估计 10258–10975/中位10416(已在售 实际10358 空间58)，空间 58
+   答：**结论：SonicBuds SE3 在巴西（Brazil）2026 年还有增长空间，但空间很小——按年初至今累计口径，实际已卖 10,358 台，估计中位 10,416 台，剩余约 58 台；相比 2025 年不是"多卖一个量级"，而是几十台级的自然动销补量。** **关键数字（每个都带口径与截至时间）** - 实际累计 Sell-out：**10,358 台**（口径：2026-01~2026-08 逐月求和，product=SonicBuds SE3，country=Brazil，渠道全加；截至 2026-08） - 实际累计 Sell-in：**11,150 台**（口径：2026-01~2026-08 逐月求和，同上；截至
+   工具：📐preest {"type":"preest","product":"SonicBuds SE3","countries":["Brazil"],"analogs":[],"top":{"国家":"Brazil","中位":10416,"区间低":10258,"区间高":10975}} ｜ PSI 分析专家:options{"field":"product","contains":"SonicBuds SE3"} ｜ PSI 分析专家:options{"field":"country","contains":"Brazil"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:query{"stackDim":"country","metric":"sellIn","gran":"month","from":"2025-01-01","to":"2026-09-12","filters":{"product":["SonicBuds SE3"],"country":["Brazil"]}} ｜ PSI 分析专家:query{"stackDim":"country","metric":"sellOut","gran":"month","from":"2025-01-01","to":"2026-09-12","filters":{"product":["SonicBuds SE3"],"country":["Brazil"]}} ｜ PSI 分析专家:query{"stackDim":"country","metric":"inv","gran":"month","from":"2025-01-01","to":"2026-09-12","filters":{"product":["SonicBuds SE3"],"country":["Brazil"]}} ｜ PSI 分析专家:query{"stackDim":"country","metric":"dos","gran":"month","from":"2025-01-01","to":"2
+
+【22】T4空间｜Slate SE 11 在秘鲁卖得够不够多？对比它在其它国家的份额，有没有空间？
+   ✅ 正确  20s  | 真值：已在售 实际 3131，估计 3066–3304/中位3160(已在售 实际3131 空间29)，空间 29
+   答：**结论：Slate SE 11 在秘鲁的销量属于中位水平、不算洼地；但"是否够多"和"份额对比"都无法用市场份额回答——本系统不含市场大盘数据（IDC 未接入），任何市场份额都算不出来。能判断的只有内部销量口径下还有约 29 台的空间。** **一、秘鲁销量（口径：product=Slate SE 11，Peru，年初至今累计 SO，截至 2026-08-17）** - 实际累计 SO：**3,131 台**（口径：年初至今累计，渠道全加不去重） - 去年同期：**2,506 台**，同比 **+24.9%** - 累计 SI：**3,056 台**，SI 同比 **+2.3%** - 估计区间：**3,066–3,304 台**
+   工具：📐preest {"type":"preest","product":"Slate SE 11","countries":["Peru"],"analogs":[],"top":{"国家":"Peru","中位":3160,"区间低":3066,"区间高":3304}}
+
+【23】T4空间｜看 Slate 11 在 Panama 的表现，是已经到顶了还是还能往上冲？给个量。
+   ✅ 正确  29s  | 真值：已在售 实际 1025，估计 722–1029/中位727(已在售 实际1025 空间-298)，空间 -298
+   答：# Slate 11 在巴拿马（Panama）2026 年表现：已进入平台期，向上空间有限 **结论：不是放量期，也不是断崖式下滑，而是「接近阶段性顶部、动能偏弱」的平台期。** 实际累计 SO 已略超估计中位、逼近区间上限，同时周销连续走弱、SI 大幅收缩，量化上不支持「仍有明显增长空间」的判断。 ## 一、卖了多少（口径：product=Slate 11 + country=Panama，年初至今累计，截至 2026-08） | 指标 | 数值 | 口径 | |---|---|---| | 累计 Sell-out | **1025 台** | 年初至今累计（cumCur） | | 累计 Sell-in | **936 台** |
+   门禁拦下：-12.4、-35.9
+   工具：📐preest {"type":"preest","product":"Slate 11","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":727,"区间低":722,"区间高":1029}} ｜ PSI 分析专家:options{"field":"product","contains":"Slate 11"} ｜ PSI 分析专家:options{"field":"country","contains":"Panama"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:query{"stackDim":"country","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-09-12","filters":{"product":["Slate 11"],"country":["Panama"]}} ｜ PSI 分析专家:query{"stackDim":"country","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-09-12","filters":{"product":["Slate 11"],"country":["Panama"]}} ｜ PSI 分析专家:query{"stackDim":"country","metric":"inv","gran":"month","from":"2026-01-01","to":"2026-09-12","filters":{"product":["Slate 11"],"country":["Panama"]}} ｜ PSI 分析专家:query{"stackDim":"country","metric":"sellOut","gran":"month","from":"2025-01-01","to":"2025-09-12","filters":{"pro
+
+【24】T4空间｜SonicBuds SE2 要不要在哥斯达黎加加大投入？现在卖了多少，理论上还能卖多少？
+   ✅ 正确  17s  | 真值：已在售 实际 458，估计 319–457/中位387(已在售 实际458 空间-71)，空间 -71
+   答：**总体判断：SonicBuds SE2 在哥斯达黎加（Costa Rica）已在售，实际累计 Sell-out 458 台，已超过理论估计上限 457 台，增量空间为 -71 台——不建议单纯靠"加大铺货投入"冲量；市场环境本身不差，问题出在单品自身。** **一、现在卖了多少（实际）** - SonicBuds SE2 哥斯达黎加累计 Sell-out：**458 台**（口径：年初至今累计，product=SonicBuds SE2，country=Costa Rica，截至 2026-09-12） - 该产品全球累计 SO：23,105 台（口径：12 个在售国合计，年初至今累计，截至 2026-09-12） - 哥斯达黎加
+   工具：📐preest {"type":"preest","product":"SonicBuds SE2","countries":["Costa Rica"],"analogs":[],"top":{"国家":"Costa Rica","中位":387,"区间低":319,"区间高":457}}
+
+【25】T4空间｜SonicBuds Pro 4 在巴西还有没有增长空间？还能多卖多少？
+   🟡 有分析但不准  25s  | 真值：已在售 实际 2918，估计 2871–3072/中位2907(已在售 实际2918 空间-11)，空间 -11
+   答：**结论：SonicBuds Pro 4 在巴西已基本到量，短期几乎没有额外增长空间——实际累计 SO 2918 台已略高于估计中位 2907 台，增量空间约 -11 台。真正的机会不在「本品加量」，而在同产品线的结构机会与去库存节奏。** **一、本品在巴西的量与空间（口径：Brazil，product=SonicBuds Pro 4，年初至今累计）** - 实际累计 SO：**2918 台**（report，Brazil 行 cumCur） - 估计区间：**2871–3072 台**，中位 **2907 台**（opportunity，份额法 3056 / 规模法 3072 / 类比法 2871–2913，取三法最小~最大与中
+   门禁拦下：3673
+   工具：📐preest {"type":"preest","product":"SonicBuds Pro 4","countries":["Brazil"],"analogs":[],"top":{"国家":"Brazil","中位":2907,"区间低":2871,"区间高":3072}} ｜ PSI 分析专家:options{"field":"product","contains":"SonicBuds Pro 4"} ｜ PSI 分析专家:options{"field":"country","contains":"Brazil"} ｜ PSI 分析专家:options{"field":"family","contains":"SonicBuds Pro"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2025-01-01","to":"2026-09-30","filters":{"product":["SonicBuds Pro 4"],"country":["Brazil"],"fami ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2025-01-01","to":"2026-09-30","filters":{"product":["SonicBuds Pro 4"],"country":["Brazil"],"fam
+
+【26】T4空间｜SonicBuds SE3 在秘鲁卖得够不够多？对比它在其它国家的份额，有没有空间？
+   ✅ 正确  23s  | 真值：已在售 实际 3875，估计 3792–4085/中位3942(已在售 实际3875 空间67)，空间 67
+   答：**结论先行：SonicBuds SE3 在秘鲁 2026 年初至今累计卖出 3,875 台，在已售 12 国中排第 5、略高于国家均量 3,811 台，属于「已在售、量级合理、还有小幅空间」的状态；但「对比其它国家市场份额」这件事做不到——内部 PSI/财经数据不含市场大盘，任何国家的份额都算不出来，需要 IDC 等外部底表且当前未接入（meta 显示 idcFolder 为 null）。** **一、销量够不够多（口径：2026 年初至今累计 SO）** - SonicBuds SE3 秘鲁累计 SO **3,875 台**（口径：product=SonicBuds SE3 + country=Peru，年初至今累计）。 - 全
+   工具：📐preest {"type":"preest","product":"SonicBuds SE3","countries":["Peru"],"analogs":[],"top":{"国家":"Peru","中位":3942,"区间低":3792,"区间高":4085}}
+
+【27】T4空间｜看 Slate SE 11 在 Panama 的表现，是已经到顶了还是还能往上冲？给个量。
+   ✅ 正确  17s  | 真值：已在售 实际 1098，估计 770–1095/中位776(已在售 实际1098 空间-322)，空间 -322
+   答：**总体判断：Slate SE 11 在巴拿马（Panama）2026 年已接近销量峰值，向上空间有限——实际累计 Sell-out 1098 台已顶到甚至略超三法估计上限 1095 台，叠加近 9 周周销走弱 -11.1%，判断为「已到顶、难再冲」。** **关键数字（每个都带口径与截至时间）** - **实际累计 Sell-out：1098 台**（口径：product=Slate SE 11 × country=Panama，2026-01-01 至数据截至日年初至今累计；截至 2026-09-12） - **实际累计 Sell-in：1077 台**（口径：同上，2026-01 至 2026-08 月度桶求和；截至 2026
+   工具：📐preest {"type":"preest","product":"Slate SE 11","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":776,"区间低":770,"区间高":1095}} ｜ PSI 分析专家:options{"field":"product","contains":"Slate SE 11"} ｜ PSI 分析专家:options{"field":"country","contains":"Panama"} ｜ PSI 分析专家:options{"field":"family","contains":"Slate SE"} ｜ PSI 分析专家:options{"field":"series","contains":"Dorado"} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-09-12","filters":{"family":["Slate SE"],"series":["Dorado"],"product":["Sl ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-09-12","filters":{"family":["Slate SE"],"series":["Dorado"],"product":["S
+
+【28】T4空间｜Slate 11 要不要在哥斯达黎加加大投入？现在卖了多少，理论上还能卖多少？
+   🟡 有分析但不准  17s  | 真值：已在售 实际 678，估计 477–679/中位480(已在售 实际678 空间-198)，空间 -198
+   答：**结论：Slate 11 在哥斯达黎加（Costa Rica）不建议单纯按"还有空白市场"加大投入——按现有三法口径，年初至今累计实际 Sell-out 678 台已基本吃满甚至略超理论空间估计（区间 477–679 台、中位 480 台），且本品近 9 周周销走弱（-15.1%），应先看动能再谈加码。** **关键数字（均标明口径与截至时间）** - **实际卖了多少**：Slate 11 · Costa Rica 累计 Sell-out **678 台**（口径：年初至今累计，product=Slate 11、country=Costa Rica；截至 2026-09-12）。该量在 Slate 11 全部 12 个在售国家中
+   工具：📐preest {"type":"preest","product":"Slate 11","countries":["Costa Rica"],"analogs":[],"top":{"国家":"Costa Rica","中位":480,"区间低":477,"区间高":679}}
+
+【29】T5DOS+预估｜如果把 SonicArc 推到危地马拉，先看危地马拉的音频与智能配件渠道 DOS 有没有风险，再预估能卖多少？
+   ✅ 正确  13s  | 真值：Guatemala 音频与智能配件 DOS 52；预估 133–203/中位198
+   答：**总体判断：SonicArc 若推向危地马拉，渠道端没有库存风险（音频与智能配件渠道 DOS 52 天，绿灯），销量预估为年初至今累计口径 133–203 台、中位 198 台，周销参考约 8 台/周——但这是量级参考，不是承诺。** **一、渠道 DOS 与库存风险（危地马拉，音频与智能配件）** - 渠道 DOS：**52 天**（口径：库存×28÷近4周SO，危地马拉，年初至今；截至 2026-09-12）→ **绿灯，无库存风险**。 - 需求侧支撑：音频与智能配件 SO **2,019 台**（口径：年初至今累计）、同比 **+27.9%**（口径：年初至今累计同比）；危地马拉国家总 SO **3,809 台**（口径：
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Guatemala"],"analogs":[],"top":{"国家":"Guatemala","中位":198,"区间低":133,"区间高":203}}
+
+【30】T5DOS+预估｜Slate SE 10 进 Costa Rica 之前，那边平板的渠道库存周转健康吗？进去能卖多少台？
+   ✅ 正确  16s  | 真值：Costa Rica 平板 DOS 53；预估 43–65/中位54
+   答：**结论：Costa Rica 平板渠道在 Slate SE 10 进入前库存周转健康，没有积压包袱；Slate SE 10 进入后预计年初至今累计量级约 43–65 台、中位 54 台，但本品自身动能偏弱，实际可能落在区间下沿。** **① 风险最大/最该清库存的产品** 按渠道 DOS 降序，风险最大的是 **Slate 11（Costa Rica，product 维度）**：渠道 DOS 58 天，🟢绿灯档（<90 天），尚未构成风险，但它是当前渠道 DOS 最高、且唯一周销走弱的产品，属于最需要盯的一款。 **② 按 DOS 降序的产品表（Costa Rica 平板，数据截至全局最新日）** | 产品 | 累计SO | S
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Costa Rica"],"analogs":[],"top":{"国家":"Costa Rica","中位":54,"区间低":43,"区间高":65}} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product","filters":{"country":["Costa Rica"],"line":["平板"]}} ｜ 汇总/国家/产业专家:options{"field":"country","contains":"Costa"}
+
+【31】T5DOS+预估｜乌拉圭的平板渠道 DOS 是多少？允不允许再放一个 Slate 12 Pro 进去？能卖多少？
+   ✅ 正确  13s  | 真值：Uruguay 平板 DOS 53；预估 27–41/中位34
+   答：**总体判断：乌拉圭（Uruguay）平板（line=平板）渠道当前 DOS 为 53 天、绿灯，库存健康度允许再放入一个 Slate 12 Pro（product=Slate 12 Pro，series=Tarpon）；按同口径估计，放入后年初至今累计可卖量级约 27–41 台（中位 34 台），周销参考约 6 台/周——这是量级参考，不是承诺。** **关键数字（均标注口径与截至时间）** - **乌拉圭平板渠道 DOS = 53 天**（口径：产品线渠道 DOS＝库存×28÷近4周SO，渠道全加不去重，report 口径，绿灯；截至 2026-09-12）。PSI 分析专家与库存与销毛专家两边口径一致，无冲突。 - **市场环
+   工具：📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Uruguay"],"analogs":[],"top":{"国家":"Uruguay","中位":34,"区间低":27,"区间高":41}}
+
+【32】T5DOS+预估｜如果把 SonicBuds SE4 ANC 推到厄瓜多尔，先看厄瓜多尔的音频与智能配件渠道 DOS 有没有风险，再预估能卖多少？
+   ✅ 正确  20s  | 真值：Ecuador 音频与智能配件 DOS 52；预估 870–1351/中位1287
+   答：**结论：SonicBuds SE4 ANC 若推向厄瓜多尔，渠道侧没有库存风险——厄瓜多尔音频与智能配件渠道 DOS 为 52 天、绿灯；销量预估为年初至今累计 870–1351 台，中位 1287 台，周销参考 48 台/周。** **一、厄瓜多尔音频与智能配件渠道 DOS（库存风险）** - 渠道 DOS：**52 天**，红绿灯：**绿灯**（口径：report 口径，库存×28÷近4周SO，最新期快照；line=音频与智能配件，country=Ecuador） - 该产品线在厄瓜多尔年初至今 SO：**3240 台**，同比 **+28.3%**（口径：年初至今累计，line=音频与智能配件，country=Ecuador
+   工具：📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Ecuador"],"analogs":[],"top":{"国家":"Ecuador","中位":1287,"区间低":870,"区间高":1351}}
+
+【33】T5DOS+预估｜Slate 11 Pro 进 Panama 之前，那边平板的渠道库存周转健康吗？进去能卖多少台？
+   ✅ 正确  20s  | 真值：Panama 平板 DOS 53；预估 599–903/中位750
+   答：**结论：巴拿马（Panama）平板渠道在 Slate 11 Pro 进入前库存周转健康，无高风险产品、无需清库存动作；Slate 11 Pro 进入后预计首销 599–903 台（中位 750 台）。** --- ## 一、风险最大/最该清库存的产品 **无。** 按 healthCheck 返回，巴拿马平板渠道**红灯产品数 0 个**（口径：渠道 DOS>120 或全流程 DOS>150）、**压货嫌疑产品数 0 个**（口径：SI/SO>1.3），两款在售平板渠道 DOS 分别为 58 天、49 天，**全部绿灯档位**，不存在需要点名清库存的产品。 ## 二、按 DOS 降序的产品表 | 产品 | 渠道DOS(天) | 灯
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":750,"区间低":599,"区间高":903}} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product","filters":{"country":["Panama"],"line":["平板"]}} ｜ 汇总/国家/产业专家:options{"field":"country","contains":"Panama"}
+
+【34】T5DOS+预估｜多米尼加的音频与智能配件渠道 DOS 是多少？允不允许再放一个 SonicArc 进去？能卖多少？
+   ✅ 正确  16s  | 真值：Dominican Rep. 音频与智能配件 DOS 53；预估 145–218/中位215
+   答：**结论：多米尼加共和国（Dominican Rep.）音频与智能配件渠道当前 DOS 为 53 天（绿灯、健康），渠道仍有容量再放入一个 SonicArc；SonicArc 在该渠道的年初至今累计销量估计区间为 145–218 台，中位 215 台，周销参考约 9 台/周。** **关键数字（均标注口径与截至时间）** - **渠道 DOS = 53 天**：口径为库存×28÷近4周SO（report 口径，跨看板一致），最新期快照、不跨期相加；灯号绿（report 口径）。截至 2026-09-12。PSI 专家与库存销毛专家均给 53 天，口径一致；PSI 侧仅写「最新可用期间」，库存侧明确为 2026-09-12，两者不冲突
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Dominican Rep."],"analogs":[],"top":{"国家":"Dominican Rep.","中位":215,"区间低":145,"区间高":218}} ｜ 库存与销毛专家:report{"groupDim":"channel","filters":{"country":["Dominican Rep."],"line":["音频与智能配件"]}} ｜ 库存与销毛专家:options{"field":"country","contains":"Dominican"} ｜ 库存与销毛专家:options{"field":"line","contains":"音频"}
+
+【35】T6收入+转国｜SonicBuds SE4 ANC 和 SonicBuds SE2 收入、销量综合看，该多推哪个？如果把 SonicBuds SE4 ANC 推到哥斯达黎加能卖多少？
+   ✅ 正确  20s  | 真值：SonicBuds SE4 ANC SO 27696/收入 953964，SonicBuds SE2 SO 23105/收入 487847；预估 431–654/中位645
+   答：# SonicBuds SE4 ANC vs SonicBuds SE2（2026 年）主推决策 + 哥斯达黎加预估 **一句话结论：2026 年应主推 SonicBuds SE4 ANC——它在收入、销量、单台收益上全面领先 SonicBuds SE2；若推到哥斯达黎加，预计年初至今累计可卖 431–654 台，中位约 645 台，周销参考约 24 台/周。** --- ## 一、对比表（行=产品） | 产品 | 累计SO | SO同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | **SonicBuds 
+   工具：📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Costa Rica"],"analogs":[],"top":{"国家":"Costa Rica","中位":645,"区间低":431,"区间高":654}} ｜ 汇总/国家/产业专家:meta{} ｜ 汇总/国家/产业专家:compareItems{"dim":"product","names":["SonicBuds SE4 ANC","SonicBuds SE2"]} ｜ PSI 分析专家:compareItems{"dim":"product","names":["SonicBuds SE4 ANC","SonicBuds SE2"]} ｜ PSI 分析专家:options{"field":"product","contains":"SonicBuds"} ｜ 经营分析专家:compareItems{"dim":"product","names":["SonicBuds SE4 ANC","SonicBuds SE2"]} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["音频与智能配件"]}
+
+【36】T6收入+转国｜从收入和销量两方面对比 Slate SE 11 与 Slate 11 Pro，再告诉我 Slate 11 Pro 拿到 Uruguay 有多大机会、能卖多少台。
+   ✅ 正确  16s  | 真值：Slate 11 Pro SO 25589/收入 5370107，Slate SE 11 SO 37064/收入 3314831；预估 351–529/中位438
+   答：**总体判断：2026 年 Slate 11 Pro 与 Slate SE 11 是「量 vs 质」的分工——Slate SE 11 卖得更多，Slate 11 Pro 收入更高、增速更快、单台更值钱；而 Slate 11 Pro 在 Uruguay 目前尚未在售，估计年初至今累计可做 351–529 台（中位 438 台），有机会但动能存疑。** **一、销量对比（口径：PSI 底表，2026 年初至今累计 SO）** - Slate 11 Pro 累计 SO 25,589 台，Slate SE 11 累计 SO 37,064 台；Slate SE 11 领先 11,475 台（约 1.4 倍）。 - 同比看：Slate 11 P
+   工具：📐precmp {"type":"precmp","names":["Slate 11 Pro","Slate SE 11"]} ｜ 📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Uruguay"],"analogs":[],"top":{"国家":"Uruguay","中位":438,"区间低":351,"区间高":529}}
+
+【37】T6收入+转国｜SonicArc 与 SonicBuds Pro 4 谁更赚钱、谁卖得更多？SonicArc 进入厄瓜多尔的预估量是多少？
+   ✅ 正确  17s  | 真值：SonicArc SO 6776/收入 331642，SonicBuds Pro 4 SO 12800/收入 854855；预估 213–331/中位315
+   答：**一句话结论：2026 年（截至 2026-09-12）SonicBuds Pro 4 比 SonicArc 卖得更多、收入与销毛也更高，是主推款；SonicArc 进入厄瓜多尔属未在售的机会量级，预估中位 315 台、区间 213–331 台（非承诺）。** ## 一、对比表（行=产品） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | SonicArc | 6,776 台（年初至今累计SO，截至2026-09-12） | 不可比（去年同期为0，新品） | 数据未包含（仅有近
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preest {"type":"preest","product":"SonicArc","countries":["Ecuador"],"analogs":[],"top":{"国家":"Ecuador","中位":315,"区间低":213,"区间高":331}} ｜ 经营分析专家:compareItems{"dim":"product","names":["SonicArc","SonicBuds Pro 4"]} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["音频与智能配件"]}
+
+【38】T6收入+转国｜Slate SE 10 和 Slate 11 收入、销量综合看，该多推哪个？如果把 Slate SE 10 推到巴拿马能卖多少？
+   ✅ 正确  18s  | 真值：Slate SE 10 SO 2761/收入 239255，Slate 11 SO 34714/收入 3520941；预估 65–98/中位81
+   答：**一句话结论：2026 年综合收入与销量，应主推 Slate 11（不是 Slate SE 10）；若把 Slate SE 10 推向巴拿马，预计可卖 65–98 台（中位 81 台，年初至今累计口径）。** ## 对比表（Slate 11 vs Slate SE 10） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | Slate 11 | 34,714 台（2026年初至今累计，截至2026-09-12） | +0.5%（2026 vs 2025 年初至今，截至2026-0
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":81,"区间低":65,"区间高":98}} ｜ 经营分析专家:compareItems{"dim":"product","names":["Slate SE 10","Slate 11"]} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["平板"]} ｜ 汇总/国家/产业专家:compareItems{"dim":"product","names":["Slate 11","Slate SE 10"]}
+
+【39】T6收入+转国｜从收入和销量两方面对比 Slate 11 Pro 与 Slate 12 Pro，再告诉我 Slate 12 Pro 拿到 Dominican Rep. 有多大机会、能卖多少台。
+   ✅ 正确  19s  | 真值：Slate 12 Pro SO 1998/收入 0，Slate 11 Pro SO 25589/收入 5370107；预估 43–66/中位54
+   答：**总体判断：Slate 11 Pro 与 Slate 12 Pro 的对比中，Slate 11 Pro 在销量与收入两端全面领先；Slate 12 Pro 在 Dominican Rep.（多米尼加共和国）目前尚未在售，属"有进入机会"的空白市场，预计年初至今累计量级 43–66 台（中位 54 台）。** --- **一、销量对比（PSI 口径，年初至今累计，截至 2026-09-12）** - Slate 11 Pro 累计 SO **25,589 台**（口径：PSI 年初至今累计，全球渠道全加）；Slate 12 Pro 累计 SO **1,998 台**（同口径）。 - 差值 **23,591 台**、倍数 **12.8
+   工具：📐precmp {"type":"precmp","names":["Slate 11 Pro","Slate 12 Pro"]} ｜ 📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Dominican Rep."],"analogs":[],"top":{"国家":"Dominican Rep.","中位":54,"区间低":43,"区间高":66}}
+
+【40】T6收入+转国｜SonicBuds SE4 ANC 与 SonicBuds Pro 4 谁更赚钱、谁卖得更多？SonicBuds SE4 ANC 进入危地马拉的预估量是多少？
+   ✅ 正确  20s  | 真值：SonicBuds SE4 ANC SO 27696/收入 953964，SonicBuds Pro 4 SO 12800/收入 854855；预估 542–829/中位807
+   答：**一句话结论：2026 年（截至 2026-09-12）SonicBuds SE4 ANC 比 SonicBuds Pro 4 卖得更多、收入与销毛额也更高，是更值得主推的一方；但 SonicBuds Pro 4 单台更赚钱（NSIP 与销毛率略高）。SonicBuds SE4 ANC 进入危地马拉（Guatemala）目前未在售，预估年初至今累计量级 542–829 台，中位 807 台。** --- ## 一、对比表（行=产品） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---|
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Guatemala"],"analogs":[],"top":{"国家":"Guatemala","中位":807,"区间低":542,"区间高":829}} ｜ 汇总/国家/产业专家:compareItems{"dim":"product","names":["SonicBuds SE4 ANC","SonicBuds Pro 4"]} ｜ 汇总/国家/产业专家:options{"field":"product","contains":"SonicBuds"}
+
+【41】T7二选一｜厄瓜多尔和巴拿马，哪个国家更值得推 Slate 11 Pro？各能卖多少？
+   ✅ 正确  19s  | 真值：Ecuador 807–1239/中位1003 vs Panama 599–903/中位750，应选 Ecuador（结论先点 Ecuador）
+   答：**结论：2026 年推广 Slate 11 Pro，厄瓜多尔（Ecuador）比巴拿马（Panama）更值得主推——厄瓜多尔预估中位 1003 台，比巴拿马中位 750 台多约 253 台（+34%）；但两国目前都还没在售，实际累计 SO 均为 0 台，以下都是量级参考、不是承诺。** --- ## 一、对比表（行=国家，列=本题要求的指标） | 国家 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | **Ecuador 厄瓜多尔** | 实际 0 台（口径：Slate 11 Pro 实
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Ecuador","Panama"],"analogs":[],"top":{"国家":"Ecuador","中位":1003,"区间低":807,"区间高":1239}}
+
+【42】T7二选一｜SonicArc 下一步进 Panama 还是 Guatemala？分别预估一下量。
+   ✅ 正确  19s  | 真值：Panama 160–246/中位237 vs Guatemala 133–203/中位198，应选 Panama（结论先点 Panama）
+   答：**结论：SonicArc（产品，family=SonicArc / product=SonicArc，隶属 Kelp 系列、音频与智能配件线）下一步应优先进入巴拿马（Panama），危地马拉（Guatemala）作为第二梯队；两国 2026 年预估销量均为「年初至今累计」口径的估计值，非承诺量。** **关键数字（逐国列出，口径与截至时间均标注）** - **Panama（巴拿马）**：预估区间 **160–246 台**（口径：2026 年年初至今累计，份额法/规模法/类比法三法最小~最大；截至 2026-09-12）；预估中位 **237 台**（口径：三法中位数，年初至今累计；截至 2026-09-12）；周销参考 **10
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Panama","Guatemala"],"analogs":[],"top":{"国家":"Panama","中位":237,"区间低":160,"区间高":246}}
+
+【43】T7二选一｜如果 Slate SE 10 只能选多米尼加或危地马拉之一进入，选哪个？两个国家各自能卖多少？
+   ✅ 正确  14s  | 真值：Dominican Rep. 59–92/中位75 vs Guatemala 54–84/中位67，应选 Dominican Rep.（结论先点 Dominican Rep.）
+   答：**结论：Slate SE 10 若只能在多米尼加（Dominican Rep.）与危地马拉（Guatemala）中二选一，建议选多米尼加——预计中位约 75 台（区间 59–92 台），高于危地马拉的约 67 台（区间 54–84 台）。** **关键数字（每个都标口径/截至时间）** - **Slate SE 10 多米尼加预计销量**：中位 **75 台**（口径：2026 年初至今累计 SO 量级参考，三法中位数；截至 2026-09-12）；区间 **59–92 台**（口径：份额法 60 / 规模法 59 / 类比 Slate SE 11 92、类比 Slate 11 89，取最小~最大；截至 2026-09-12）。 
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Dominican Rep.","Guatemala"],"analogs":[],"top":{"国家":"Dominican Rep.","中位":75,"区间低":59,"区间高":92}}
+
+【44】T7二选一｜危地马拉和乌拉圭，哪个国家更值得推 Slate 12 Pro？各能卖多少？
+   ✅ 正确  19s  | 真值：Guatemala 39–60/中位49 vs Uruguay 27–41/中位34，应选 Guatemala（结论先点 Guatemala）
+   答：**一句话结论：2026 年危地马拉比乌拉圭更值得推广 Slate 12 Pro——危地马拉预估累计 SO 中位 49 台（区间 39–60 台），乌拉圭中位 34 台（区间 27–41 台），危地马拉全面领先，建议优先推危地马拉。** --- ## 一、对比表（对象：Slate 12 Pro 在危地马拉 vs 乌拉圭） | 项目 | 危地马拉 Guatemala | 乌拉圭 Uruguay | 领先方 | |---|---|---|---| | 是否已在售 | 否（未在售） | 否（未在售） | 平 | | 实际累计 SO | 0 台（年初至今累计） | 0 台（年初至今累计） | 平 | | 预估累计 SO 区间 | **39–
+   工具：📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Guatemala","Uruguay"],"analogs":[],"top":{"国家":"Guatemala","中位":49,"区间低":39,"区间高":60}}
+
+【45】T7二选一｜SonicBuds SE4 ANC 下一步进 Costa Rica 还是 Uruguay？分别预估一下量。
+   ✅ 正确  19s  | 真值：Costa Rica 431–654/中位645 vs Uruguay 380–582/中位565，应选 Costa Rica（结论先点 Costa Rica）
+   答：**结论：SonicBuds SE4 ANC 下一步应优先进入 Costa Rica，而不是 Uruguay；两国 2026 年预估销量（年初至今累计口径，截至 2026-09-12）Costa Rica 中位 645 台、Uruguay 中位 565 台，Costa Rica 量级与市场盘子都略优。** **一、总体判断** - SonicBuds SE4 ANC 在 Costa Rica 与 Uruguay 目前均未在售，实际累计 SO 均为 0 台（口径：年初至今累计，产品维度，截至 2026-09-12），因此两国都只有预估、没有已实现销量，也没有「已实现 vs 剩余空间」拆分（空间为 null）。 - 若资源只够先开一国，
+   工具：📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Costa Rica","Uruguay"],"analogs":[],"top":{"国家":"Costa Rica","中位":645,"区间低":431,"区间高":654}}
+
+【46】T7二选一｜如果 Slate 11 Pro 只能选乌拉圭或巴拿马之一进入，选哪个？两个国家各自能卖多少？
+   🟡 有分析但不准  18s  | 真值：Uruguay 351–529/中位438 vs Panama 599–903/中位750，应选 Panama（结论先点 Uruguay）
+   答：**结论：Slate 11 Pro 若 2026 年只能在乌拉圭和巴拿马之间二选一，应选巴拿马（Panama）**——巴拿马预计约 750 台（区间 599–903 台），乌拉圭预计约 438 台（区间 351–529 台），巴拿马中位约为乌拉圭的 (未取到) 倍（750÷438）。 **关键数字（口径均为「年初至今累计」，与看板同口径）** - **Slate 11 Pro 巴拿马预估销量**：中位 750 台，区间 599–903 台。三法明细：份额法 599 台、规模法 603 台、类比 Slate SE 11 得 903 台、类比 Slate 11 得 897 台；区间取三法最小~最大，中位取三法中位数。周销参考 25 台/
+   门禁拦下：1.7、71
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Uruguay","Panama"],"analogs":[],"top":{"国家":"Uruguay","中位":438,"区间低":351,"区间高":529}}
+
+【47】T8线级+预估｜SonicArc 所在的音频与智能配件在乌拉圭的渠道 DOS 和同比是多少？SonicArc 进去能卖多少？
+   ✅ 正确  19s  | 真值：Uruguay 音频与智能配件 DOS 53，同比 24.6%；预估 93–142/中位138
+   答：**结论：SonicArc（产品，属 Kelp 系列 / SonicArc 家族 / 音频与智能配件产业）在乌拉圭目前未在售，其所在产业 2026 年渠道 DOS 为 53 天、年初至今 SO 同比 +24.6%；若进入乌拉圭，预计年初至今累计可卖 93–142 台，中位 138 台。** --- **一、产业渠道 DOS 与同比（乌拉圭 · 音频与智能配件产业）** - 渠道 DOS：**53 天**（口径：渠道 DOS（非全流程 DOS），当前时点快照；截至 2026-09-12）——判定为绿灯。 - SO 同比：**+24.6%**（口径：产业整体口径，年初至今累计同比；截至 2026-09-12）。 - 参考基数：该产业 S
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Uruguay"],"analogs":[],"top":{"国家":"Uruguay","中位":138,"区间低":93,"区间高":142}} ｜ PSI 分析专家:options{"field":"line","contains":"音频"} ｜ PSI 分析专家:options{"field":"country","contains":"Uruguay"} ｜ PSI 分析专家:options{"field":"product","contains":"SonicArc"} ｜ PSI 分析专家:options{"field":"family","contains":"SonicArc"} ｜ PSI 分析专家:options{"field":"series","contains":"Kelp"} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:query{"stackDim":"country","metric":"dos","gran":"month","from":"2026-01-01","to":"2026-09-12","filters":{"country":["Uruguay"],"line":["音频与智能配件"],"family":["SonicAr ｜ PSI 分析专家:query{"stackDim":"country","metric":"dos","gran":"month","from":"2025-01-01","to":"2025-09-12","filters":{"country":["Uruguay"],"line":["音频与智能配件"],"family":["SonicAr ｜ PSI 分析专家:query{"stackDim":"country","metric":"dos","gran":"month","from":"2026-01-01","to":"2026-09
+
+【48】T8线级+预估｜厄瓜多尔的平板今年同比怎么样、渠道周转多少天？在这个盘子里 Slate SE 10 能分到多少量？
+   ✅ 正确  24s  | 真值：Ecuador 平板 DOS 54，同比 13.2%；预估 87–134/中位108
+   答：**结论：厄瓜多尔平板电脑（line=平板，全渠道全品牌合计）2026 年年初至今销量 2,873 台、同比 +13.2%，渠道 DOS 54 天（绿灯）；Slate SE 10（product，属 Anchovy 系列 / Slate 家族 / 平板线）目前未在厄瓜多尔在售，实际累计 SO = 0 台，预估可分配到 87–134 台（中位 108 台），约占该盘子的 3.0%–(未取到)%（中位约 3.8%）。** **关键数字（均标注口径与截至时间）** - **平板市场销量同比**：累计 SO **2,873 台**（口径：2026 年年初至今，country=Ecuador、line=平板，全渠道全品牌合计），去年同期 SO
+   门禁拦下：4.7
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Ecuador"],"analogs":[],"top":{"国家":"Ecuador","中位":108,"区间低":87,"区间高":134}} ｜ 汇总/国家/产业专家:options{"field":"country","contains":"Ecuador"} ｜ 汇总/国家/产业专家:options{"field":"line","contains":"平板"} ｜ 汇总/国家/产业专家:report{"groupDim":"country","filters":{"country":["Ecuador"],"line":["平板"]}} ｜ 汇总/国家/产业专家:report{"groupDim":"line","filters":{"country":["Ecuador"],"line":["平板"]}}
+
+【49】T8线级+预估｜Slate 12 Pro 所在的平板在巴拿马的渠道 DOS 和同比是多少？Slate 12 Pro 进去能卖多少？
+   ✅ 正确  18s  | 真值：Panama 平板 DOS 53，同比 9.8%；预估 47–70/中位59
+   答：**结论：Slate 12 Pro 目前尚未进入巴拿马渠道，它本身没有 DOS、没有同比；它所在的平板品类（line=平板）在巴拿马的渠道 DOS 为 53 天、SO 同比 +9.8%；若进入巴拿马，预计 2026 年初至今可卖 47–70 台（中位 59 台，Sell-out 口径）。** --- **一、Slate 12 Pro 本身在巴拿马：无数据，不是 0** - 在售状态：**未在售**（口径：巴拿马，年初至今累计 SO=0 台，截至 2026-09-12） - DOS：**数据未包含**（口径：该产品在巴拿马无销售记录，无 DOS，截至 2026-09-12） - DOS 同比：**数据未包含**（口径：无基期数据，截至
+   工具：📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":59,"区间低":47,"区间高":70}} ｜ PSI 分析专家:options{"field":"country","contains":"Panama"} ｜ PSI 分析专家:options{"field":"product","contains":"Slate 12 Pro"} ｜ PSI 分析专家:options{"field":"line"} ｜ PSI 分析专家:report{"groupDim":"country","filters":{"country":["Panama"],"line":["平板"]}} ｜ PSI 分析专家:query{"stackDim":"country","metric":"dos","gran":"month","from":"2025-01-01","to":"2026-09-12","filters":{"country":["Panama"],"line":["平板"]}}
+
+【50】T8线级+预估｜多米尼加的音频与智能配件今年同比怎么样、渠道周转多少天？在这个盘子里 SonicBuds SE4 ANC 能分到多少量？
+   ✅ 正确  22s  | 真值：Dominican Rep. 音频与智能配件 DOS 53，同比 27.9%；预估 591–892/中位880
+   答：**结论：多米尼加音频与智能配件 2026 年年初至今累计 SO 2201 台，同比 +27.9%；渠道 DOS 53 天（绿灯）。SonicBuds SE4 ANC 在多米尼加尚未在售，实际累计 SO 为 0 台，因此没有已实现的销量份额；只能给「若进入」的量级估计 591–892 台（中位 880 台）。** **一、行业盘子（多米尼加 · 音频与智能配件）** | 指标 | 数值 | 口径 | |---|---|---| | 累计 SO | **2201 台** | 2026 年初至今，country=Dominican Rep.，line=音频与智能配件 | | 去年同期 SO | 1721 台 | 2025 年同期（同口径
+   门禁拦下：431、206
+   工具：📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Dominican Rep."],"analogs":[],"top":{"国家":"Dominican Rep.","中位":880,"区间低":591,"区间高":892}}
+
+【51】T9周销｜SonicBuds SE4 ANC 如果进入多米尼加，按现在的周销节奏每周大概能卖多少台？年初至今口径总量呢？
+   ✅ 正确  11s  | 真值：周销参考 33；预估 591–892/中位880
+   答：**SonicBuds SE4 ANC 若进入多米尼加（Dominican Rep.），按当前周销节奏预计每周约 33 台，2026 年初至今累计口径预计约 591–892 台（中位 880 台）——这是机会预估量级，不是承诺。** **关键数字（均截至 2026-09-12）** - **周销参考：33 台/周**（口径：本品近 4 周周销均值按「中位 ÷ 本品累计」等比换算，已剔除末端 2 周报量延迟的 0 值）。 - **年初至今累计中位：880 台**（口径：份额法 / 规模法 / 类比法三法中位数，年初至今累计口径）。 - **累计估计区间：591–892 台**（口径：三法最小~最大）。 - **份额法：591 台**（
+   工具：📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Dominican Rep."],"analogs":[],"top":{"国家":"Dominican Rep.","中位":880,"区间低":591,"区间高":892}}
+
+【52】T9周销｜把 Slate 11 Pro 放到 Guatemala，一周能走多少台？累计能到多少？
+   ✅ 正确  11s  | 真值：周销参考 21；预估 503–772/中位625
+   答：**结论：Slate 11 Pro 目前未在危地马拉（Guatemala）在售，若放入该市场，预计一周约 21 台/周、年初至今累计约 503–772 台（中位 625 台），属量级参考而非承诺。** **关键数字（均截至 2026-09-12）** - **一周预估**：约 **21 台/周**（口径：本品近 4 周周销均值按「中位 ÷ 本品累计」等比换算；非 Guatemala 实测值）。 - **累计预估区间**：**503–772 台**（口径：年初至今累计，份额法/规模法/类比法三法区间）。 - **累计预估中位**：**625 台**（口径：年初至今累计，三法中位数）。 - **三法拆解**：份额法 **505 台**、
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Guatemala"],"analogs":[],"top":{"国家":"Guatemala","中位":625,"区间低":503,"区间高":772}}
+
+【53】T9周销｜SonicArc 如果进入哥斯达黎加，按现在的周销节奏每周大概能卖多少台？年初至今口径总量呢？
+   ✅ 正确  20s  | 真值：周销参考 7；预估 105–160/中位158
+   答：**SonicArc（产品，属 Kelp 系列 / 音频与智能配件产品线）目前尚未在哥斯达黎加销售。若进入，按当前周销节奏估算约 7 台/周；2026 年年初至今累计口径量级约 105–160 台（中位 158 台）——属百台级小体量试水机会，不是承诺值。** **关键数字（口径均为年初至今累计 / 最新期快照）** - **周销参考：7 台/周**（口径：本品近 4 周周销均值按「中位 ÷ 本品累计」等比换算，已剔除末端 2 周报量延迟） - **年初至今累计估计区间：105–160 台**（口径：年初至今累计，份额法/规模法/类比法三法最小~最大） - **估计中位：158 台**（口径：年初至今累计，三法中位数） - 分法拆解
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Costa Rica"],"analogs":[],"top":{"国家":"Costa Rica","中位":158,"区间低":105,"区间高":160}}
+
+【54】T9周销｜把 Slate SE 10 放到 Uruguay，一周能走多少台？累计能到多少？
+   ✅ 正确  13s  | 真值：周销参考 0；预估 38–57/中位47
+   答：**结论：Slate SE 10 目前未在 Uruguay 在售，若放入该市场，2026 年单周 Sell-out 参考约 0 台/周，年初至今累计量级约 38–57 台（中位 47 台）——这是「进入机会预估」，不是实际销量，也不是路标目标。** **关键数字（均截至 2026-09-12）** - **单周**：0 台/周（口径：周销参考＝本品近 4 周周销均值按中位÷本品累计等比换算；前提是本品未在 Uruguay 在售） - **累计区间**：38–57 台（口径：机会预估·年初至今累计口径·三法最小~最大） - **累计中位**：47 台（口径：机会预估·三法中位数） - **三法拆解**：份额法 38 台（本品已售国产品
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Uruguay"],"analogs":[],"top":{"国家":"Uruguay","中位":47,"区间低":38,"区间高":57}}
+
+==================== 汇总 ====================
+题数 54｜能分析出来 54/54（100%）｜结论正确 50/54（93%）
+分场景：T1对比+转国 7/8｜T2类比 8/8｜T3下一国 4/4｜T4空间 6/8｜T5DOS+预估 6/6｜T6收入+转国 6/6｜T7二选一 5/6｜T8线级+预估 4/4｜T9周销 4/4
+未通过：#4(不准) #25(不准) #28(不准) #46(不准)
+结果文件：eval/runs/run-composite-v1.txt

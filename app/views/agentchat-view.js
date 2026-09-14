@@ -331,7 +331,13 @@
         : e.type === 'tool' ? ('　🔧 ' + e.tool)
         : e.type === 'toolDone' ? null
         : e.type === 'agentDone' ? ('🤖 ' + e.agent + ' ✓')
-        : e.type === 'synth' ? '🧩 综合结论…' : null;
+        : e.type === 'synth' ? '🧩 综合结论…'
+        : e.type === 'prerank' ? ('📐 代码预排名：' + e.by + e.order + '，第 1 名 ' + e.top + '（' + e.value + ' ' + e.unit + '）')
+        : e.type === 'prediag' ? ('📐 代码预诊断：' + (e.counts || []).join('，'))
+        : e.type === 'preest' ? ('📐 代码预估：' + e.product + (e.countries.length ? ' → ' + e.countries.join('/') : ' 未进入国家排名') + (e.top ? '，' + e.top.国家 + ' 中位 ' + e.top.中位 + ' 台（' + e.top.区间低 + '–' + e.top.区间高 + '）' : ''))
+        : e.type === 'preoutlook' ? ('📐 代码前瞻：未来 ' + e.weeks + ' 周' + (e.top ? '，第 1 名 ' + e.top.name + ' 中性 ' + e.top.中性 + ' 台' : '') + (e.dosTarget ? '，DOS 目标 ' + e.dosTarget + ' 天' : ''))
+        : e.type === 'precmp' ? ('📐 代码预对比：' + e.names.join(' vs '))
+        : e.type === 'verify' ? (e.pinned ? '🛡 模型改后仍不一致，已把代码排名钉在答案最前面 → ' + e.expected : e.ok ? (e.fixed ? '🛡 结论已按代码排名改正 → ' + e.expected : '🛡 结论核对通过') : '🛡 结论与代码排名不一致，要求模型改正…') : null;
       if (label) { ss.flowLive.push(label); if (ss.flowLive.length > 40) ss.flowLive.shift(); }
       if (AC.cur === sid) renderChat();
     };

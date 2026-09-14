@@ -1,0 +1,27 @@
+真值摘要：top cum=SonicBuds SE3/Slate SE 11/Slate 11；top yoy=SonicBuds SE4 ANC89242%/Slate 11 Pro214%/SonicBuds SE3117%；最高DOS=Slate SE 10(461)；同比为负=SonicBuds SE2/Slate SE 10；周走势下滑=Slate 11/Slate SE 10；去库存=Slate 11/SonicBuds Pro 4；Slate 11 最强国家=Mexico；贡献最大=SonicBuds SE4 ANC/SonicBuds SE3；收入最高=Slate 11 Pro
+
+【3】哪个产品的库存风险最大？为什么？
+   ✅ 正确  15s  | 真值：DOS 最高=Slate SE 10(461)
+   答：**结论：截至 2026-09-11，产业看板中库存风险最大、最该清库存的产品是 Slate SE 10——渠道 DOS 461 天、全流程 DOS 461 天，渠道与全流程双双红灯，是全品类唯一红灯产品。** --- **一、一句话总体判断** Slate SE 10 是唯一触发红灯的产品，DOS 是第 2 名的 8 倍以上，且销量同比大幅下滑、周销持续走弱，属于典型的「尾部动销几乎归零、尾货积压」型库存风险，而非渠道压货。 **二、按渠道 DOS 降序的产品表**（口径：渠道 DOS = 渠道库存×28÷近4周SO，产品维度；截至 2026-09-11） | 名次 | 产品 | 渠道DOS(天) | 渠道灯 | 全流程DOS(天
+   工具：📐prerank {"type":"prerank","dim":"product","by":"渠道DOS","order":"降序","top":"Slate SE 10","value":461,"unit":"天","n":10,"filters":{}} ｜ 📐prediag {"type":"prediag","dim":"product","keys":["周销走弱","渠道去库存","压货嫌疑","库存风险_按渠道DOS降序","红灯","报量延迟提示"],"counts":["周销走弱 8","渠道去库存 2","压货嫌疑 2","库存风险_按渠道DOS降序 10","红灯 1","报量延迟提示 5"],"filters":{}}
+
+【14】Slate 11 和 Slate 11 Pro 今年的收入和单台净售价（NSIP）分别是多少？
+   ✅ 正确  13s  | 真值：收入 5.37M/3.52M，NSIP 270/182(±1)
+   答：**结论：2026 年 1–9 月，Slate 11 收入 352.09 万美元、单台净售价（NSIP）181.64 美元/台；Slate 11 Pro 收入 537.01 万美元、NSIP 270.28 美元/台。** 两者合计 889.10 万美元，即 Slate 家族（family）全部收入。 ## 一、逐产品数字（口径：净销售收入 / 收入量，2026 年 1–9 月累计） | 产品 | 收入 2026(1–9月) | 收入 2025(1–9月) | 收入同比 | NSIP 2026 | NSIP 2025 | NSIP 同比 | |---|---|---|---|---|---|---| | **Slate 11** | 
+   门禁拦下：75.0、37、75
+   工具：经营分析专家:dataCatalog{} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9,"lv1":["平板"]}
+
+【24】收入最高的产品是哪个？
+   ✅ 正确  9s  | 真值：Slate 11 Pro
+   答：2026年截至目前，产业看板中收入最高的产品是「Slate 11 Pro」，收入 5,370,107 USD。 **关键数字（口径均为：2026年年初至今·产业看板·产品维度·收入·USD，截至 2026 年数据最新期）** - **第1名 Slate 11 Pro：5,370,107 USD**，排名第1，距第1名 0；标记「周销走弱」。 - **第2名 Slate 11：3,520,941 USD**，距第1名 1,849,166 USD；标记「渠道去库存、周销走弱」。 - **第3名 Slate SE 11：3,314,831 USD**，距第1名 2,055,276 USD；标记「周销走弱」。 - 第1名领先第2名 1,84
+   工具：📐prerank {"type":"prerank","dim":"product","by":"收入","order":"降序","top":"Slate 11 Pro","value":5370107,"unit":"USD","n":10,"filters":{}}
+
+【25】单台净售价（NSIP）最高的产品是哪个？
+   ✅ 正确  10s  | 真值：Slate 11 Pro 270
+   答：产业看板中单台净售价（NSIP）最高的产品是 **Slate 11 Pro**，NSIP = 270.3 USD/台。 **关键数字（均取自产业看板产品级 NSIP 降序排名，单位 USD/台）** - **第1名 Slate 11 Pro：270.3 USD/台**，距第1名 0；标记「周销走弱」。 - **第2名 Slate 11：181.6 USD/台**，距第1名 88.7；标记「渠道去库存(SI降SO不降)、周销走弱」。 - **第3名 Slate SE 11：112.0 USD/台**，距第1名 158.3；标记「周销走弱」。 - 第4名 Slate SE 10：87.8 USD/台，距第1名 182.5；第5名 Son
+   工具：📐prerank {"type":"prerank","dim":"product","by":"NSIP","order":"降序","top":"Slate 11 Pro","value":270.3,"unit":"USD/台","n":10,"filters":{}} ｜ 定价专家:meta{} ｜ 定价专家:pricingLibRecords{}
+
+==================== 汇总 ====================
+题数 4｜能分析出来 4/4（100%）｜结论正确 4/4（100%）
+未通过：
+结果文件：eval/runs/run-30-v9-probe.txt

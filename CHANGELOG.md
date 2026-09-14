@@ -4,7 +4,8 @@ One entry per shipped build. Dates are the original build dates; each version is
 
 | Version | Date | Change |
 |---|---|---|
-| **v148** | 2026-09-11 | FOB pricing board, sell-out forecast view, agent chat view; bundled synthetic demo dataset on first start; 87 test files green |
+| **v155** | 2026-09-12 | Deterministic analytics layer (rankings / comparisons / health / outlook / opportunity computed in code) + conclusion gate; three code-graded suites on the synthetic dataset: complex analysis 30/30, composite 52/54, strategy 55/56; 89 test files green |
+| v148 | 2026-09-11 | FOB pricing board, sell-out forecast view, agent chat view; bundled synthetic demo dataset on first start; 87 test files green |
 | v139 | 2026-09-07 | chore(release): 版本号（推演不预测/库存联动/DOS去单位） |
 | v138 | 2026-09-07 | chore(release): 版本号（推演真实期次+历史对照） |
 | v137 | 2026-09-07 | chore(release): 版本号（SO 推演四行布局） |

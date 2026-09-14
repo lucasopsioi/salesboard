@@ -1,0 +1,12 @@
+题数 56
+
+【33】S6两品未来｜SonicBuds SE3 和 SonicBuds SE4 ANC 未来一个季度谁更强？分别预计多少台？
+   ✅ 正确  19s  2405字 | 真值：更强 SonicBuds SE3；SonicBuds SE3 20950/SonicBuds SE4 ANC 13439
+   答：**一句话结论：SonicBuds SE3 更强、更值得主推——未来 13 周（覆盖 2026 Q4 前后）中性预测出货 20,950 台，高于 SonicBuds SE4 ANC 的 13,439 台，领先约 7,511 台（约 1.6 倍）。** ## 一、对比表（行=产品） | 产品 | 累计SO | SO同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | SonicBuds SE3 | 45,727 台（口径：2026年初至今累计，PSI口径，截至2026-08-17） | +117.5%（口径：20
+   工具：📐precmp {"type":"precmp","names":["SonicBuds SE3","SonicBuds SE4 ANC"]} ｜ 📐preest {"type":"preest","product":"SonicBuds SE3","countries":[],"analogs":[],"top":{"国家":"Mexico","中位":11380,"区间低":11057,"区间高":11934}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":13,"top":{"name":"SonicBuds SE3","中性":20950},"dosTarget":null,"filters":{}}
+
+==================== 汇总 ====================
+题数 1｜能分析出来 1/1（100%）｜结论正确 1/1（100%）｜平均 2405 字/题
+分场景：S6两品未来 1/1
+未通过：无
+结果文件：eval/runs/run-strategy-p5.txt

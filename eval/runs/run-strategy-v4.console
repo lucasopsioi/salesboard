@@ -1,0 +1,288 @@
+题数 56
+
+【1】S1未来排名｜未来 12 周哪个产品会卖得最多？预计多少台？为什么？
+   ✅ 正确  15s  1636字 | 真值：第 1 名 SonicBuds SE3 中性 19338（结论点 SonicBuds SE3）
+   答：**结论：SonicBuds SE3 是未来 12 周（2026 年 9 月中旬至 12 月初）卖得最多的产品，中性预测约 19,338 台（口径：近 4 周周均×12 周线性外推，截至 2026-08-17）。** 这是基于当前销售动量的判断，不是承诺值。 **一、关键数字（每个都标口径与截至时间）** - **未来 12 周中性预测第 1 名：SonicBuds SE3，19,338 台**（口径：outlook 12 周中性预测排名，截至 2026-08-17）；保守 19,272 台、乐观 19,338 台（口径：后段周均×12 / max(近4周,后段)×(1+周变化封顶30%)×12，截至 2026-08-17）。保守≈
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【2】S1未来排名｜未来 8 周哪个产品预计销量最高？大概多少？
+   ✅ 正确  7s  1764字 | 真值：第 1 名 SonicBuds SE3 中性 12892
+   答：**未来 8 周（2026-09-12 起）预计销量最高的产品是 SonicBuds SE3，中性预测约 12,892 台。** **依据（口径：PSI Sell-out，产品维度，未来 8 周前瞻推演，数据截至 2026-08-17）** 未来 8 周预测排名前 5： | 名次 | 产品 | 中性预测(台) | 保守(台) | 乐观(台) | 周走势 | |---|---|---|---|---|---| | 1 | **SonicBuds SE3** | **12,892** | 12,848 | 12,892 | 走弱 | | 2 | Slate SE 11 | 9,414 | 9,304 | 9,414 | 走弱 | | 3
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":8,"top":{"name":"SonicBuds SE3","中性":12892},"dosTarget":null,"filters":{}}
+
+【3】S1未来排名｜接下来一个季度（13 周），哪个产品会是销量第一？预计多少台？
+   ✅ 正确  7s  2031字 | 真值：第 1 名 SonicBuds SE3 中性 20950
+   答：**接下来一个季度（13 周）销量第一的产品是「SonicBuds SE3」，预计约 20,950 台（中性口径）。** ## 结论与依据 **1. 未来 13 周预测排名（中性口径，单位：台）** | 名次 | 产品 | 中性预测 | 保守 | 乐观 | 周走势 | |---|---|---|---|---|---| | 1 | **SonicBuds SE3** | **20,950** | 20,878 | 20,950 | 走弱 | | 2 | Slate SE 11 | 15,298 | 15,119 | 15,298 | 走弱 | | 3 | SonicBuds SE4 ANC | 13,439 | 13,260 | 1
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":13,"top":{"name":"SonicBuds SE3","中性":20950},"dosTarget":null,"filters":{}}
+
+【4】S1未来排名｜未来 3 个月平板和音频两条线哪条卖得更多？各预计多少台？
+   ✅ 正确  8s  2159字 | 真值：第 1 音频与智能配件；音频与智能配件 48654/平板 40782
+   答：**结论：未来 3 个月（2026 年 10–12 月）音频与智能配件产品线的预计销量更多，中性预测 48,654 台；平板产品线中性预测 40,782 台，前者多约 7,872 台。** --- ## 一、两条线未来 3 个月预测（2026-10 至 2026-12） 数据截至 **2026-08-17**，到年底剩余 19 周；未来 12 周预测（口径：按现在节奏线性外推的量级参考，不是承诺）： | 名次 | 产品线 | 中性预测 | 保守 | 乐观 | 周走势 | |---|---|---|---|---|---| | 1 | 音频与智能配件 | **48,654 台** | 48,504 台 | 48,654 台 | 走弱 
+   工具：📐prerank {"type":"prerank","dim":"line","by":"累计SO","order":"降序","top":"音频与智能配件","value":116104,"unit":"台","n":2,"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"line","weeks":12,"top":{"name":"音频与智能配件","中性":48654},"dosTarget":null,"filters":{}}
+
+【5】S1未来排名｜未来 12 周哪个国家出货最多？预计多少台？
+   ✅ 正确  16s  1518字 | 真值：第 1 名 Mexico 中性 23334
+   答：**结论：基于当前动量（同比增速、库存健康度、周走势），未来 12 周出货量最多的国家/地区是 Mexico（墨西哥），中性预估约 23,334 台——这是按当前节奏线性外推的量级参考，不是承诺数字。** **关键数字（每个都标口径与截至时间）** - **排名第 1：Mexico**，未来 12 周中性预测 **23,334 台**（口径：近 4 周周均 × 12 周线性外推；截至 2026-08-17）。 - **第 2：Brazil 21,558 台**（同口径，近 4 周周均 × 12 周；截至 2026-08-17）。Mexico 领先约 1,776 台，两者差距很小，同属第一梯队。 - **第 3~5：Colombia 
+   工具：📐preoutlook {"type":"preoutlook","dim":"country","weeks":12,"top":{"name":"Mexico","中性":23334},"dosTarget":null,"filters":{}}
+
+【6】S1未来排名｜接下来 12 周 Slate 11 和 Slate 11 Pro 谁会卖得更多？分别预计多少台？
+   ✅ 正确  13s  1725字 | 真值：更多 Slate 11；Slate 11 12285/Slate 11 Pro 10281
+   答：**结论：在 2026 年接下来的 12 周内，Slate 11 销量更高——中性预测 12,285 台，Slate 11 Pro 中性预测 10,281 台，Slate 11 领先 2,004 台。** ## 一、两款产品未来 12 周预测（数据截至 2026-08-17） | 产品 | 保守 | 中性 | 乐观 | 周走势 | |---|---|---|---|---| | **Slate 11** | 12,156 台 | **12,285 台** | 12,285 台 | 走弱 | | **Slate 11 Pro** | 10,188 台 | **10,281 台** | 10,281 台 | 走弱 | - 中性口径下 S
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【7】S1未来排名｜未来 12 周音频线里哪个产品预计卖得最多？多少台？
+   ✅ 正确  7s  2143字 | 真值：第 1 名 SonicBuds SE3 中性 19338
+   答：**结论：在产业看板音频线（line=音频与智能配件）中，未来 12 周（2026-09-12 起算）预计销量最多的是 SonicBuds SE3，中性预测约 19,338 台。** ## 未来 12 周各产品预计销量排名（Sell-out，台） | 名次 | 产品 | 中性预测 | 保守 | 乐观 | 周走势 | |---|---|---|---|---|---| | 1 | **SonicBuds SE3** | **19,338** | 19,272 | 19,338 | 走弱 | | 2 | SonicBuds SE4 ANC | 12,405 | 12,240 | 12,405 | 走平 | | 3 | SonicBuds
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":5,"filters":{"line":["音频与智能配件"]}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{"line":["音频与智能配件"]}}
+
+【8】S2全年｜按现在的节奏今年全年能卖到多少？哪个产品全年预测最高？
+   ✅ 正确  10s  3154字 | 真值：全年第 1 SonicBuds SE3 76346
+   答：**SonicBuds SE3 是 2026 年全年预测销量最高的产品，全年中性预测 76,346 台**（累计 SO 45,727 台 + 到年底剩余 19 周预测 30,619 台）。 ## 一、2026 年全年各产品预测销量（中性口径，单位：台） 数据截至 2026-08-17，到年底剩余 19 周。全年预测 = 累计 SO + 近 4 周周均 × 19 周。 | 排名 | 产品 | 累计 SO（年初至 8/17） | 全年预测（中性） | |---|---|---|---| | 1 | **SonicBuds SE3** | 45,727 | **76,346** | | 2 | Slate SE 11 | 37,064 |
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{}}
+
+【9】S2全年｜SonicBuds SE3 今年全年预计能卖多少台？年底累计到多少？
+   ✅ 正确  13s  2409字 | 真值：全年预测 76346
+   答：**SonicBuds SE3（产品，family=SonicBuds / series=Puffin）2026 全年预计销量约 76,346 台；到 2026 年底累计销量即该全年预测值 76,346 台（年初至今累计 45,727 台 + 剩余 19 周预测 30,619 台）。** 分国家看，第 1 名 Mexico：已在售，实际累计 11,293 台，估计区间 11,057–11,934 台（中位 11,380），空间 87。 ## 一、结论与数字 | 指标 | 数值 | 口径 | |---|---|---| | 2026 全年预测（中性） | **76,346 台** | 全年预测 = 年初至今累计 SO + 近 4 周周
+   工具：📐preest {"type":"preest","product":"SonicBuds SE3","countries":[],"analogs":[],"top":{"国家":"Mexico","中位":11380,"区间低":11057,"区间高":11934}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{}} ｜ 🛡verify {"ok":false} ｜ 🛡verify {"ok":true,"fixed":true,"expected":"Mexico"}
+
+【10】S2全年｜平板线全年预计多少台？和音频线比谁更高？
+   ✅ 正确  10s  1022字 | 真值：全年 音频与智能配件 193140/平板 166698，高者 音频与智能配件
+   答：2026 年平板线全年预计出货 166,698 台，低于音频与智能配件线的 193,140 台，音频线更高。 **关键数字（口径均为 PSI 台数口径、渠道全加不去重，数据截至 2026-08-17）** - 平板线全年预计出货（中性）：166,698 台（口径：全年预测 = 年初至今累计 SO + 近 4 周周均 × 到年底剩余 19 周，线性外推） - 音频与智能配件线全年预计出货（中性）：193,140 台（口径：同上） - 两线差额：音频线领先约 26,442 台（口径：193,140 − 166,698，同一口径下相减） - 平板线年初至今累计 SO：102,126 台（口径：2026 年初至 2026-08-17 累计，
+   工具：📐preoutlook {"type":"preoutlook","dim":"line","weeks":19,"top":{"name":"音频与智能配件","中性":77036},"dosTarget":null,"filters":{}}
+
+【11】S2全年｜墨西哥今年全年预计出货多少台？
+   ✅ 正确  5s  841字 | 真值：Mexico 全年 93754
+   答：**墨西哥（Mexico）2026 年全年预计出货约 93,754 台（中性口径）。** 依据（数据截至 2026-08-17，到年底剩余 19 周）： - **全年预测（中性）**：Mexico 93,754 台 —— 由「累计 SO 56,808 台 + 近 4 周周均 × 剩余 19 周」推得。 - **未来 19 周预测**：中性 36,946 台（保守 23,218、乐观 36,946），周走势标记为「走弱」。 - **参考位置**：全年预测在 12 国中排第 1（第 2 名 Brazil 86,513 台，第 3 名 Colombia 43,912 台）。 - **库存侧**：渠道库存 12,519 台，可支撑 6.4 
+   工具：📐preoutlook {"type":"preoutlook","dim":"country","weeks":19,"top":{"name":"Mexico","中性":36946},"dosTarget":null,"filters":{}}
+
+【12】S2全年｜今年年底 Slate 11 Pro 累计能到多少台？按现在的周销节奏算。
+   ✅ 正确  12s  2025字 | 真值：全年预测 41867
+   答：**Slate 11 Pro（产品，全球）按当前周销节奏线性外推，2026 年年底累计 Sell-out 预计约 41,867 台（中性口径）；未进入国家中排名第 1 为 Ecuador（中位 1003 台，区间 807–1239 台）。** **依据与数字（口径：全球、渠道全加不去重、Sell-out 台数）** - 数据截至：2026-08-17；到 2026 年底剩余 **19 周**。 - 年初至今累计 SO：**25,589 台**（Slate 11 Pro，全球）。 - 近 4 周周均 SO：**857 台/周**。 - 未来 19 周预测（线性外推）：中性 **16,278 台**（保守 16,131、乐观 16,27
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":[],"analogs":[],"top":{"国家":"Ecuador","中位":1003,"区间低":807,"区间高":1239}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{}} ｜ 🛡verify {"ok":false} ｜ 🛡verify {"ok":true,"fixed":true,"expected":"Ecuador"}
+
+【13】S2全年｜今年全年哪个国家出货最多？预计多少？
+   ✅ 正确  6s  1383字 | 真值：全年第 1 Mexico 93754
+   答：**2026 年全年出货量（Sell-in）预计最多的国家是 Mexico（墨西哥），预计约 93,754 台。** **依据（口径：全年预测 = 累计 SO + 近 4 周周均 × 到年底剩余 19 周，中性情景）** 全年预测排名前 5： | 名次 | 国家 | 累计 SO（台） | 全年预测·中性（台） | |---|---|---|---| | 1 | Mexico | 56,808 | **93,754** | | 2 | Brazil | 52,379 | 86,513 | | 3 | Colombia | 26,418 | 43,912 | | 4 | Chile | 21,626 | 35,700 | | 5 | P
+   工具：📐preoutlook {"type":"preoutlook","dim":"country","weeks":19,"top":{"name":"Mexico","中性":36946},"dosTarget":null,"filters":{}}
+
+【14】S3断货｜哪些产品 4 周内有断货风险？库存还能撑几周？
+   ✅ 正确  8s  2409字 | 真值：断货清单 无；最紧 SonicBuds SE2 5.2 周
+   答：**结论：截至 2026-08-17，产业看板中没有任何产品在未来 4 周内存在断货风险。** 库存最紧的是 SonicBuds SE2（可支撑 5.2 周）、Slate SE 11（5.9 周）、SonicBuds SE3（6.2 周），均高于 4 周阈值，属于「8 周内需补货」而非断货。 --- **一、断货风险判定（口径：渠道库存 ÷ 近 4 周周均 SO，<4 周才算断货风险）** 代码前瞻给出的**断货风险清单为空**——即 10 个在售产品中，没有一个可支撑周数低于 4 周。 **二、库存可支撑周数升序（最紧的 8 个，均标「8 周内需补货」）** | 产品 | 可支撑周数 | 渠道库存(台) | 近4周周均(台) | 
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【15】S3断货｜SonicBuds SE2 的渠道库存还能撑几周？会不会断货？
+   ✅ 正确  14s  1328字 | 真值：可支撑 5.2 周，断货=false
+   答：**SonicBuds SE2（产品，全球渠道合计）2026 年当前渠道库存约可支撑 5.2 周销售，属「8 周内需补货」档，但不在断货风险清单里——真正的问题是需求同比下滑，不是卖断货。** **关键数字（均截至 2026-08-17）** - **渠道库存 3,573 台**（口径：最新期快照，渠道全加不去重）。 - **近 4 周周均 SO 692 台/周**（口径：近 4 周 Sell-out ÷ 4，音频按各原子单元最后有报量的周截取）。 - **可支撑周数（DOS）5.2 周**（口径：渠道库存 ÷ 近 4 周周均 SO）。这是本次回答的主口径。 - **渠道 DOS 44 天**（口径：report 口径，库存 × 2
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【16】S3断货｜如果停止进货，Slate 12 Pro 的库存能卖多久？
+   ✅ 正确  6s  1198字 | 真值：可支撑 8 周
+   答：**Slate 12 Pro 当前渠道库存按当前 Sell-out 速度可支撑约 8 周（约 56 天 DOS），暂无断货风险。** **依据与数字（口径：产品=Slate 12 Pro，全球渠道合计，数据截至 2026-08-17）** - 渠道库存：**2,709 台**（最新期快照，不跨期累加） - 近 4 周周均 Sell-out：**338 台/周** - 可支撑周数：**8 周**（= 渠道库存 ÷ 近 4 周周均） - 渠道 DOS：**56 天**（系统重算口径，非底表自带 DOS 列） - 断货风险判定：**暂无断货风险**（8 周内无需补货；对比清单中 SonicBuds SE2 5.2 周、Slate SE 1
+   工具：📐preest {"type":"preest","product":"Slate 12 Pro","countries":[],"analogs":[],"top":{"国家":"Ecuador","中位":78,"区间低":63,"区间高":96}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【17】S3断货｜音频线的渠道库存能支撑几周？够不够卖到年底？
+   ✅ 正确  16s  1365字 | 真值：音频与智能配件 可支撑 6.3 周 vs 剩余 19 周，够=false
+   答：**音频与智能配件（音频产品线）当前渠道库存 25,611 台，按近 4 周销售速度只能支撑约 6.3 周，不足以卖到 2026 年年底（还剩 19 周），属于 8 周内需补货。** **关键数字（均截至 2026-08-17）** - **渠道库存 25,611 台**：口径为最新期快照（数据截至 2026-08-17）当天所有行求和、渠道全加不去重（ALL/Online/Offline 仅为行标签，无包含关系），不跨期累加。 - **近 4 周周均 SO 4,055 台/周**：口径为近 4 周 Sell-out ÷ 4，音频按各原子单元最后有报量的周截取（末端 0 周是「没录」而非「卖了 0」）。 - **可支撑周数 6.3 
+   门禁拦下：90
+   工具：📐preoutlook {"type":"preoutlook","dim":"line","weeks":19,"top":{"name":"音频与智能配件","中性":77036},"dosTarget":null,"filters":{}}
+
+【18】S3断货｜哪个国家的渠道库存最先见底？还能撑几周？
+   ✅ 正确  13s  1340字 | 真值：最先 Mexico 6.4 周（并列同值算对）
+   答：**总体判断：在产业看板按国家维度看，2026 年渠道库存最先见底的是 Mexico（墨西哥），当前渠道库存按近 4 周销速只能再支撑约 6.4 周。** **关键数字（均截至 2026-08-17）** - **最先见底国家：Mexico** — 口径：渠道库存 ÷ 近 4 周周均 SO，升序取最短。 - **Mexico 渠道库存：12,519 台** — 口径：最新期快照，渠道全加（maxYmd 当天所有行求和）。 - **Mexico 可支撑周数：6.4 周** — 口径：渠道库存 ÷ 近 4 周周均 SO（周均 1,945 台）。 - **Mexico 渠道 DOS：46 天** — 口径：库存 × 28 ÷ 近 4 周 
+   工具：📐preoutlook {"type":"preoutlook","dim":"country","weeks":12,"top":{"name":"Mexico","中性":23334},"dosTarget":null,"filters":{}}
+
+【19】S3断货｜Slate SE 11 要不要补货？库存还够卖几周？
+   ✅ 正确  11s  1152字 | 真值：可支撑 5.9 周
+   答：**结论：Slate SE 11（product 维度单品，归属 Dorado(series) ⊂ Slate SE(family) ⊂ 平板(line)）在 2026 年需要补货——渠道库存只够卖约 5.9 周，属「8 周内需补货」档。** **关键数字（均截至 2026-08-17）** - **渠道库存 6,993 台**（口径：最新期快照，渠道全加不去重，不跨期累加）。 - **近 4 周周均 Sell-out 1,177 台/周**（口径：近 4 周 SO ÷ 4）。 - **可支撑周数 5.9 周**（口径：渠道库存 ÷ 近 4 周周均 SO），落在「8 周内需补货」判定档；注意这不是已断货——本次断货风险清单为空，5.
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【20】S4DOS目标｜要把 Slate SE 10 的渠道 DOS 压到 90 天，要消化多少库存？停止进货要多少周？
+   ✅ 正确  6s  1204字 | 真值：需减 199，消化 53.1 周
+   答：**Slate SE 10（产品，平板线 ⊂ Slate SE 家族 ⊂ Anchovy 系列）当前渠道库存 247 台、渠道 DOS 461 天；要把 DOS 压到 90 天需消化 199 台库存；若停止进货，按当前 sell-out 速度需约 53.1 周才能降到 90 天。** **依据与数字（口径：渠道全加不去重，库存为最新期快照，DOS=库存×28÷近4周SO，数据截至 2026-08-17）** | 指标 | 数值 | 口径 | |---|---|---| | 渠道库存 | 247 台 | 最新期快照，不跨期累加 | | 渠道 DOS | 461 天 | 库存×28÷近4周SO | | 近4周周均 SO | 4 台/周 
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":90,"filters":{}}
+
+【21】S4DOS目标｜如果所有产品的渠道 DOS 都要控制在 45 天以内，哪个产品需要减的库存最多？减多少？
+   ✅ 正确  7s  2088字 | 真值：最多 Slate 11 Pro 需减 1112
+   答：**结论：Slate 11 Pro 需要减少的库存最多——需减 1,112 台（约 1.3 周销量），把渠道 DOS 从 54 天压到 45 天。** ## 一、DOS 目标 45 天：各产品需减库存对比（按需减量降序） | 产品 | 当前渠道 DOS（天） | 当前渠道库存（台） | 目标库存（台） | **需减库存（台）** | 停止进货消化周数 | 是否已达标 | |---|---|---|---|---|---|---| | **Slate 11 Pro** | **54** | **6,620** | 5,508 | **1,112** | 1.3 | 否 | | Slate 11 | 49 | 7,186 | 6,581
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":45,"filters":{}}
+
+【22】S4DOS目标｜哪个国家最该去库存？要把渠道 DOS 降到 40 天各需要减多少？
+   ✅ 正确  18s  2268字 | 真值：最该 Brazil 需减 1683
+   答：**结论：按 2026 年渠道 DOS（库存×28÷近4周SO）口径，12 国渠道 DOS 全部在 45–53 天、全部绿灯，没有一国进入黄灯（90–120）或红灯（>120），所以不存在渠道积压风险；若统一把渠道 DOS 压到 40 天，需减库存绝对量最多的是 Brazil（巴西）1683 台，而 DOS 缺口最大的是 Ecuador、Panama、Dominican Rep.、Guatemala、Costa Rica、Uruguay 这 6 国（均为 53 天）。** 以下数字均截至 2026-08-17（meta 口径），渠道库存＝maxYmd 当天快照求和，渠道 DOS＝库存×28÷近4周SO，红绿灯＝渠道<90绿/90–1
+   工具：📐prediag {"type":"prediag","dim":"country","keys":["渠道去库存","报量延迟提示"],"counts":["渠道去库存 6","报量延迟提示 0"],"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"country","weeks":12,"top":{"name":"Mexico","中性":23334},"dosTarget":40,"filters":{}}
+
+【23】S4DOS目标｜Slate 11 Pro 的渠道 DOS 降到 50 天需要减多少库存？
+   ✅ 正确  6s  1150字 | 真值：需减 500（当前 DOS 54）
+   答：**Slate 11 Pro 当前渠道库存 6,620 台、渠道 DOS 54 天；要把渠道 DOS 降到 50 天，需减少约 500 台库存（目标库存 6,120 台），按当前节奏停止进货约 0.6 周可消化。** **依据与数字（口径：Slate 11 Pro 单品，product 维度过滤，渠道全加不去重，数据截至 2026-08-17）** | 指标 | 数值 | 口径 | |---|---|---| | 渠道库存 | 6,620 台 | 最新期快照，不跨期累加 | | 渠道 DOS | 54 天 | 最新期库存 ÷ 日均 SO | | 近4周周均 SO | 857 台 | 近4周 SO÷4 | | 库存可支撑周数 | 7.
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":50,"filters":{}}
+
+【24】S4DOS目标｜SonicBuds Pro 4 的 DOS 要压回 45 天，停止进货的话要几周才能消化到位？
+   ✅ 正确  7s  1593字 | 真值：需减 445，1 周
+   答：**SonicBuds Pro 4（产品，全球渠道合计）当前渠道库存 3217 台、近 4 周周均 Sell-out 431 台；DOS 目标 45 天，当前 53 天，需减库存 445 台，停止进货后约 1 周即可消化到位。** ## 一、当前库存与 Sell-out（口径：渠道全加不去重，库存为最新期快照） | 指标 | 数值 | 口径 | |---|---|---| | 渠道库存 | **3217 台** | 最新期快照，截至 2026-08-17 | | 近 4 周周均 Sell-out | **431 台/周** | 近 4 周 SO ÷ 4 | | 库存可支撑周数 | **7.5 周** | 渠道库存 ÷ 近 4 周周均
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":45,"filters":{}}
+
+【25】S4DOS目标｜平板线整体渠道 DOS 控制在 45 天以内要减多少库存？
+   ✅ 正确  5s  1203字 | 真值：平板 需减 1907
+   答：**平板线整体渠道当前 DOS 为 49 天，渠道库存 23,755 台；要把 DOS 压到 45 天以内，需减少约 1,907 台库存（相当于停止进货消化 0.6 周）。** ## 依据与数字 | 指标 | 数值 | 口径 | |---|---|---| | 渠道库存 | 23,755 台 | 平板线整体渠道，最新期快照（数据截至 2026-08-17） | | 渠道 DOS | 49 天 | 库存×28÷近4周SO（report 口径，跨看板一致） | | 近4周周均 SO | 3,399 台 | 近4周 SO÷4 | | 目标 DOS | 45 天 | 题设目标 | | 目标库存 | 21,848 台 | 45 天 × 日均销
+   工具：📐preoutlook {"type":"preoutlook","dim":"line","weeks":12,"top":{"name":"音频与智能配件","中性":48654},"dosTarget":45,"filters":{}}
+
+【26】S5主推｜下半年主推组合选 3 个，并说明理由。
+   ✅ 正确  17s  1997字 | 真值：候选 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC
+   答：**总体判断：2026年下半年（H2）主推产品组合建议锁定 SonicBuds SE3、Slate SE 11、SonicBuds SE4 ANC 这三个产品**——它们是产业看板「主推候选池」中未来19周中性预测量排名前三、且都不在剔除清单里的组合（口径：代码前瞻主推候选池按未来19周中性预测量排序，数据截至2026-08-17）。 **关键数字（每个都标口径与截至时间）：** 1. **SonicBuds SE3（音频走量主推）**：未来19周中性预测 30619 台（口径：近4周周均×19周线性外推，截至2026-08-17）；全年预测（中性）76346 台（口径：累计SO+近4周周均×19周，截至2026-08-17）；累计
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{}}
+
+【27】S5主推｜Q4 该把资源集中在哪两个产品上？为什么？
+   ✅ 正确  16s  1512字 | 真值：候选 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3/Slate SE 11
+   答：**结论：2026 年 Q4 资源应集中在 SonicBuds SE3 和 Slate SE 11 这两个产品上**——两者是未来 13 周预测量与全年预测量的双料前二，SO 同比为正，且渠道库存可支撑周数偏紧，属于「卖得动、还得补」的加推窗口。 **关键数字（口径与截至时间均标注）** - **SonicBuds SE3**：未来 13 周预测（中性，近 4 周周均×13）20,950 台，排名第一；全年预测（中性，累计 SO+近 4 周周均×19 周）76,346 台，排名第一；累计 SO（2026 年初至今）45,727 台；SO 同比（2026 年初至今 vs 2025 同期）+117.5%；渠道 DOS（库存×28÷近 4
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":13,"top":{"name":"SonicBuds SE3","中性":20950},"dosTarget":null,"filters":{}}
+
+【28】S5主推｜哪些产品不该再投资源了？给出理由。
+   ✅ 正确  19s  2269字 | 真值：剔除 SonicBuds SE2/Slate SE 10；点名砍 Slate SE 10/SonicBuds SE2
+   答：**总体判断：截至 2026-09-12 看，产业看板口径下最不该再投入资源的是 Slate SE 10 和 SonicBuds SE2 这两款产品**——前者是「销量崩塌 + 库存严重冗余」的双红灯，后者是「同比下滑 + 周销走弱」的需求退坡品；其余在售产品仍在主推候选内，但普遍处于「周销走弱」状态，属于要盯节奏、不是停投。 **关键数字（每个都标口径与截至时间）** 1. **Slate SE 10 —— 建议停止投入** - 累计 SO 仅 **2,761 台**（口径：2026 YTD 渠道全加不去重，截至 2026-08-17） - SO 同比 **-82.6%**（口径：(2026YTD−2025同期)/2025同期，截
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【29】S5主推｜音频线下半年主推谁、清谁？
+   ✅ 正确  19s  1691字 | 真值：候选 SonicBuds SE3/SonicBuds SE4 ANC/SonicBuds Pro 4/SonicArc；剔除 SonicBuds SE2；点名推 SonicBuds SE3/SonicBuds SE4 ANC/SonicBuds Pro 4/SonicArc 清 
+   答：**结论：2026 年下半年音频与智能配件产品线线下渠道，主推 SonicBuds SE3、SonicBuds SE4 ANC、SonicBuds Pro 4、SonicArc 四款；清库 SonicBuds SE2 一款。** 以下数字均来自专家已查到的结论，口径与截至时间逐条标注；两处看板口径不同处已分别说明，缺失部分直说没查到。 **一、主推产品（4 款）** - 名单口径：line=音频与智能配件、线下渠道，代码前瞻主推候选（非退市、渠道 DOS 非红、SO 同比非负、近 4 周有销量），截至 2026-08-17。 - SonicBuds SE3：未来 19 周中性预测 30619 台（线性外推，截至 2026-08-17
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{"line":["音频与智能配件"]}} ｜ PSI 分析专家:options{"field":"line","contains":"音频"} ｜ PSI 分析专家:options{"field":"channel","filters":{"line":["音频与智能配件"]}} ｜ PSI 分析专家:dataCatalog{} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellIn","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"line":["音频与智能配件"],"channel":["Offline"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"sellOut","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"line":["音频与智能配件"],"channel":["Offline"]}} ｜ PSI 分析专家:query{"stackDim":"product","metric":"inv","gran":"month","from":"2026-01-01","to":"2026-08-31","filters":{"line":["音频与智能配件"],"channel":["Offline"]}} ｜ PSI 分析专家:healthCheck{"dim":"product","filters":{"line":["音频与智能配件"],"channel":["Offline"]}}
+
+【30】S5主推｜如果只能保留 4 个产品进入明年，留哪 4 个？为什么？
+   ✅ 正确  19s  1455字 | 真值：候选 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11
+   答：**结论：在产业看板的产品维度上，如果 2027 年只能保留 4 个产品，建议保留 SonicBuds SE3、Slate SE 11、SonicBuds SE4 ANC、Slate 11。** **关键数字（每个都标口径与截至时间）** - **未来 12 周预测销量（中性口径，近 4 周周均×12 周线性外推，截至 2026-08-17）**：SonicBuds SE3 19,338 台、Slate SE 11 14,121 台、SonicBuds SE4 ANC 12,405 台、Slate 11 12,285 台——这 4 个正好是该口径下的前 4 名。 - **全年预测（中性口径，累计 SO＋近 4 周周均×剩余 19 周
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":8} ｜ 经营分析专家:dataCatalog{}
+
+【31】S5主推｜平板线该重点推哪个产品？为什么？
+   ✅ 正确  17s  1723字 | 真值：候选 Slate SE 11/Slate 11/Slate 11 Pro/Slate 12 Pro（预测最高 Slate SE 11）；点名 Slate SE 11
+   答：**总体判断：平板线 2026 年应重点推 Slate SE 11**——它是各看板一致指向的预测量第一、全年预测第一、且同比正增长的主力机型；Slate 11 Pro 作第二增长极，Slate 12 Pro 作走强新品试探，Slate SE 10 建议停止投入。 **关键数字（口径与截至时间均标注）** - **Slate SE 11 未来12周预测（中性）：14,121 台**（口径：近4周周均线性外推，截至 2026-08-17）；保守/乐观口径下为 13,956 / 14,121 台（同上口径）。 - **Slate SE 11 全年预测（中性）：59,422 台**（口径：累计SO + 近4周周均×到年底剩余19周，截至 
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"Slate SE 11","中性":14121},"dosTarget":null,"filters":{"line":["平板"]}}
+
+【32】S5主推｜综合同比、周走势、库存和未来 12 周预测，哪个产品最值得加大投入？
+   ✅ 正确  16s  1603字 | 真值：候选 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3
+   答：**结论：2026 年最值得加大投入的是音频产品 SonicBuds SE3**——它是唯一同时拿到「未来 12 周预测第一 + 全年预测第一 + SO 同比高增 + 渠道 DOS 绿灯」的产品；但周销走弱、库存可支撑周数偏短，加投必须同步配货，而不是单纯压货。 **关键数字（口径与截至时间）** - **未来 12 周预测（中性）19338 台**，口径：outlook 前瞻，近 4 周周均×12 周，数据截至 2026-08-17；同口径第 2 名 Slate SE 11 为 14121 台、第 3 名 SonicBuds SE4 ANC 为 12405 台。 - **全年预测（中性）76346 台**，口径：累计 SO 457
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【33】S6两品未来｜SonicBuds SE3 和 SonicBuds SE4 ANC 未来一个季度谁更强？分别预计多少台？
+   🟡 有分析但不准  20s  2582字 | 真值：更强 SonicBuds SE3；SonicBuds SE3 20950/SonicBuds SE4 ANC 13439
+   答：**一句话结论：SonicBuds SE3 与 SonicBuds SE4 ANC 相比，2026 年第四季度（未来一个季度）SonicBuds SE3 更强、更值得主推——中性预测出货 20,950 台，SonicBuds SE4 ANC 中性预测 13,439 台，SE3 领先 7,511 台（约 1.6 倍）。** ## 一、对比表（行=产品） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | **SonicBuds SE3** | 45,727 台（口径：PSI年初至今累
+   工具：📐precmp {"type":"precmp","names":["SonicBuds SE3","SonicBuds SE4 ANC"]} ｜ 📐preest {"type":"preest","product":"SonicBuds SE3","countries":[],"analogs":[],"top":{"国家":"Mexico","中位":11380,"区间低":11057,"区间高":11934}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":13,"top":{"name":"SonicBuds SE3","中性":20950},"dosTarget":null,"filters":{}}
+
+【34】S6两品未来｜SonicArc 和 Slate 12 Pro 谁的库存更先撑不住？各能撑几周？
+   ✅ 正确  6s  1465字 | 真值：先撑不住 SonicArc；SonicArc 7.9 周/Slate 12 Pro 8 周
+   答：**结论：SonicArc 会先撑不住。** 按当前渠道库存和近 4 周 Sell-out 速度，SonicArc 可支撑约 **7.9 周**，Slate 12 Pro 可支撑约 **8.0 周**——SonicArc 更早见底，且它周销还在走弱（-10.6%），Slate 12 Pro 周销反而走强。 **两款产品对比（口径：渠道库存 ÷ 近4周SO周均，数据截至 2026-08-17）** | 产品 | 渠道库存（台） | 近4周SO周均（台） | 可支撑周数 | 断货风险 | 周走势 | |---|---|---|---|---|---| | SonicArc | 2,249 | 286 | **7.9 周** | 8周内需
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【35】S6两品未来｜SonicBuds SE2 和 SonicBuds Pro 4 谁该先去库存？渠道 DOS 降到 40 天各要减多少？
+   ✅ 正确  14s  1403字 | 真值：先去 SonicBuds Pro 4；SonicBuds SE2 需减 0/SonicBuds Pro 4 需减 753
+   答：**结论：SonicBuds Pro 4 应优先去库存，SonicBuds SE2 不需要去库存（已达标）。** 若把两款渠道 DOS 都压到 40 天，SonicBuds Pro 4 需减 753 台，SonicBuds SE2 需减 0 台。 **关键数字（口径与截至时间）** - **SonicBuds Pro 4 渠道库存 3217 台**（口径：report 渠道库存最新期快照，渠道全加不去重；截至 2026-08-17）。 - **SonicBuds Pro 4 渠道 DOS 53 天**（口径：库存×28÷近4周SO，重算；截至 2026-08-17），高于 40 天目标线。 - **SonicBuds Pro 4 降
+   工具：📐prediag {"type":"prediag","dim":"product","keys":["渠道去库存","报量延迟提示"],"counts":["渠道去库存 2","报量延迟提示 5"],"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":40,"filters":{}}
+
+【36】S6两品未来｜Slate SE 11 和 Slate 11 今年全年谁更高？各预计多少？
+   ✅ 正确  8s  1762字 | 真值：高者 Slate SE 11；Slate SE 11 59422/Slate 11 54165
+   答：**Slate SE 11 更高。** 2026 年全年预计销量（Sell-out 口径，中性预测）：**Slate SE 11 约 59,422 台**，**Slate 11 约 54,165 台**，前者领先约 5,257 台。 **依据与数字** | 指标（2026 全年，中性预测） | Slate SE 11 | Slate 11 | |---|---|---| | 累计 SO（截至 2026-08-17） | 37,064 台 | 34,714 台 | | 未来 19 周预测（中性） | 22,358 台 | 19,451 台 | | **全年预测（中性）** | **59,422 台** | **54,165 台** |
+   工具：📐precmp {"type":"precmp","names":["Slate 11","Slate SE 11"]} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{}}
+
+【37】S6两品未来｜Slate 11 Pro 和 SonicBuds SE4 ANC 未来 8 周谁的量更大？各多少？谁更值得投资源？
+   ✅ 正确  25s  2678字 | 真值：更大 SonicBuds SE4 ANC；Slate 11 Pro 6854/SonicBuds SE4 ANC 8270
+   答：**一句话结论：未来 8 周（2026 年第 37–44 周）SonicBuds SE4 ANC 中性预测 8270 台，高于 Slate 11 Pro 的 6854 台，SonicBuds SE4 ANC 量更大；但更值得投入资源的是 Slate 11 Pro——它单台价值高 6.3 倍、销毛额高 5.8 倍，是真正的利润引擎。** ## 对比表 | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | **Slate 11 Pro** | 25589 台（口径：2026年初至2026
+   工具：📐precmp {"type":"precmp","names":["Slate 11 Pro","SonicBuds SE4 ANC"]} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":8,"top":{"name":"SonicBuds SE3","中性":12892},"dosTarget":null,"filters":{}} ｜ 🛡verify {"ok":false} ｜ 🛡verify {"ok":true,"fixed":true,"expected":null}
+
+【38】S7国家×产品｜墨西哥未来 12 周哪个产品预计卖得最多？多少台？
+   ✅ 正确  16s  1558字 | 真值：Mexico 第 1 SonicBuds SE3 4794
+   答：**结论：墨西哥市场未来 12 周（2026 年 9 月中旬至 12 月初）预计卖得最多的产品是 SonicBuds SE3，中性预测约 4794 台**（口径：墨西哥，按当前节奏线性外推，中性；截至 2026-08-17）。这是基于当前动量的定性判断，不是承诺数字。 **关键数字（每个都标口径）** - 未来 12 周中性预测：SonicBuds SE3 **4794 台**（口径：近 4 周周均×12，墨西哥；截至 2026-08-17）；保守 4794 台、乐观 4812 台（口径：后段周均×12 / max(近 4 周,后段)×(1+周变化封顶 30%)×12）。 - 领先幅度：领先第 2 名 SonicBuds SE4 A
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":4794},"dosTarget":null,"filters":{"country":["Mexico"]}}
+
+【39】S7国家×产品｜巴西今年全年哪个产品预计最高？多少台？
+   ✅ 正确  6s  1785字 | 真值：Brazil 全年第 1 SonicBuds SE3 17141
+   答：**2026 年全年巴西市场预计销量最高的产品是 SonicBuds SE3，全年预计约 17,141 台（中性口径）。** ## 依据与数字 **1. 当前累计实绩（年初至今，巴西，渠道全加）** - SonicBuds SE3 累计 SO **45,727 台**，在巴西全部产品中排名第 1，领先第 2 名 Slate SE 11（37,064 台）**8,663 台**。 - 其后依次为：Slate 11 34,714 台、SonicBuds SE4 ANC 27,696 台、Slate 11 Pro 25,589 台。 **2. 全年预测（巴西，中性口径 = 累计 SO + 近 4 周周均 × 到年底剩余 19 周）** |
+   工具：📐prerank {"type":"prerank","dim":"product","by":"累计SO","order":"降序","top":"SonicBuds SE3","value":45727,"unit":"台","n":10,"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":6783},"dosTarget":null,"filters":{"country":["Brazil"]}}
+
+【40】S7国家×产品｜哥伦比亚哪些产品有断货风险？各能撑几周？
+   ✅ 正确  9s  2463字 | 真值：Colombia 断货 无；最紧 SonicBuds SE2 5.2
+   答：**结论：截至 2026-08-17，哥伦比亚市场没有任何产品处于「断货风险」状态（无产品可支撑周数低于 4 周）；但 8 个产品库存偏紧、8 周内需补货，其中 SonicBuds SE2（5.2 周）、SonicBuds SE3（5.9 周）、Slate SE 11（5.9 周）最紧。** ## 一、断货风险判断 代码前瞻给出的**断货风险清单为空**——按「渠道库存 ÷ 近4周周均 SO」口径，哥伦比亚没有任何产品跌破 4 周安全线。但以下 8 个产品被标记为「8 周内需补货」： | 产品 | 可支撑周数 | 渠道库存(台) | 近4周周均SO(台) | 状态 | |---|---|---|---|---| | SonicBud
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":2169},"dosTarget":null,"filters":{"country":["Colombia"]}}
+
+【41】S7国家×产品｜秘鲁要把平板的渠道 DOS 压到 40 天，要减多少库存？
+   ✅ 正确  5s  1038字 | 真值：Peru 平板 需减 319（当前 DOS 47）
+   答：**秘鲁平板：当前渠道 DOS 47 天、渠道库存 2036 台；要把 DOS 压到 40 天，需减少 319 台库存（约 1.1 周消化量）。** **依据（口径：秘鲁 · line=平板 · 渠道全加不去重）** - 当前渠道 DOS：**47 天**（库存×28÷近4周SO，report 口径） - 当前渠道库存：**2036 台**（最新期快照，不跨期累加） - 近4周周均 SO：**301 台/周** - 目标 DOS 40 天 → 目标库存 **1717 台** → **需减库存 319 台**，若停止进货约需 **1.1 周**消化 - 库存可支撑周数 **6.8 周**（渠道库存÷近4周周均），提示「8周内需补货」；
+   工具：📐preoutlook {"type":"preoutlook","dim":"line","weeks":12,"top":{"name":"音频与智能配件","中性":4443},"dosTarget":40,"filters":{"country":["Peru"]}}
+
+【42】S7国家×产品｜智利下半年该主推哪个产品？为什么？
+   ✅ 正确  22s  2033字 | 真值：Chile 候选 SonicBuds SE3/SonicBuds SE4 ANC/Slate SE 11/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3/SonicBuds SE4 ANC
+   答：**结论：智利市场 2026 年下半年应主推 SonicBuds SE3，SonicBuds SE4 ANC 作为高单台收益的第二主推补充。** ## 对比表（智利，产品级 lv4） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | SonicBuds SE3 | 4,276 台（2026年初至2026-08-17累计） | +113.7%（去年同期2,001台，截至2026-08-17） | 数据未包含（仅有周变化 −10.3%，走弱，截至2026-08-17） | 1,113
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":2936},"dosTarget":null,"filters":{"country":["Chile"]}} ｜ 经营分析专家:compareItems{"dim":"product","names":["SonicBuds SE3","SonicBuds SE4 ANC"],"filters":{"country":["Chile"]}} ｜ 经营分析专家:financeProductBoard{"fromM":1,"toM":9} ｜ 汇总/国家/产业专家:searchDim{"q":"SonicBuds SE3"} ｜ 汇总/国家/产业专家:searchDim{"q":"SonicBuds SE4 ANC"} ｜ 路标与上市专家:compareItems{"dim":"product","names":["SonicBuds SE3","SonicBuds SE4 ANC"],"filters":{"country":["Chile"]}} ｜ 路标与上市专家:options{"field":"product","filters":{"country":["Chile"]},"contains":"SonicBuds"} ｜ 汇总/国家/产业专家:compareItems{"dim":"product","names":["SonicBuds SE3","SonicBuds SE4 ANC"],"filters":{"country":["Chile"]}}
+
+【43】S7国家×产品｜阿根廷未来 8 周音频线预计多少台？平板呢？
+   ✅ 正确  25s  1373字 | 真值：Argentina 音频与智能配件 2618/平板 2162
+   答：**结论：本轮 `outlook({"dim":"line","weeks":8,"filters":{"country":["Argentina"]}})` 的 `DOS目标_需减库存降序` 返回 null，但未来 8 周分品类预测已返回可用数值——音频与智能配件中性 2618 台（保守 2600、乐观 2618，走平），平板中性 2162 台（保守 2162、乐观 2200，走平）；因此未来 8 周音频与智能配件预计卖得更多。**（平板为已在售，先列实际累计 SO 8011 台；音频与智能配件累计 SO 9195 台。） ## 一、未来 8 周预测（原样引用代码口径） | 名次 | 品类 | 中性 | 保守 | 乐观 | 周走势
+   工具：📐preoutlook {"type":"preoutlook","dim":"line","weeks":8,"top":{"name":"音频与智能配件","中性":2618},"dosTarget":null,"filters":{"country":["Argentina"]}} ｜ 🛡verify {"ok":false} ｜ 🛡verify {"ok":true,"fixed":true,"expected":null}
+
+【44】S8新国头12周｜SonicBuds SE4 ANC 进巴拿马后头 12 周能卖多少台？
+   ✅ 正确  9s  2416字 | 真值：Panama 12周参考 432（周销参考 36，累计口径中位 969）
+   答：**SonicBuds SE4 ANC 在巴拿马（Panama）上市后头 12 周预计可卖约 432 台**（周销参考 36 台/周 × 12 周）；若按「年初至今累计」量级口径看，估计区间为 **653–1005 台，中位 969 台**。 --- ### 一、结论与数字 | 口径 | 数值 | 说明 | |---|---|---| | **头 12 周参考** | **432 台** | 周销参考 36 台/周 × 12 周（这才是「头 12 周能卖多少」的数） | | 周销参考 | 36 台/周 | 本品近 4 周周销均值按中位÷本品累计等比换算 | | 估计区间（年初至今累计口径） | 653–1005 台 | 三法最小~最
+   工具：📐preest {"type":"preest","product":"SonicBuds SE4 ANC","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":969,"区间低":653,"区间高":1005}}
+
+【45】S8新国头12周｜如果 Slate 11 Pro 铺到多米尼加，头 12 周按周销节奏预计走多少台？累计口径又是多少？
+   ✅ 正确  13s  1140字 | 真值：Dominican Rep. 12周参考 276（周销参考 23，累计口径中位 690）
+   答：**结论：Slate 11 Pro 目前在多米尼加未在售（实际累计 SO = 0 台，口径：年初至今累计，截至 2026-08-17），若按现有周销节奏推算，上市头 12 周参考约 276 台；而 551–847 台（中位 690 台）是「年初至今累计」口径的量级参考，不是头 12 周的数，两者口径不同、不可混用。** **关键数字（均截至 2026-08-17）** - **头 12 周预计销量：276 台**（口径：周销参考 × 12 周）。对应周销节奏 **23 台/周**（口径：本品近 4 周周销均值按「中位 ÷ 本品累计」等比换算）。 - **累计口径量级参考：551–847 台，中位 690 台**（口径：份额法 / 规
+   工具：📐preest {"type":"preest","product":"Slate 11 Pro","countries":["Dominican Rep."],"analogs":[],"top":{"国家":"Dominican Rep.","中位":690,"区间低":551,"区间高":847}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【46】S8新国头12周｜SonicArc 进入 Guatemala 的前 12 周量级估一下。
+   ✅ 正确  14s  1776字 | 真值：Guatemala 12周参考 96（周销参考 8，累计口径中位 198）
+   答：**SonicArc 进入 Guatemala 后前 12 周销量量级参考约 96 台（口径：周销参考 8 台/周 × 12 周，截至 2026-09-12），属偏保守的参考量级；该产品目前在 Guatemala 尚未在售（实际累计 SO = 0 台，年初至今累计口径，截至 2026-09-12），属「有进入机会」的未进入市场。** **一、头 12 周量级（这是回答本题的核心口径）** - 头 12 周参考：**96 台**（口径：周销参考 8 台/周 × 12 周，截至 2026-09-12） - 说明：这是唯一直接对应「上市后前 12 周」的数字；下面第二点的 133–203 台是**年初至今累计口径**，两者口径不同，不能混
+   工具：📐preest {"type":"preest","product":"SonicArc","countries":["Guatemala"],"analogs":[],"top":{"国家":"Guatemala","中位":198,"区间低":133,"区间高":203}}
+
+【47】S8新国头12周｜哥斯达黎加开 Slate SE 10，前 12 周能出多少台？
+   ✅ 正确  13s  1394字 | 真值：Costa Rica 12周参考 0（周销参考 0，累计口径中位 54）
+   答：**总体判断：哥斯达黎加市场的 Slate SE 10 目前尚未上市（路标无上市时间、实际累计 SO 为 0 台），因此「上市后前 12 周能出多少台」没有可用的确定性预测；现有数字里唯一对应「进入后头 12 周」口径的是 0 台，而 43–65 台（中位 54 台）是年初至今累计口径的量级参考，两者口径不同，不能互相替代。** **关键数字（均截至 2026-09-12）** - **上市时间与节奏：没查到。** Slate SE 10 在哥斯达黎加的路标上市时间（shipLate）为空，不进甘特图，首销周与爬坡节奏数据未包含；销售结束为空（口径：仍在售），EOM 为空（口径：未公告/未知，不做推算）。 - **「进入后头 12 
+   工具：📐preest {"type":"preest","product":"Slate SE 10","countries":["Costa Rica"],"analogs":[],"top":{"国家":"Costa Rica","中位":54,"区间低":43,"区间高":65}}
+
+【48】S8新国头12周｜Slate 12 Pro 打入乌拉圭，头 12 周和年初至今口径各预估多少？
+   ✅ 正确  12s  1154字 | 真值：Uruguay 12周参考 72（周销参考 6，累计口径中位 34）
+   答：**Slate 12 Pro 在乌拉圭尚未在售，属新进入机会：头 12 周参考约 72 台，年初至今（YTD）累计预估区间 27–41 台、中位 34 台——两者口径不同，不能互相替代或直接比较。** **关键数字（均截至 2026-09-12）** - **头 12 周参考销量：72 台**（口径：周销参考 6 台/周 × 12 周，预估非承诺）。 - **周销参考：6 台/周**（口径：本品近 4 周周销均值按「中位 ÷ 本品累计」等比换算）。 - **YTD 累计预估区间：27–41 台**（口径：年初至今累计，份额法/规模法/类比法三法最小~最大）。 - **YTD 累计预估中位：34 台**（口径：年初至今累计，三法中位数
+   工具：📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Uruguay"],"analogs":[],"top":{"国家":"Uruguay","中位":34,"区间低":27,"区间高":41}}
+
+【49】S9综合策略｜综合同比、周走势、库存和未来 12 周预测，给音频线一个下半年策略：主推谁、清谁、为什么？
+   ✅ 正确  19s  1794字 | 真值：候选 SonicBuds SE3/SonicBuds SE4 ANC/SonicBuds Pro 4/SonicArc；剔除 SonicBuds SE2；点名推 SonicBuds SE3/SonicBuds SE4 ANC/SonicBuds Pro 4/SonicArc 清 SonicBuds SE2
+   答：底表数据只读，无法执行写入/修改/删除/清理等操作；以下为基于已提供数字的查询与策略分析，不引入任何新数字。 **一句话结论：音频线2026年下半年应主推 SonicBuds SE3、SonicBuds SE4 ANC（SonicBuds Pro 4、SonicArc 作补充），清理 SonicBuds SE2。** **对比表**（口径：累计SO＝2026年至今累计SO；同比＝(今年-去年)/去年；渠道DOS＝渠道库存÷近4周日均；均截至 2026-08-17） | 产品 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|-
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{"line":["音频与智能配件"]}}
+
+【50】S9综合策略｜给平板线做一个到年底的规划：谁冲量、谁清库存、库存缺口在哪？
+   ✅ 正确  20s  2148字 | 真值：候选 Slate SE 11/Slate 11/Slate 11 Pro/Slate 12 Pro；剔除 Slate SE 10；最紧 Slate SE 11 5.9 周；点名冲 Slate SE 11/Slate 11/Slate 11 Pro 清 
+   答：**结论：平板产品线（line=平板，5 款机型）2026 年到年底的规划——Slate SE 10 是唯一红灯、风险最大、最该清库存的机型（渠道 DOS 461 天，红灯档 >120）；Slate SE 11、Slate 11、Slate 11 Pro 三款是冲量主力但周销都在走弱、库存只够 6–8 周，缺口在补货端；Slate 12 Pro 走强可加投。** 数据截至 2026-08-17（meta 口径），今天是 2026-09-12。 --- ## ① 风险最大 / 最该清库存的产品 **Slate SE 10** —— 渠道 DOS **461 天**（口径：近 4 周渠道 DOS，红绿灯 >120 为红 → **红灯**
+   工具：📐prediag {"type":"prediag","dim":"product","keys":["库存风险_按渠道DOS降序","红灯","报量延迟提示"],"counts":["库存风险_按渠道DOS降序 5","红灯 1","报量延迟提示 0"],"filters":{"line":["平板"]}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"Slate SE 11","中性":22358},"dosTarget":null,"filters":{"line":["平板"]}} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:options{"field":"line"} ｜ 路标与上市专家:options{"field":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:healthCheck{"dim":"product","filters":{"line":["平板"]}} ｜ 路标与上市专家:outlook{"dim":"product","weeks":0,"filters":{"line":["平板"]}}
+
+【51】S9综合策略｜按现在的节奏，年底前哪些产品会断货、哪些会积压？各需要什么动作？
+   ✅ 正确  21s  2239字 | 真值：断货 无；积压(红灯) Slate SE 10
+   答：**结论：产业看板 10 个产品，2026 年底前没有一款会真断货（断货风险清单为空），最该清库存的是 Slate SE 10——渠道 DOS 461 天、红灯档（阈值>120），其次是 SonicBuds SE2（SO 同比 −26.3%、可支撑 5.2 周但周销持续走弱）。** --- ## 一、风险最大 / 最该清库存的产品 **Slate SE 10**：渠道 DOS **461 天**（口径：report 近 4 周口径，红灯阈值 >120），SO 同比 **−82.6%**（口径：2026 年初至 0817 vs 2025 同期），是唯一明确积压款。 --- ## 二、按 DOS 降序的产品表 | 产品 | 累计SO |
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":19,"top":{"name":"SonicBuds SE3","中性":30619},"dosTarget":null,"filters":{}} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product"} ｜ 汇总/国家/产业专家:options{"field":"product"} ｜ 路标与上市专家:healthCheck{"dim":"product"} ｜ 路标与上市专家:dataCatalog{}
+
+【52】S9综合策略｜明年 BP 目标如果按今年全年预测来定，两条产品线各是多少？
+   ✅ 正确  11s  1302字 | 真值：音频与智能配件 193140/平板 166698
+   答：**结论：在产业看板·产品线维度下，若 2027 年 BP 目标直接按 2026 年全年预测来定，音频与智能配件为 193,140 台、平板为 166,698 台（口径均为 2026 全年预测·中性线性外推＝累计 SO＋近 4 周周均×到年底剩余 19 周，数据截至 2026-08-17）。** **关键数字（均标注口径与截至时间）** - **音频与智能配件 2027 BP 目标：193,140 台**（口径：2026 全年预测·中性；截至 2026-08-17）。其构成侧参考：2026 累计 SO 116,104 台（口径：年初至今累计 SO；截至 2026-08-17）。 - **平板 2027 BP 目标：166,698 台
+   工具：📐preoutlook {"type":"preoutlook","dim":"line","weeks":19,"top":{"name":"音频与智能配件","中性":77036},"dosTarget":null,"filters":{}}
+
+【53】S9综合策略｜SonicBuds SE2 同比在下滑、库存又不多，现在是该清库存还是补货？给出依据。
+   ✅ 正确  18s  1460字 | 真值：可支撑 5.2 周，同比 -26.3%，DOS 37
+   答：**总体判断：SonicBuds SE2（product，属 Otter series / SonicBuds family / 音频与智能配件 line）不该清库存，反而要准备补货——它同比销量确实在下滑，但库存更紧，没有积压可清。** **关键数字（口径与截至时间）** - 渠道 DOS **37 天**（口径：近4周口径，绿灯<90；截至 2026-08-17）——绿灯，且是 10 个产品渠道 DOS 降序里的**最后一位（最低）**。 - 全流程 DOS **47 天**（口径：渠道库存+CDC/FDC，绿灯<120；截至 2026-08-17）——同样绿灯。 - 渠道库存 **3573 台**（口径：maxYmd 当天快照
+   工具：📐prediag {"type":"prediag","dim":"product","keys":["同比下滑","库存风险_按渠道DOS降序","红灯","报量延迟提示"],"counts":["同比下滑 2","库存风险_按渠道DOS降序 10","红灯 1","报量延迟提示 5"],"filters":{}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}} ｜ 路标与上市专家:meta{} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product","contains":"SonicBuds"} ｜ 路标与上市专家:options{"field":"series","contains":"Otter"} ｜ 路标与上市专家:options{"field":"family","contains":"SonicBuds"} ｜ 路标与上市专家:options{"field":"line"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"model","filters":{"product":["SonicBuds SE2"]}} ｜ 路标与上市专家:rankItems{"dim":"product","by":"cumCur","filters":{"product":["SonicBuds SE2"]}} ｜ 路标与上市专家:healthCheck{"dim":"product","filters":{"product":["SonicBuds SE2"]}}
+
+【54】S9综合策略｜音频线未来 12 周预计合计多少台？平板线呢？差距大不大？
+   ✅ 正确  17s  1708字 | 真值：音频与智能配件 48654/平板 40782
+   答：**结论：音频线（音频与智能配件线）未来12周预计合计 48654 台，平板线 40782 台，差距 7872 台（约 19%），差距不算大——两条线量级接近，同属第一梯队。** 以下数字口径均为「近4周周均×12周线性外推（中性）」，数据截至 2026-08-17；预测区间为 2026-09-12 起共 12 周。 **一、未来12周预测（2026-09-12 起，共12周）** | 排名 | 产品线 | 中性 | 保守 | 乐观 | 周走势 | |---|---|---|---|---|---| | 1 | 音频与智能配件 | 48654 台 | 48504 台 | 48654 台 | 走弱 | | 2 | 平板 | 40782
+   工具：📐preoutlook {"type":"preoutlook","dim":"line","weeks":12,"top":{"name":"音频与智能配件","中性":48654},"dosTarget":null,"filters":{}} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"yoy","minCum":1000,"filters":{"line":["音频与智能配件"]}} ｜ 汇总/国家/产业专家:rankItems{"dim":"product","by":"yoy","minCum":1000,"filters":{"line":["平板"]}} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product","filters":{"line":["音频与智能配件"]}} ｜ 汇总/国家/产业专家:healthCheck{"dim":"product","filters":{"line":["平板"]}}
+
+【55】S9综合策略｜如果把 Slate 12 Pro 推到哥斯达黎加，头 12 周能卖多少？Slate 12 Pro 本身未来 12 周预计多少？
+   ✅ 正确  14s  1693字 | 真值：Costa Rica 12周参考 84；本身 12 周中性 4050
+   答：**结论：Slate 12 Pro 本身（现有 6 个在售国）未来 12 周的量级远大于其在哥斯达黎加单国上市头 12 周的新增参考量——前者中性 4050 台，后者约 84 台，约 48 倍；哥斯达黎加只是单国增量机会，不是主盘子。** --- **一、哥斯达黎加：Slate 12 Pro 尚未在售** - 在售状态：哥斯达黎加未在售，实际累计 SO = 0 台（口径：在售状态，截至 2026-08-17）。 - 头 12 周参考量：**84 台**（口径：周销参考 7 台/周 × 12 周，截至 2026-08-17）。 - 年初至今口径量级区间：**31–46 台，中位 39 台**（口径：份额法 31 / 规模法 31 / 
+   工具：📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Costa Rica"],"analogs":[],"top":{"国家":"Costa Rica","中位":39,"区间低":31,"区间高":46}} ｜ 📐preoutlook {"type":"preoutlook","dim":"product","weeks":12,"top":{"name":"SonicBuds SE3","中性":19338},"dosTarget":null,"filters":{}}
+
+【56】S9综合策略｜如果 Q4 预算只够主推两个产品，选谁？它们各自未来 13 周预计多少台？有没有断货风险？
+   ✅ 正确  19s  1973字 | 真值：候选 SonicBuds SE3/Slate SE 11/SonicBuds SE4 ANC/Slate 11/Slate 11 Pro/SonicBuds Pro 4/Slate 12 Pro/SonicArc；点名 SonicBuds SE3/Slate SE 11；SonicBuds SE3 13周 20950/撑 6.2，Slate SE 11 13周 15298/撑 5.9
+   答：**结论：2026 年 Q4 预算只够主推两个产品，应选 SonicBuds SE3 与 Slate SE 11——这是基于当前动量的定性判断（预测量级前二、SO 同比为正、渠道 DOS 绿灯），不是未来销量预测。** --- **一、总体判断** 在产业看板的前瞻候选清单（口径：非退市、渠道 DOS 非红、SO 同比非负、近 4 周有销量，截至 2026-08-17）中，SonicBuds SE3 与 Slate SE 11 是未来 13 周预测量级最大的两个产品，且均不在剔除清单内，因此作为 Q4 双主推。 **二、关键数字（每个数字均标口径与截至时间）** - **SonicBuds SE3**：未来 13 周中性预测 **2
+   工具：📐preoutlook {"type":"preoutlook","dim":"product","weeks":13,"top":{"name":"SonicBuds SE3","中性":20950},"dosTarget":null,"filters":{}} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:options{"field":"product"} ｜ 路标与上市专家:options{"field":"product","contains":"Slate"} ｜ 路标与上市专家:options{"field":"series"} ｜ 路标与上市专家:options{"field":"product","contains":"Sonic"} ｜ 路标与上市专家:options{"field":"product","contains":"Slate"} ｜ 路标与上市专家:dataCatalog{} ｜ 路标与上市专家:roadmapUpsert{"name":"Slate 11"} ｜ 路标与上市专家:roadmapUpsert{"name":"Slate 11 Pro"} ｜ 路标与上市专家:roadmapUpsert{"name":"Slate 12 Pro"} ｜ 路标与上市专家:roadmapUpsert{"name":"Slate SE 10"} ｜ 路标与上市专家:roadmapUpsert{"name":"Slate SE 11"} ｜ 路标与上市专家:roadmapUpsert{"name":"SonicArc"} ｜ 路标与上市专家:roadmapUpsert{"name":"SonicBuds Pro 4"}
+
+==================== 汇总 ====================
+题数 56｜能分析出来 56/56（100%）｜结论正确 55/56（98%）｜平均 1727 字/题
+分场景：S1未来排名 7/7｜S2全年 6/6｜S3断货 6/6｜S4DOS目标 6/6｜S5主推 7/7｜S6两品未来 4/5｜S7国家×产品 6/6｜S8新国头12周 5/5｜S9综合策略 8/8
+未通过：#33(不准)
+结果文件：eval/runs/run-strategy-v4.txt

@@ -315,6 +315,7 @@ async function main() {
   await unscoped();
   await judge();
   await nudge();
+  await gate();
 
   console.log(f ? ('\n' + f + ' FAILED') : '\nALL PASS');
   process.exit(f ? 1 : 0);
@@ -378,7 +379,7 @@ async function followup() {
   const h = mk([{ content: '{"standalone":"Product A 13.2-inch 收入与库存"}' },
                 { content: '收入专家结论。{"claims":[{"metric":"收入","value":"9"}],"notes":"收入说明"}' },
                 { content: '库存专家结论。{"claims":[{"metric":"库存","value":"8"}],"notes":"库存说明"}' },
-                { content: '' }]);                                              // 综合层空回复
+                { content: '' }, { content: '' }]);                            // 综合层空回复（含一次重来）
   const r6 = await O.orchestrate('它的收入 和 库存 怎么样', 'finance', h.deps, { history: HIST, mode: 'deep' });
   ok('F6 综合层空回复时不再输出「(空回复)」，而是给出专家结论', r6.answer !== '(空回复)' && /收入说明|库存说明|未能完成|重试/.test(r6.answer));
 
@@ -548,5 +549,69 @@ async function nudge() {
   const deps2 = Object.assign({}, deps, { chat: async p => { calls2.push(p); return script2[j++] || { content: 'Let me pull more data.' }; } });
   const r2 = await O.orchestrate('现在哪个产品未来能卖得更多？', 'industry', deps2, {});
   ok('N3 专家逼两次仍是过程话 → 编排层半途重试真的跑了并采纳终答', r2.results[0].halfwayRetried === true && /重试终答/.test(r2.results[0].notes || ''));
+}
+
+/* ---------- 结论核对闸：点名必须等于代码排名第 1 名（2026-09-11） ---------- */
+async function gate() {
+  const RANK = { by: '渠道DOS', order: '降序', items: [{ 名次: 1, name: 'Slate SE 10', 值: 461 }, { 名次: 2, name: 'Slate 12 Pro', 值: 56 }] };
+  const mk = (script) => { let i = 0; const calls = []; const ev = []; return { calls, ev, deps: {
+    schemas: AD.TOOL_SCHEMAS, buildToolSpecs: n => AD.buildToolSpecs(n), parseToolCall: AD.parseToolCall, pickTools: AD.pickTools, boardLabel: () => 'X', filters: () => null, snapshot: async () => '',
+    runTool: async (n) => (n === 'rankItems' ? RANK : { ok: 1 }), optionsDirect: async () => ['Slate SE 10', 'Slate 12 Pro'],
+    chat: async p => { calls.push(p); return script[i++] || { content: 'x' }; }, onProgress: e => ev.push(e) } }; };
+  const PLAN = { content: '{"standalone":"哪个产品的库存风险最大","tasks":[{"agent":"report","label":"库存","question":"哪个产品的库存风险最大"}]}' };
+  const CALL = { toolCalls: [{ function: { name: 'rankItems', arguments: '{"dim":"product","by":"dos"}' } }] };
+  const WRONG = { content: '结论：库存风险最大的是 Slate 12 Pro（DOS 56）。{"claims":[{"metric":"DOS","value":"56"}],"notes":"结论：库存风险最大的是 Slate 12 Pro（DOS 56）。"}' };
+  const RIGHT = { content: '结论：库存风险最大的是 Slate SE 10（DOS 461，红灯），Slate 12 Pro 其次（56）。' };
+  // G1 模型点错名 → 闸让它重写 → 重写点对了 → 采纳重写，不加系统核对行
+  const a = mk([PLAN, CALL, WRONG, RIGHT]);
+  const r1 = await O.orchestrate('哪个产品的库存风险最大？', 'industry', a.deps, {});
+  ok('G1 结论点错名时触发核对并重写', a.ev.some(e => e.type === 'verify' && e.ok === false) && a.ev.some(e => e.type === 'verify' && e.fixed === true));
+  ok('G1b 采纳重写后的正确结论，且没有加「系统核对」前缀', /Slate SE 10/.test(r1.answer.slice(0, 60)) && !/系统核对/.test(r1.answer) && r1.verified.conclusion && r1.verified.conclusion.fixed === true);
+  // G2 重写仍点错 → 代码排名钉在最前面，verified.ok=false
+  const b = mk([PLAN, CALL, WRONG, WRONG]);
+  const r2 = await O.orchestrate('哪个产品的库存风险最大？', 'industry', b.deps, {});
+  ok('G2 重写仍错 → 答案最前面是【系统核对】+ 代码排名', /^【系统核对】/.test(r2.answer) && /1\. Slate SE 10（461）/.test(r2.answer) && r2.verified.ok === false && r2.verified.conclusion.expected === 'Slate SE 10');
+  // G3 点对了 → 不动
+  const c = mk([PLAN, CALL, RIGHT]);
+  const r3 = await O.orchestrate('哪个产品的库存风险最大？', 'industry', c.deps, {});
+  ok('G3 结论正确 → 不重写、不加前缀、标记已核对', c.calls.length === 3 && !/系统核对/.test(r3.answer) && r3.verified.conclusion && r3.verified.conclusion.checked === true);
+  // G5 代码预排名：单选题先由代码算 rankItems，原文塞给专家，并发 prerank 事件
+  const e5 = mk([PLAN, CALL, RIGHT]);
+  await O.orchestrate('哪个产品的库存风险最大？', 'industry', e5.deps, {});
+  const specMsgs = (e5.calls[1] && e5.calls[1].messages || []).map(m => String(m.content || ''));
+  ok('G5 专家收到「代码预排名」且点明第 1 名', specMsgs.some(m => /代码预排名/.test(m) && /第 1 名是「Slate SE 10」/.test(m)));
+  ok('G5b 发出 prerank 事件', e5.ev.some(e => e.type === 'prerank' && e.top === 'Slate SE 10' && e.dim === 'product'));
+  // G6 代码预诊断：集合题先由代码跑 healthCheck，只塞问题要的清单
+  const HC = { 口径: 'x', 周销走弱: [{ name: 'Slate 11', 周变化: -15.1 }, { name: 'Slate SE 10', 周变化: -26.7 }], 周销走强: [{ name: 'Slate 12 Pro' }], 红灯: [] };
+  const e6 = mk([{ content: '{"standalone":"哪些产品在走弱","tasks":[{"agent":"report","label":"x","question":"哪些产品在走弱"}]}' }, RIGHT]);
+  e6.deps.runTool = async (n) => (n === 'healthCheck' ? HC : n === 'rankItems' ? RANK : { ok: 1 });
+  await O.orchestrate('从近 9 周的周销量走势看，哪些产品在持续走弱？', 'industry', e6.deps, {});
+  const m6 = (e6.calls[1] && e6.calls[1].messages || []).map(m => String(m.content || '')).join('\n');
+  ok('G6 专家收到「代码预诊断」，含周销走弱清单、不含无关的周销走强', /代码预诊断/.test(m6) && /Slate SE 10/.test(m6) && /周销走弱/.test(m6) && !/周销走强/.test(m6) && /全部（问题没限定/.test(m6));
+  ok('G6b 发出 prediag 事件', e6.ev.some(e => e.type === 'prediag' && e.keys.indexOf('周销走弱') >= 0));
+  // G7 代码预估：预估题先由代码跑 opportunity，原文塞给专家；对比题先跑 compareItems
+  const OPPO = { product: 'SonicArc', 目标国家: 'Ecuador', 产品现状: {}, 类比品: [], 估计: [{ 国家: 'Ecuador', 已在售: false, 实际累计SO: 0, 份额法: 213, 规模法: 214, 类比法: [], 区间低: 213, 区间高: 331, 中位: 315 }], 口径: 'x', 假设与风险: [] };
+  const CMPO = { 口径: 'x', items: [{ name: 'SonicArc', 累计SO: 6776 }, { name: 'SonicBuds SE3', 累计SO: 45727 }], 对比: { 累计SO: { 领先: 'SonicBuds SE3', 差值: 38951 } } };
+  const e7 = mk([{ content: '{"standalone":"x","tasks":[{"agent":"report","label":"x","question":"SonicArc 对比 SonicBuds SE3 表现怎么样？如果把 SonicArc 拿到厄瓜多尔去卖能卖多少？"}]}' }, { content: '结论：SonicBuds SE3 领先（45,727 vs 6,776）；SonicArc 拿到厄瓜多尔约 213–331 台，中位 315 台。' }]);
+  e7.deps.runTool = async (n, a) => (n === 'opportunity' ? OPPO : n === 'compareItems' ? CMPO : { ok: 1 });
+  e7.deps.optionsDirect = async (f) => (f === 'product' ? ['SonicArc', 'SonicBuds SE3'] : f === 'country' ? ['Ecuador', 'Mexico'] : []);
+  const r7 = await O.orchestrate('SonicArc 对比 SonicBuds SE3 表现怎么样？如果把 SonicArc 拿到厄瓜多尔去卖能卖多少？', 'industry', e7.deps, {});
+  const m7 = (e7.calls[1] && e7.calls[1].messages || []).map(m => String(m.content || '')).join('\n');
+  ok('G7 专家收到「代码预估」与「代码预对比」', /代码预估/.test(m7) && /"中位":315/.test(m7) && /代码预对比/.test(m7) && /38951/.test(m7));
+  ok('G7b 发出 preest/precmp 事件且闸通过', e7.ev.some(e => e.type === 'preest' && e.product === 'SonicArc' && e.countries[0] === 'Ecuador') && e7.ev.some(e => e.type === 'precmp') && r7.verified && r7.verified.conclusion && r7.verified.conclusion.ok === true);
+  // G8 代码前瞻：前瞻题先由代码跑 outlook，摘要 + JSON 并入题面
+  const OLO = { dim: 'product', 数据截至: '2026-08-17', 预测周数: 12, 到年底剩余周数: 19, items: [{ name: 'SonicBuds SE3', 近4周周均: 1612, '未来12周预测': { 保守: 19092, 中性: 19338, 乐观: 19338 }, 全年预测_中性: 76346, 渠道库存: 10009, 可支撑周数: 6.2, 断货风险: '8周内需补货', 主推候选: true, 剔除原因: [] }], '未来12周预测排名': [{ 名次: 1, name: 'SonicBuds SE3', 中性: 19338, 保守: 19092, 乐观: 19338, 周走势: '走弱' }], 全年预测排名: [{ name: 'SonicBuds SE3', 全年预测_中性: 76346 }], 库存可支撑周数_升序: [{ name: 'SonicBuds SE3', 可支撑周数: 6.2 }], 断货风险清单: [], 主推候选_按预测量: [{ name: 'SonicBuds SE3', 中性: 19338 }], 剔除清单: [], DOS目标_需减库存降序: null, 口径: 'x', 假设与风险: [] };
+  const e8 = mk([{ content: '{"standalone":"x","tasks":[{"agent":"report","label":"x","question":"未来 12 周哪个产品会卖得最多？"}]}' }, { content: '结论：SonicBuds SE3 未来 12 周中性预测 19,338 台居首。' }]);
+  e8.deps.runTool = async (n) => (n === 'outlook' ? OLO : { ok: 1 });
+  const r8 = await O.orchestrate('未来 12 周哪个产品会卖得最多？预计多少台？', 'industry', e8.deps, {});
+  const m8 = (e8.calls[1] && e8.calls[1].messages || []).map(m => String(m.content || '')).join('\n');
+  ok('G8 专家收到「代码前瞻」摘要且闸通过', /代码前瞻/.test(m8) && /19338/.test(m8) && e8.ev.some(e => e.type === 'preoutlook' && e.top && e.top.name === 'SonicBuds SE3') && r8.verified && r8.verified.conclusion && r8.verified.conclusion.ok === true);
+  // G9 产品线简称：「音频线」→ 实体 line=音频与智能配件
+  const e9 = await O.scanEntities('未来 12 周音频线里哪个产品预计卖得最多？', { optionsDirect: async f => (f === 'line' ? ['平板', '音频与智能配件'] : f === 'product' ? ['SonicArc'] : []) });
+  ok('G9 「音频线」识别为 line 实体', JSON.stringify(e9.line) === '["音频与智能配件"]', e9);
+  // G4 集合题不核
+  const d = mk([{ content: '{"standalone":"哪些产品在下滑","tasks":[{"agent":"report","label":"x","question":"哪些产品在下滑"}]}' }, CALL, WRONG]);
+  const r4 = await O.orchestrate('哪些产品今年同比在下滑？', 'industry', d.deps, {});
+  ok('G4 集合题（哪些）不核、不重写', d.calls.length === 3 && !/系统核对/.test(r4.answer));
 }
 main().catch(e => { console.log('FAIL 未捕获异常: ' + (e && e.stack || e)); process.exit(1); });

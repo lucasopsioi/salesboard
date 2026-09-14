@@ -1,0 +1,17 @@
+题数 54｜可转国产品：SonicBuds SE4 ANC(6 国未进)、Slate 11 Pro(6 国未进)、SonicArc(6 国未进)、Slate SE 10(6 国未进)、Slate 12 Pro(6 国未进)｜全覆盖产品：SonicBuds SE3、Slate SE 11、Slate 11、SonicBuds SE2、SonicBuds Pro 4
+
+【38】T6收入+转国｜Slate SE 10 和 Slate 11 收入、销量综合看，该多推哪个？如果把 Slate SE 10 推到巴拿马能卖多少？
+   ✅ 正确  18s  | 真值：Slate SE 10 SO 2761/收入 239255，Slate 11 SO 34714/收入 3520941；预估 65–98/中位81
+   答：**结论：Slate 11 与 Slate SE 10 对比，应主推 Slate 11；Slate SE 10 若推向巴拿马市场，预计年初至今累计量级约 65–98 台（中位 81 台）。** --- ## 一、一句话结论 在 Slate 11 与 Slate SE 10 之间，**主推 Slate 11**——它在销量、收入、单台收益、库存健康度上全面领先；Slate SE 10 已进入退市/清尾阶段，不建议再投入，若推向巴拿马预计全年累计仅 65–98 台（中位 81 台）。 --- ## 二、对比表（行=产品） | 产品 | 累计SO | SO同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 
+   工具：📐precmp {"type":"precmp","names":["Slate 11","Slate SE 10"]} ｜ 📐preest {"type":"preest","product":"Slate SE 10","countries":["Panama"],"analogs":[],"top":{"国家":"Panama","中位":81,"区间低":65,"区间高":98}}
+
+【44】T7二选一｜危地马拉和乌拉圭，哪个国家更值得推 Slate 12 Pro？各能卖多少？
+   ✅ 正确  17s  | 真值：Guatemala 39–60/中位49 vs Uruguay 27–41/中位34，应选 Guatemala（结论先点 Guatemala）
+   答：**一句话结论：2026 年推广 Slate 12 Pro，危地马拉（Guatemala）比乌拉圭（Uruguay）更值得主推——两国都还没在售，但危地马拉预估中位 49 台（年初至今累计量级参考，截至 2026-09-12）高于乌拉圭 34 台，市场盘子与平板同比也全面领先。** --- ## 一、对比表（行=国家，本题为「同一产品在两个国家」的对比） | 国家 | 累计SO | 同比 | 近3个月环比趋势 | 收入 | 销毛率 | NSIP | 渠道DOS | 上市阶段 | |---|---|---|---|---|---|---|---|---| | 危地马拉 Guatemala | 0 台（Slate 12 Pro 实际累计
+   工具：📐preest {"type":"preest","product":"Slate 12 Pro","countries":["Guatemala","Uruguay"],"analogs":[],"top":{"国家":"Guatemala","中位":49,"区间低":39,"区间高":60}}
+
+==================== 汇总 ====================
+题数 2｜能分析出来 2/2（100%）｜结论正确 2/2（100%）
+分场景：T6收入+转国 1/1｜T7二选一 1/1
+未通过：无
+结果文件：eval/runs/run-composite-p3.txt

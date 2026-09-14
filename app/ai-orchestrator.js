@@ -64,7 +64,7 @@
   const AGENTS = {
     general: {
       id: 'general', name: '通用助手', boards: [],
-      tools: ['meta', 'dataCatalog', 'searchDim', 'query', 'report', 'options'],
+      tools: ['meta', 'dataCatalog', 'searchDim', 'query', 'report', 'options', 'rankItems', 'compareItems', 'healthCheck', 'opportunity', 'outlook'],
       prompt: [
         '你是通用助手：不属于任何专业域的活儿都归你直接干完——写作/改写/翻译/摘要/邮件/方案/解释概念/整理上传文档，一步到位交成品，不摆分析架子。',
         '【干活方式】① 任务是写东西就直接写完整成品（不是大纲、不是"建议你这样写"），语气与篇幅贴合用途；② 用户上传了文档就基于文档原文干活，逐点忠实，不虚构文档里没有的内容；③ 任务含数据时用工具取数（dataCatalog 看目录→searchDim 定位→query/report 取数），取不到就明说；④ 多个子任务逐个交付，不合并糊弄。',
@@ -74,7 +74,7 @@
     },
     psi: {
       id: 'psi', name: 'PSI 分析专家', boards: ['psi'],
-      tools: ['meta', 'options', 'query', 'report', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
+      tools: ['meta', 'options', 'query', 'report', 'boardState', 'searchDim', 'rawRows', 'dataCatalog', 'rankItems', 'compareItems', 'healthCheck', 'opportunity', 'outlook'],
       prompt: [
         '你是 PSI 数据分析专家，负责 Sell-in / Sell-out / 库存 / DOS 的时间序列（全是台数，无金额）。',
         '【底表与录入】长表：同一「9维×期间」拆成 Sell In / Sell Out / Inventory / DOS 四行；解析只认全称（sellin/sellout/inventory|inv/dos），SI/SO 缩写整行丢弃。同键行 sellIn/sellOut 累加、inv/dos 后写覆盖；多文件按 mtime 新文件整行覆盖，不相加。底表自带的 DOS 列一律不用，DOS 永远重算。音频 SO 是人工延迟录入（一般晚 1–2 周），不是激活回传：缺周＝没录，不是卖了 0。真实底表没有汇总行，别用「小计重复计数」解释对不上。',
@@ -89,7 +89,7 @@
     },
     report: {
       id: 'report', name: '汇总/国家/产业专家', boards: ['report', 'country', 'industry'],
-      tools: ['meta', 'options', 'report', 'industryBoard', 'industryTrend', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
+      tools: ['meta', 'options', 'report', 'industryBoard', 'industryTrend', 'boardState', 'searchDim', 'rawRows', 'dataCatalog', 'rankItems', 'compareItems', 'healthCheck', 'opportunity', 'outlook'],
       prompt: [
         '你是汇总表 / 国家看板 / 产业看板专家，负责「卖了多少、同比多少、库存多少、周转多少天」。三者取数同源于 report()，数字应当一致。',
         '【公式】累计SO/SI＝自然年 1/1 起至全局最新日 maxYmd；去年同期＝去年同一日历 MMDD 截取；同比＝(今年−去年)/去年，去年≤0 记 null 显「—」。年度锚点固定用全量数据的 maxYmd，不随下钻漂移（下钻到当年无SO的停产品也要显示「当年0 / 去年真实值 / −100%」）。周列走 ISO 周，默认近 9 周；WoW＝周列最后两周之比（周列只统计当前 ISO 年，年初时去年 W52/W53 恒 0）。DOS 的近4周窗口按**真实日期**回看 28 天、以 maxYmd 那周收尾，**跨年正确**（2026-08-11 起；此前按 ISO 周号取且只认当年，1 月 DOS 曾虚高至 4 倍）：改 fromW/toW 只改周列与 WoW，不改 DOS。显示库存 inv＝maxYmd 当天所有行求和；DOS 分子在音频走该原子单元 W_last 那周的库存（显示/计算分离）。dos=null 只在「含音频且日均=0」时出现，纯平板日均=0 给 0。全流程库存＝渠道库存 + 库龄表最新运行日的 CDC+FDC；全流程列忽略 channel 筛选，groupDim=channel 时不出该列。DOS 红绿灯：渠道 <90/90–120/>120，全流程 <120/120–150/>150。',
@@ -103,7 +103,7 @@
     },
     finance: {
       id: 'finance', name: '经营分析专家', boards: ['finance'],
-      tools: ['meta', 'financeOverview', 'financeProductBoard', 'financeRepBoard', 'financeCustom', 'boardState', 'dataCatalog'],
+      tools: ['meta', 'financeOverview', 'financeProductBoard', 'financeRepBoard', 'financeCustom', 'boardState', 'dataCatalog', 'rankItems', 'compareItems', 'healthCheck', 'opportunity', 'outlook'],
       prompt: [
         '你是经营分析（财经）专家：收入 / 销毛额 / 销毛率 / NSIP / 贡献利润 与 BP、预测达成。财经全部是月粒度。',
         '【公式】销毛率＝Σ销毛额 ÷ Σ净销售收入（先各自求和再相除，绝不对各行的率取平均），对比用 pp 差。NSIP＝净销售收入 ÷ 收入量（实际表叫「收入量_终端」，预测/BP 叫「收入量」，两名都要吃进；≠Sell in量），单位 USD/台，恒按 USD 显示不随 MUSD 缩放，同比是绝对美元差（±$）不是百分比；对 BP/预测比时目标 NSIP＝目标收入 ÷ 目标 Sell in量。收入量＝能进收入的 sell-in，DOS>90 天的部分递延不进当期。实际与同比取同一 [fromM,toM] 区间；预测/BP 是全年 12 月求和，所以 BP达成率＝区间实际收入 ÷ 全年BP，必须同时给出时间进度＝(toM−fromM+1)/12。Sell-in/out 的实际值来自 PSI 底表（财经实际表没有这两个指标），财经的 Sell in/out 量只是目标。销毛额指标名精确取「销售毛利」，别误命中「销售毛利率」「销售毛利(不含中期激励)」。产品维度用户要看年内 BP/预测完成率，不看同比。',
@@ -117,7 +117,7 @@
     },
     inventory: {
       id: 'inventory', name: '库存与销毛专家', boards: ['inventory'],
-      tools: ['meta', 'sosimSummary', 'report', 'options', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
+      tools: ['meta', 'sosimSummary', 'report', 'options', 'boardState', 'searchDim', 'rawRows', 'dataCatalog', 'rankItems', 'compareItems', 'healthCheck', 'opportunity', 'outlook'],
       prompt: [
         '你是库存管理 / SO 模拟专家（销毛推演已迁出到 siso-lab，本仓只修不加）。',
         '【计算域】库存、成本、约束都是累计量，必须从生命周期起点算到区间末，range 只做显示切片——库存绝不能随所选月份变。cutoff＝PSI 与发货行里的最大 ymd，≤cutoff 是历史只读，>cutoff 是未来可编辑。',
@@ -146,7 +146,7 @@
     },
     roadmap: {
       id: 'roadmap', name: '路标与上市专家', boards: ['roadmap'],
-      tools: ['meta', 'options', 'report', 'roadmapUpsert', 'dataCatalog'],
+      tools: ['meta', 'options', 'report', 'roadmapUpsert', 'dataCatalog', 'rankItems', 'compareItems', 'healthCheck', 'opportunity', 'outlook'],
       prompt: [
         '你是产品路标 / 上市节奏专家。路标数据全部是手填在本地存档里，不在 PSI 底表；只有实际销量走引擎。',
         '【生命周期】上市时间＝shipLate（最晚发货时间，必填，没有就不进甘特）；销售结束为空＝仍在售；EOM 非必填（发公告后才知道）且必须晚于上市；EOM+180 天＝EOM+180×86400000，是激励投放截止线，过后不可再投、不能顺延。EOM 为空就答「未公告/未知」，不要推算。同跑产品并列多行，不依赖 predecessorId。',
@@ -190,7 +190,7 @@
     },
     weekly: {
       id: 'weekly', name: '产业周报专家', boards: ['audio'],
-      tools: ['meta', 'options', 'report', 'query', 'financeProductBoard', 'boardState', 'searchDim', 'rawRows', 'dataCatalog'],
+      tools: ['meta', 'options', 'report', 'query', 'financeProductBoard', 'boardState', 'searchDim', 'rawRows', 'dataCatalog', 'rankItems', 'compareItems', 'healthCheck', 'opportunity', 'outlook'],
       prompt: [
         '你是产业周报（音频/平板可切换）专家。六块：M1 遗留问题（人工录入）、M2 产业经营进展（财经分系列/分国家办）、M3 SI 达成进展、M4 周度销售进展（4 个 KPI + 趋势）、M5 产品维度（按国家逐块）、M6 新品进展。',
         '【M3 口径】累计SI＝Sell-in（渠道全加不去重）；时间进度＝年内第几天 ÷ 全年天数（自然日，闰年366）——注意这与财经 BP/预测的时间进度 (toM−fromM+1)/12 不是同一个算法，不要混用；达成率＝累计SI ÷ SI目标，目标≤0 记 null；「拉美其他」＝范围总量 − 已列名国家之和，不为负（clamp 0）。大盘年空间、目标份额、SI目标都是人工维护的目标值，底表里没有。',
@@ -575,14 +575,23 @@
     /* 底表直查三件套常驻（2026-09-11 用户：「底表也要能访问」）：快速模式原来只挑 4 个工具，
        rawRows/searchDim/dataCatalog 常被挤掉，聚合工具查不到时专家就只能认输。 */
     const mustHave = ['rawRows', 'searchDim', 'dataCatalog'].filter(n => baseTools.indexOf(n) >= 0);
+    // 排名/对比/健康/趋势/贡献类问题：确定性分析三件套常驻（数字由代码算，模型只解读）
+    if (/(哪个|哪些|哪款|谁|最|排名|排序|对比|比较|vs|更好|更值得|多卖|主推|贡献|趋势|走势|走弱|风险|健康|清库存|退市|压货|去库存|下滑|增长|潜力|组合|建议|砍)/i.test(task.subQuestion)) ['rankItems', 'compareItems', 'healthCheck'].forEach(n => { if (baseTools.indexOf(n) >= 0) mustHave.push(n); });
+    if (/(预估|估计|能卖|能不能卖|有没有机会|有机会|拿到|进入|推到|打入|铺到|下一个.{0,6}国|还能卖|增长空间|卖更多|多卖|机会|参考.{0,12}历史)/.test(task.subQuestion) && baseTools.indexOf('opportunity') >= 0) mustHave.push('opportunity');
+    if (/(未来|接下来|下个月|下季度|下半年|年底|全年|Q[34]|断货|可支撑|撑多久|撑几周|压到|降到|主推|组合|资源|前景|预测|预计|展望|节奏|会不会|策略)/.test(task.subQuestion) && baseTools.indexOf('outlook') >= 0) mustHave.push('outlook');
+    if (a.id === 'finance' && /产品|哪个|哪款|哪些|Slate|Sonic|型号|系列|最高|最低|分别/i.test(task.subQuestion) && baseTools.indexOf('financeProductBoard') >= 0) mustHave.push('financeProductBoard');
     const picked = !fast ? baseTools
       : (deps.pickTools ? deps.pickTools(baseTools, task.subQuestion, 4 + uiUniq.length) : baseTools.slice(0, 4));
     const toolNames = [...new Set(picked.concat(mustHave))];
     const specs = (deps.buildToolSpecs ? deps.buildToolSpecs(toolNames) : []);
     const messages = [];
     if (ctxMsg) messages.push({ role: 'user', content: ctxMsg });
+    /* 代码预算块（预排名/预诊断/预对比/预估）并入题面消息、紧跟问题——单独一条早早发出去会被后面空的工具结果盖过
+       （v-composite #50：预估块明明在，专家跑了两个空查询就写「本轮均未取到」）。 */
+    const preTxt = [task.preRank, task.preDiag, task.preCmp, task.preEst, task.preOut].filter(Boolean).join('\n\n');
+    const preBlock = preTxt ? ('\n\n【代码已算好的本题数据——就是本题的数据，你的工具查询返回空不等于没有数据；数字原样引用】\n' + preTxt) : '';
     const guardTxt = (task.guards && task.guards.length) ? ('\n\n【本题硬约束(违反即废答)】\n' + task.guards.map(g => '· ' + g).join('\n')) : '';
-    messages.push({ role: 'user', content: task.subQuestion + guardTxt + '\n\n' + ANSWER_CHECKLIST + '\n\n输出格式：先写面向用户的完整回答（第一句就是结论，然后是依据与数字，最后是口径），再附一段 JSON：{"claims":[{"metric":"指标名","value":数值或字符串,"unit":"单位","caliber":"口径","asOf":"截至"}],"notes":"一句话结论"}。正文不要省略——JSON 只是给系统核数用的。' });
+    messages.push({ role: 'user', content: task.subQuestion + guardTxt + preBlock + '\n\n' + ANSWER_CHECKLIST + '\n\n输出格式：先写面向用户的完整回答（第一句就是结论，然后是依据与数字，最后是口径），再附一段 JSON：{"claims":[{"metric":"指标名","value":数值或字符串,"unit":"单位","caliber":"口径","asOf":"截至"}],"notes":"一句话结论"}。正文不要省略——JSON 只是给系统核数用的。' });
     let rounds = 0, lastErr = null, nudges = 0;
     const maxRounds = task.maxRounds || BUDGET.maxToolRoundsPerAgent;   // 剧本题(对比/趋势)要先探路再取数，给 8 轮
     while (rounds < maxRounds) {
@@ -688,6 +697,8 @@
     if (/Slate|Sonic|Slate Tab|SonicBuds/i.test(q)) g.push('维度命名字典：Slate/Slate SE/SonicBuds/SonicBuds Pro/SonicArc 这类市场名是 family(产品家族)；Marlin/Coral/Dorado/Tarpon 等代号是 series；带连字符的编码(如 SLT11P-W8256)是 model；「Slate 11 Pro」这类含数字后缀的是 product。按名字形态选对 filters 的维度键，查不到先用 options 对表，不要断言"数据未包含"。问「某一个产品」(如 Slate 11)的数值时必须用 product 维度过滤到该单品——用 family(家族)合计冒充单品是严重错误(家族含多个产品,数值必然偏大)。');
     if (/(库存|DOS|周转)/.test(q) && /(健康|风险|周转|压货|积压|水位|哪条|哪个|更好|更差)/.test(q)) g.push('库存健康/周转判断一律用 report 返回的 dos（库存×28÷近4周SO，跨看板一致）；industryTrend/query 按月算的 DOS 在末月不完整（数据截止在月中）时会被放大几倍，禁止拿单月 DOS 做健康结论；音频末端周为 0 是报量延迟，不是断货。');
     if (/(收入|销毛|NSIP|净售价|毛利)/.test(q) && /(产品|哪个|哪款|Slate|Sonic|最高|最低|分别)/.test(q)) g.push('财经产品级问题：financeProductBoard({fromM:1,toM:当前月,lv1:[产品线]}) 返回的 lv4.rows 才是产品级（rev26/gmr26/nsip26/gm26），按产品名挑行作答；line/lv3 合计不能拿来回答某个产品；两条产品线都可能有目标产品，各取一次。');
+    if (/(哪个|哪些|哪款|谁)[^。？?]{0,12}(最|更|前|后|第一|排名|排序)|排名|排序|对比|比较|更好|更值得|多卖|主推|贡献|趋势|走势|走弱|走强|风险|健康|清库存|退市|压货|去库存|下滑|潜力|组合|建议|砍掉/.test(q)) g.push('【数字由代码算】排名用 rankItems、两两/多方对比用 compareItems、库存风险/下滑/去库存/走弱清单用 healthCheck——这三个工具返回的名次、同比(已是百分数)、差值、倍数、红绿灯、周走势、贡献量都是代码算好的，回答里的数字与「谁领先/谁最高/谁下滑」必须直接引用它们，禁止用 query 逐月矩阵或 report 原始行自己再算一遍（自己算过的同比曾把 +0.5% 算成 −0.5%）。');
+    if (/(贡献|拉动|驱动|谁带来|主要来自)/.test(q)) g.push('贡献分析必须到产品级：report({groupDim:"product"}) 逐产品取 cumCur/cumPrev，贡献量 = cumCur − cumPrev，按贡献量排序点名最大者；只有 line/series 合计不能回答「哪个产品贡献最大」。');
     if (/(库存|DOS)/.test(q) && /(合计|加起来|总和|求和|累加|加一下|加总)/.test(q)) g.push('库存/DOS 是「时点快照」不是流量：跨月把各月末库存相加没有业务意义，禁止给出求和值。正确做法：用 query(metric:"inv",gran:"month") 逐月列出各月末时点值，并明确说明快照不能求和；如用户要的是总量概念，请引导用累计 SI/SO。');
     if (/(增速|同比|增长)/.test(q) && /(快|慢|驱动|拆|来自|哪一?年|比.*(快|高)|靠什么)/.test(q)) g.push('财经看板返回自带上年同期与同比字段(rev25/rev26/revYoy、nsip25/nsip26/nsipYoy、gm25/gmYoy)，不要声称"缺上年数据"；收入增速可拆为量(≈收入÷NSIP)与均价(NSIP)两个因子分别对比。');
     return g;
@@ -744,6 +755,9 @@
       // 允许：原值、×100、÷100（比率↔百分比）。占比/整体达成等衍生值由工具算好后随返回给出，
       // 不再开放"任意两数之商"通道——商空间太密，8.1% 这类编造小百分数总能撞上巧合配对（评测实测）。
       for (const t of uniq) { if (close(t, x) || close(t * 100, x) || close(t / 100, x)) return true; }
+      // 「下滑 82.6%」写的是绝对值，工具里是 -0.826：比率↔百分比通道按绝对值再比一次（30 题实测 #7 被误拦）
+      const ax = Math.abs(x);
+      for (const t of uniq) { const at = Math.abs(t); if (close(at * 100, ax) || close(at / 100, ax)) return true; }
       // 单位换算通道(Round 8)：K/万/MUSD/亿 的显示换算(12,445,134 → 12.4M)。舍入容差比 close 宽一档，
       // 只在换算方向开放——直接值仍走紧容差，避免容差放大误放编造。
       const closeScale = (a, b) => Math.abs(a - b) <= Math.max(0.051, Math.abs(b) * 0.005);
@@ -824,7 +838,7 @@
         /* 2026-09-11 实测：模型交了一句「I'll re-pull every number from the tools.」被当成重写答案原样出门。
            重写必须是面向用户的完整回答：太短、过程话（中英文）都不收，让它再来一轮；三轮都不行就返回 null，
            由调用方保留原答案并把无出处的数打「(未取到)」——诚实的标注远好过一句敷衍。 */
-        if (txt.length >= 40 && !RETRY_JUNK_RE.test(txt)) return txt;
+        if (txt.length >= 40 && !RETRY_JUNK_RE.test(txt) && !isProcessOnly(txt)) return txt;   // 30 题 v5 #27：「I need product-level SI and SO… Let me pull」84 字绕过了 80 字上限
       }
       return null;
     } catch (e) { return null; }
@@ -855,6 +869,8 @@
         const vn = vs.toLowerCase().replace(/[\s\-_]/g, '');
         if (/[\u4e00-\u9fa5]/.test(vs) ? qRaw.indexOf(vs) >= 0 : (vn.length >= 3 && qn.indexOf(vn) >= 0)) hit.push(vs);
       }
+      // 产品线简称：「音频线 / 平板」→「音频与智能配件 / 平板」（取值前两个汉字出现在问题里即命中；产品线取值只有寥寥几个，不会误伤）
+      if (dim === 'line' && !hit.length) vals.forEach(v => { const k = String(v == null ? '' : v).slice(0, 2); if (/^[\u4e00-\u9fa5]{2}$/.test(k) && qRaw.indexOf(k) >= 0 && hit.indexOf(String(v)) < 0) hit.push(String(v)); });
       hit = hit.filter(a => !hit.some(b => b !== a && b.toLowerCase().replace(/[\s\-_]/g, '').indexOf(a.toLowerCase().replace(/[\s\-_]/g, '')) === 0));
       if (hit.length) found[dim] = hit.slice(0, 8);
     }
@@ -969,26 +985,44 @@
        · 决策题专家取到了数，综合层却不敢下结论、或被门禁重写成一句过程话。
      剧本三段：plan 给规划员（拆哪些任务、各调什么）、text 给专家（取数清单 + 必须下结论）、synth 给综合层（结论格式）。 */
   const PB_DECISION_RE = /(哪个|哪款|哪些|谁)[^。？?]{0,14}(更好|更值得|更赚|卖得.?更?好|表现.?更?好|更划算|更强|更优)|多卖哪|主推哪|优先[^。？?]{0,4}哪|该(推|卖|押)哪|综合(考虑|来看|评估|判断|权衡)/;
+  const PB_STOCK_RE = /(清库存|退市|库存风险|压货|积压|周转最差|库存最差|库存.{0,4}(健康|风险)|滞销|呆滞)/;
   const PB_TREND_RE = /(未来|接下来|后面|下半年|明年|潜力|前景|后劲|会不会|能不能|有没有可能)[^。？?]{0,14}(卖|增长|涨|好|多|爆|放量|机会)|(哪个|哪些|谁)[^。？?]{0,10}(潜力|前景|后劲)/;
   function analysisPlaybook(question) {
     const q = String(question || '');
     if (PB_DECISION_RE.test(q)) {
       return {
         kind: '产品对比决策',
-        plan: '本题是产品对比/决策题，按剧本拆任务：① report 专家(id=report)：report({groupDim:"product"}) 一把拿全产品的 累计SO/去年同期/同比/库存/DOS，再 query({stackDim:"product",metric:"sellOut",gran:"month",近6个月}) 看逐月动量；② 财经专家(id=finance)：financeProductBoard({fromM:1,toM:当前月,lv1:[产品线]}) **不要带 lv3**（系列名容易猜错返回空），在返回的 LV4 产品行里挑出目标产品的收入/销毛额/销毛率/NSIP；财经粒度到不了单品就按系列/产品线，并明说；③ 可选 路标专家(id=roadmap)：上市时间/生命周期阶段。至少要有 ① 和 ②。',
-        text: '本题是产品对比/决策题。取数清单（缺哪项就把那项标「数据未包含」，其余照比）：累计SO、同比、近6个月逐月SO(判断动量)、渠道库存与DOS、收入/销毛额/销毛率/NSIP（financeProductBoard 不带 lv3 取全表后按 LV4 产品行挑，别猜系列名）、上市时间。探索性调用（meta/dataCatalog/options）最多 2 次，然后直接取正题的数。每个产品逐项列出实际值；**必须给出结论**（多卖哪个/谁更好）并说明依据与风险，不许以「无法判断/无法回答」整体推脱。不得编造未来的具体数字。',
+        plan: '本题是产品对比/决策题，按剧本拆任务：① report 专家(id=report)：**先调 compareItems({dim:"product",names:[两款产品]})**，一次拿到销量/同比/DOS(红绿灯)/周走势/贡献量/收入/销毛率/NSIP 与逐指标领先方，不要自己算；② 财经专家(id=finance)：financeProductBoard({fromM:1,toM:当前月,lv1:[产品线]}) **不要带 lv3**（系列名容易猜错返回空），在返回的 LV4 产品行里挑出目标产品的收入/销毛额/销毛率/NSIP；财经粒度到不了单品就按系列/产品线，并明说；③ 可选 路标专家(id=roadmap)：上市时间/生命周期阶段。至少要有 ① 和 ②。',
+        text: '本题是产品对比/决策题。**第一步必调 compareItems({dim:"product",names:[…]})**（代码算好的并排对比，含财经产品级与逐指标领先方），所有数字与「谁领先/差多少」直接引用工具返回，禁止自己再算同比/差值/倍数。取数清单（缺哪项就把那项标「数据未包含」，其余照比）：累计SO、同比、近6个月逐月SO(判断动量)、渠道库存与DOS、收入/销毛额/销毛率/NSIP（financeProductBoard 不带 lv3 取全表后按 LV4 产品行挑，别猜系列名）、上市时间。探索性调用（meta/dataCatalog/options）最多 2 次，然后直接取正题的数。每个产品逐项列出实际值；**必须给出结论**（多卖哪个/谁更好）并说明依据与风险，不许以「无法判断/无法回答」整体推脱。不得编造未来的具体数字。',
         synth: '最终回答必须是：①一句话结论（明确说多卖/主推哪个）；②对比表（行=产品，列=累计SO/同比/近3个月环比趋势/收入/销毛率/NSIP/渠道DOS/上市阶段，缺项写「数据未包含」）；③依据（按 销量规模、增速动量、单台收益(NSIP/销毛率)、库存健康 四个维度各一句）；④风险与前提。禁止只列数不下结论，禁止以「无法判断」收尾。',
+      };
+    }
+    if (PB_STOCK_RE.test(q)) {
+      return {
+        kind: '库存风险/清库存',
+        plan: '本题是库存风险/清库存判断，按剧本拆任务：① report 专家(id=report)：**先调 healthCheck({dim:"product"})**（按 DOS 降序 + 红绿灯 + 下滑/去库存/压货/走弱清单，全是代码算好的）；② 可选 路标专家(id=roadmap)：退市(salesEnd)/EOM 计划。只派一个 report 专家也够，别派没有销量工具的专家单独作答。',
+        text: '本题是库存风险/清库存判断。**第一步必调 healthCheck**，风险排序、红绿灯、清单直接引用其返回。判据顺序：DOS 从高到低（渠道 <90 绿/90-120 黄/>120 红；全流程 <120/120-150/>150）→ 周销是否持续萎缩（weekly）→ SO 同比是否为负 → SI 同比是否远低于 SO（渠道在去库存）。**必须点名**风险最大/最该清的产品并给 DOS 数值；一定要用 report 的 dos（近4周口径），不要用单月 DOS。',
+        synth: '最终回答：①一句话点名风险最大/最该清库存的产品（附 DOS 与红绿灯档位）；②按 DOS 降序的产品表（累计SO/同比/DOS/全流程DOS/近期周销走势）；③每个高风险产品一句原因；④建议动作（降价/调拨/停止发货/退市评估）。',
       };
     }
     if (PB_TREND_RE.test(q)) {
       return {
         kind: '潜力/趋势判断',
-        plan: '本题问「未来谁能卖得更多」，是基于当前动量的定性判断，按剧本拆任务：① report 专家(id=report)：report({groupDim:"product"}) 拿全产品 累计SO/同比/DOS，再 query({stackDim:"product",metric:"sellOut",gran:"month",近6个月}) 看逐月动量；② 路标专家(id=roadmap)：各产品上市时间(shipLate)/退市(salesEnd)判断生命周期阶段。绝不能只派路标/数据源这类没有销量工具的专家单独作答。',
-        text: '本题问的是「未来谁能卖得更多」——这是基于当前动量的**定性判断**，不是预测数字：允许并且必须给出排序/判断，依据 = 同比增速、近3个月环比是否连续上行、DOS 是否健康、是否处于上市放量期(上市后前几个月)、是否临近退市；禁止给出任何具体的未来销量数字（如「预计明年 X 台」）。取数顺序：先 report({groupDim:"product"}) 一把拿全产品，再 query 逐月，不要在 meta/options 上打转。',
+        plan: '本题问「未来谁能卖得更多」，是基于当前动量的定性判断，按剧本拆任务：① report 专家(id=report)：**先调 rankItems({dim:"product",by:"yoy",minCum:1000}) 与 healthCheck({dim:"product"})**（代码算好的同比排名、周走势走强/走弱、上市阶段、DOS 红绿灯），不要自己算增速；② 路标专家(id=roadmap)：各产品上市时间(shipLate)/退市(salesEnd)判断生命周期阶段。绝不能只派路标/数据源这类没有销量工具的专家单独作答。',
+        text: '本题问的是「未来谁能卖得更多」——这是基于当前动量的**定性判断**，不是预测数字：允许并且必须给出排序/判断，依据 = 同比增速、近3个月环比是否连续上行、DOS 是否健康、是否处于上市放量期(上市后前几个月)、是否临近退市；禁止给出任何具体的未来销量数字（如「预计明年 X 台」）。取数顺序：**先 rankItems(by:"yoy") + healthCheck**（同比/周走势/上市阶段/红绿灯全是代码算好的，直接引用），不要自己重算增速，不要在 meta/options 上打转。',
         synth: '最终回答必须是：①结论：按潜力排序点名前 2~3 个产品，并说明这是基于当前动量的判断；②依据表（行=产品，列=累计SO/同比/近3个月逐月SO与环比/DOS/上市阶段）；③每个上榜产品一句「为什么」；④风险（数据截止、报量延迟、上市早期基数小）。禁止出现具体的未来销量数字，禁止以「无法预测」收尾。',
       };
     }
     return null;
+  }
+
+  function _AC() {
+    if (typeof window !== 'undefined' && window.AnalyticsCore) return window.AnalyticsCore;
+    try { return require('./analytics-core.js'); } catch (e) { return null; }
+  }
+  function _CC() {
+    if (typeof window !== 'undefined' && window.ConclusionCheck) return window.ConclusionCheck;
+    try { return require('./conclusion-check.js'); } catch (e) { return null; }
   }
 
   async function orchestrate(question, currentBoard, deps, opt) {
@@ -996,6 +1030,7 @@
     const budget = { left: BUDGET.maxToolCallsTotal };
     // 记录本轮全部工具返回原文——溯源门禁的比对池
     const toolTrace = [];
+    const toolLog = [];                     // [{n, out}]：结论核对器按工具名找排名结果
     const guards = [];
     /* 今天日期恒注入(2026-09-01)：模型不知道今天几号，把「今年」猜成数据里的旧年份(实测把今年当 2025)。 */
     try {
@@ -1082,6 +1117,7 @@
           if (empty) out.hint = '结果为空：很可能 filters 的维度取值不存在（如把产品名当型号、中英文/大小写不符）。请用 searchDim({q:名称}) 跨全维度定位真实维度与精确写法后重查；确认取值正确仍为空可用 rawRows 下钻确认是否真无数据。';
         }
         try { toolTrace.push(JSON.stringify(out)); } catch (e) {}
+        try { toolLog.push({ n: n, out: out }); } catch (e) {}
         return out;
       },
     });
@@ -1093,6 +1129,11 @@
          只派了产业专家——它手里没有财经工具，只能答「数据未包含」。硬命中的领域词（收入/NSIP/销毛…→财经，
          上市/路标→路标）如果规划里没有对应专家，代码补一个任务，子问题就用补全后的独立问题。 */
       const MUST = { finance: /收入|销毛|毛利|NSIP|贡献利润|利润|单台净售价|净售价/, roadmap: /上市时间|路标|生命周期|退市|首销/ };
+      const DATA_AGENTS = ['report', 'psi', 'inventory', 'weekly', 'finance'];
+      const DATA_Q = /销量|卖|SO|SI|库存|DOS|同比|增长|下滑|走势|趋势|主推|组合|哪个产品|哪些产品|哪个国家|贡献|排序|排名|表现/i;
+      if (DATA_Q.test(question) && !tasks.some(t => DATA_AGENTS.indexOf(t.agentId) >= 0) && tasks.length < 4) {
+        tasks.push({ agentId: 'report', agent: AGENTS.report, boardId: currentBoard, subQuestion: question, label: '取数' });
+      }
       Object.keys(MUST).forEach(id => {
         if (!AGENTS[id] || !MUST[id].test(question)) return;
         if (tasks.some(t => t.agentId === id) || tasks.length >= 4) return;
@@ -1130,6 +1171,160 @@
       guards.push('本题指的是界面当前范围：取数必须带上界面筛选 ' + JSON.stringify(boardFilters) + '。');
     }
     tasks.forEach(t => { t.mode = mode; t.guards = guards; t.ignoreBoardFilters = ignoreBoardFilters; if (playbook) t.maxRounds = Math.max(BUDGET.maxToolRoundsPerAgent, 8); });
+    /* 代码预排名（2026-09-11 用户：「收回代码，100% 数据准确性」）：问「谁最高/谁第一/哪条更快」这类单选题，
+       不等模型自己挑工具——代码先按问题意图算好 rankItems（维度：产品/产品线/系列/国家…；问题点名了别的维度对象就当筛选），
+       结果原文塞给每个专家，并进 toolLog 供结论闸核对。模型的自由只剩「怎么解释」，「谁第一」由代码说了算。 */
+    /* 意图/角色识别一律先看用户原话（规划员的改写会挪动「A 拿到 X」的位置关系，v-composite #36 把本品认成了对比品）；原话没实体才退回改写后的问题 */
+    const qIntent = (String(origQuestion || '').trim() && /[A-Za-z\u4e00-\u9fa5]/.test(String(origQuestion))) ? String(origQuestion) : question;
+    let preRank = null;
+    try {
+      const CC = _CC();
+      const dosQ = CC && CC.outlookIntent && CC.outlookIntent(qIntent) && CC.outlookParams(qIntent).dosTarget != null;   // DOS 目标题交给代码前瞻，天数排名会和「需减台数」打架
+      const planQ = CC && CC.outlookIntent && CC.outlookIntent(qIntent) && /(主推|组合|冲量|规划|策略|保留|砍掉|清谁|推谁|留哪|资源)/.test(qIntent);   // 规划题交给代码前瞻（候选/剔除清单），不做单指标排名
+      const it = (dosQ || planQ) ? null : (CC && CC.intentOf(qIntent) || CC && CC.intentOf(question));
+      if (it && typeof deps.runTool === 'function') {
+        const dim = CC.dimOf(qIntent);
+        const ents = await scanEntities(qIntent + ' ' + question, deps);
+        const filters = {};
+        Object.keys(ents || {}).forEach(d => { if (d !== dim && ents[d] && ents[d].length) filters[d] = ents[d]; });
+        // 「Slate 11」会同时命中 family=Slate：细粒度在手就丢粗粒度，筛选只留最细的一层；问题点了产品名时，其上级 family/series/line 都是产品名带出来的，不当筛选
+        if (ents && ents.product && ents.product.length) { delete filters.family; delete filters.series; delete filters.line; }
+        if (filters.product || filters.model) { delete filters.family; delete filters.series; delete filters.line; }
+        else if (filters.series) { delete filters.family; delete filters.line; }
+        else if (filters.family) { delete filters.line; }
+        const args = { dim: dim, by: it.by, order: it.order, limit: 20 };
+        if (Object.keys(filters).length) args.filters = filters;
+        const out = await deps.runTool('rankItems', args);
+        if (out && !out.error && Array.isArray(out.items) && out.items.length) {
+          preRank = out;
+          const brief = out.items.slice(0, 12).map(i => ({ 名次: i.名次, name: i.name, 值: i.值, 距第1名: i.距第1名, 标记: i.标记 }));
+          const msg = '【代码预排名·结论必须以此为准】rankItems(' + JSON.stringify(args) + ') → 指标「' + out.by + '」' + out.order + '（单位 ' + (out.unit || '') + '）：' + String.fromCharCode(10) + JSON.stringify(brief) + String.fromCharCode(10)
+            + '第 1 名是「' + out.items[0].name + '」（' + out.items[0].值 + ' ' + (out.unit || '') + '）。结论句必须点它，并直接引用这里的「' + out.by + '」数值；差多少直接引用 距第1名/距上一名 字段，不要自己减、不要再用 query 逐月自算同比（同期截取口径会错）；财经收入增速等其它口径只能作补充，不得替代。';
+          tasks.forEach(t => { t.preRank = msg; });
+          if (deps.onProgress) deps.onProgress({ type: 'prerank', dim: dim, by: out.by, order: out.order, top: out.items[0].name, value: out.items[0].值, unit: out.unit || '', n: out.items.length, filters: filters });
+        }
+      }
+    } catch (e) { preRank = null; }
+    /* 代码预诊断：集合题（哪些在走弱 / 去库存 / 压货 / 红灯…）同样不等模型挑工具——代码先跑一次不带筛选的 healthCheck，
+       只把问题要的那几张清单原文塞给专家。v6 #16 产业周报专家自作主张只看音频线、#27 PSI 专家拿逐月数自己算同比后判「没有」——
+       两题的数据都在 healthCheck 里，代码给了，模型就没有算错的机会。 */
+    let preDiag = null;
+    try {
+      const CC = _CC(); const keys = CC && CC.healthIntent && (CC.healthIntent(qIntent) || CC.healthIntent(question));
+      if (keys && typeof deps.runTool === 'function') {
+        const dim = CC.dimOf(qIntent);
+        const ents = await scanEntities(qIntent + ' ' + question, deps);
+        const filters = {};
+        Object.keys(ents || {}).forEach(d => { if (d !== dim && ents[d] && ents[d].length) filters[d] = ents[d]; });
+        if (ents && ents.product && ents.product.length) { delete filters.family; delete filters.series; delete filters.line; }
+        if (filters.product || filters.model) { delete filters.family; delete filters.series; delete filters.line; }
+        else if (filters.series) { delete filters.family; delete filters.line; }
+        else if (filters.family) { delete filters.line; }
+        const args = { dim: dim };
+        if (Object.keys(filters).length) args.filters = filters;
+        const out = await deps.runTool('healthCheck', args);
+        if (out && !out.error) {
+          const pick = {};
+          keys.forEach(k => { if (Array.isArray(out[k])) pick[k] = out[k].slice(0, 20); });
+          if (out['报量延迟提示']) pick['报量延迟提示'] = out['报量延迟提示'];
+          if (Object.keys(pick).length) {
+            preDiag = pick;
+            const scope = Object.keys(filters).length ? ('范围：' + JSON.stringify(filters)) : '范围：全部（问题没限定产业/国家，不要自己加产品线筛选）';
+            const msg = '【代码预诊断·清单以此为准】healthCheck(' + JSON.stringify(args) + ')，' + scope + '，口径：' + String(out['口径'] || '') + String.fromCharCode(10)
+              + JSON.stringify(pick) + String.fromCharCode(10)
+              + '清单是代码按口径算好的：问「哪些」就照单点名（一个不多、一个不少），空清单就明说「没有」；可再取数解释原因，但不得增删名单。';
+            tasks.forEach(t => { t.preDiag = msg; });
+            if (deps.onProgress) deps.onProgress({ type: 'prediag', dim: dim, keys: Object.keys(pick), counts: Object.keys(pick).map(k => k + ' ' + (Array.isArray(pick[k]) ? pick[k].length : 1)), filters: filters });
+          }
+        }
+      }
+    } catch (e) { preDiag = null; }
+    /* 代码预估 + 代码预对比（2026-09-12 用户：「A 对比 B 表现怎么样，拿到 X 国卖有没有机会、参考 C 的历史能卖多少」——要至少 50 道这种题 100% 对，不能是编的数）：
+       预估数字（份额法/规模法/类比法区间与中位）由 opportunity 算，对比表由 compareItems 算，两者原文塞给专家；结论闸再核正文有没有引用。 */
+    let preEst = null, preCmp = null; let estTargets = [];
+    try {
+      const CC = _CC(); const ACm = _AC();
+      const qE = (CC && CC.estimateIntent(qIntent)) ? qIntent : question;
+      const CMP_RE = /(对比|比较|相比|比一下|比比|比一比|vs|versus|谁更|谁强|谁卖得|哪个更|哪个卖得|跟.{1,20}比)/i;
+      if (CC && ACm && typeof deps.runTool === 'function' && (CC.estimateIntent(qE) || CMP_RE.test(qE))) {
+        const ents = await scanEntities(qE + ' ' + question, deps);
+        const prods = (ents && ents.product) || [];
+        let ctyKeys = []; try { const oc = deps.optionsDirect ? await deps.optionsDirect('country') : null; ctyKeys = Array.isArray(oc) ? oc : ((oc && (oc['取值'] || (Array.isArray(oc.values) ? oc.values : null) || oc.list)) || []); } catch (e) { ctyKeys = []; }
+        const ctys = ACm.countriesIn(qE, ctyKeys);
+        if (prods.length >= 2 && (CMP_RE.test(qE) || /(哪个|谁|该|综合看|综合考虑|多推)/.test(qE))) {   // 点了两个产品又在问「哪个/谁/该多推」= 对比题
+          const cmp = await deps.runTool('compareItems', { dim: 'product', names: prods.slice(0, 5) });
+          if (cmp && !cmp.error && Array.isArray(cmp.items)) {
+            preCmp = cmp;
+            const KEEP = ['name', '累计SO', '去年同期SO', 'SO同比', '累计SI', 'SI同比', '渠道库存', '渠道DOS', '渠道DOS灯', '周走势', '周变化', '贡献量', '收入', '收入同比', '销毛额', '销毛率', 'NSIP', '上市阶段', '标记'];
+            const slim = cmp.items.map(i => { const r = {}; KEEP.forEach(k => { if (i[k] != null) r[k] = i[k]; }); return r; });
+            const msg = '【代码预对比·数字以此为准】compareItems(' + JSON.stringify(prods.slice(0, 5)) + ')，' + String(cmp['口径'] || '') + String.fromCharCode(10) + JSON.stringify({ items: slim, 对比: cmp['对比'] }) + String.fromCharCode(10) + '对比结论按这张表说：谁领先、差多少直接引用「对比」里的领先/差值/倍数字段，不要自己减。';
+            tasks.forEach(t => { t.preCmp = msg; });
+            if (deps.onProgress) deps.onProgress({ type: 'precmp', names: prods.slice(0, 5) });
+          }
+        }
+        if (CC.estimateIntent(qE) && prods.length) {
+          const roles = CC.pickEstimateRoles(qE, prods, ctys);
+          if (roles.product) {
+            const targets = (roles.countries && roles.countries.length) ? roles.countries.slice(0, 3) : [null];
+            estTargets = targets.filter(Boolean);
+            const outs = [];
+            for (const X of targets) {
+              const args = { product: roles.product }; if (X) args.country = X; if (roles.analogs.length) args.analogs = roles.analogs;
+              const out = await deps.runTool('opportunity', args);
+              if (out && !out.error && Array.isArray(out.估计) && out.估计.length) outs.push({ args, out });
+            }
+            if (outs.length) {
+              preEst = outs;
+              const blocks = outs.map(({ args, out }) => {
+                const slimOut = { product: out.product, line: out.line, series: out.series, 上市阶段: out.上市阶段, 目标国家: out.目标国家, 产品现状: out.产品现状, 类比品: out.类比品, 未采用的类比品: out.未采用的类比品, 估计: args.country ? out.估计 : out.估计.slice(0, 6), 口径: out.口径, 假设与风险: out.假设与风险 };
+                const brief = (args.country ? out.估计.slice(0, 1) : out.估计.slice(0, 3)).map(e => e.国家 + '：' + (e.已在售 ? '已在售，实际累计 ' + e.实际累计SO + ' 台，' : '未在售，') + '估计区间 ' + e.区间低 + '–' + e.区间高 + ' 台（中位 ' + e.中位 + '；份额法 ' + e.份额法 + '、规模法 ' + e.规模法 + (e.类比法 || []).filter(x => x.估计 != null).map(x => '、类比 ' + x.类比品 + ' ' + x.估计).join('') + '）' + (e.空间 != null ? '，空间 ' + e.空间 : '') + (e.周销参考 != null ? '，周销参考 ' + e.周销参考 + ' 台/周，进入后头 12 周参考 ' + e.未来12周参考 + ' 台（周销参考×12；这才是「头 12 周能卖多少」的数，年初至今口径的区间/中位不是）' : '') + (e.市场环境 ? '；目标国市场环境：国家总SO ' + e.市场环境.国家总SO + '、' + (out.line || '产品线') + ' SO ' + e.市场环境.产品线SO + '（同比 ' + e.市场环境.产品线SO同比 + '%）、' + (out.line || '产品线') + '渠道 DOS ' + e.市场环境.产品线渠道DOS + ' 天（' + e.市场环境.产品线DOS灯 + '灯）' : '')).join('；');
+                return '摘要：' + out.product + '（' + out.上市阶段 + '）' + brief + '。风险：' + ((out.假设与风险 || []).join('；') || '无') + String.fromCharCode(10) + 'opportunity(' + JSON.stringify(args) + ') → ' + JSON.stringify(slimOut);
+              });
+              const msg = '【代码预估·数字以此为准】' + String.fromCharCode(10) + blocks.join(String.fromCharCode(10)) + String.fromCharCode(10) + '预估结论只能引用上面的区间/中位/各法估计/实际累计/空间/周销参考，原样照抄单位「台」，不得自行估算或换算；已在售的国家先说实际再说空间；排名模式第 1 名就是「估计」数组第一个国家。口径与假设要一并告诉用户。';
+              tasks.forEach(t => { t.preEst = msg; });
+              if (deps.onProgress) deps.onProgress({ type: 'preest', product: roles.product, countries: targets.filter(Boolean), analogs: roles.analogs, top: outs[0].out.估计[0] ? { 国家: outs[0].out.估计[0].国家, 中位: outs[0].out.估计[0].中位, 区间低: outs[0].out.估计[0].区间低, 区间高: outs[0].out.估计[0].区间高 } : null });
+            }
+          }
+        }
+      }
+    } catch (e) { preEst = null; }
+    /* 代码前瞻（2026-09-12 用户：「策略性、未来判断类的题也要 100% 对」）：未来 N 周预测 / 全年预测 / 断货风险 / DOS 目标 / 主推候选
+       全由 outlook 算好塞给专家；模型只解释与建议，不自己外推。 */
+    let preOut = null;
+    try {
+      const CC = _CC(); const ACm = _AC();
+      if (CC && ACm && CC.outlookIntent && CC.outlookIntent(qIntent) && typeof deps.runTool === 'function') {
+        let dim = CC.dimOf(qIntent);
+        const ents = await scanEntities(qIntent + ' ' + question, deps);
+        let ctyKeys = []; try { const oc = deps.optionsDirect ? await deps.optionsDirect('country') : null; ctyKeys = Array.isArray(oc) ? oc : ((oc && (oc['取值'] || (Array.isArray(oc.values) ? oc.values : null) || oc.list)) || []); } catch (e) { ctyKeys = []; }
+        const ctys0 = ACm.countriesIn(qIntent, ctyKeys);
+        const ctys = ctys0.filter(x => estTargets.indexOf(x) < 0);   // 预估的目标国不是前瞻的筛选（「推到 X…本品本身未来 12 周」）
+        const hasProdNoun = /产品|哪款|谁|型号|系列|机型/.test(qIntent);
+        if (dim === 'product' && !hasProdNoun && !(ents && ents.product && ents.product.length)) { if (ctys.length) dim = 'country'; else if (ents && ents.line && ents.line.length) dim = 'line'; }   // 「墨西哥全年预计多少」问的是国家本身
+        const filters = {};
+        Object.keys(ents || {}).forEach(d => { if (d !== dim && ents[d] && ents[d].length) filters[d] = ents[d]; });
+        if (ents && ents.product && ents.product.length) { delete filters.family; delete filters.series; delete filters.line; }
+        if (filters.product || filters.model) { delete filters.family; delete filters.series; delete filters.line; }
+        if (dim !== 'country') { if (ctys.length) filters.country = ctys; else delete filters.country; }
+        const prm = CC.outlookParams(qIntent);
+        const args = { dim: dim, weeks: prm.weeks };
+        if (prm.dosTarget != null) args.dosTarget = prm.dosTarget;
+        if (Object.keys(filters).length) args.filters = filters;
+        const out = await deps.runTool('outlook', args);
+        if (out && !out.error && Array.isArray(out.items) && out.items.length) {
+          preOut = out;
+          const key = '未来' + out.预测周数 + '周预测';
+          const focus = (ents && ents[dim]) || [];
+          const top = out[key + '排名'].slice(0, 5).map(i => i.名次 + '. ' + i.name + ' 中性 ' + i.中性 + '（保守 ' + i.保守 + '、乐观 ' + i.乐观 + '，' + i.周走势 + '）').join('；');
+          const focusTxt = focus.map(n => { const i = out.items.find(x => x.name === n); if (!i) return ''; return n + '：近4周周均 ' + i.近4周周均 + '，' + key + ' 中性 ' + i[key].中性 + '（保守 ' + i[key].保守 + '、乐观 ' + i[key].乐观 + '），全年预测 ' + i.全年预测_中性 + '，渠道库存 ' + i.渠道库存 + ' 可支撑 ' + i.可支撑周数 + ' 周（' + i.断货风险 + '）' + (i.DOS目标 ? '，DOS 目标 ' + i.DOS目标.目标DOS + ' 天：当前 ' + i.DOS目标.当前DOS + ' 天，需减库存 ' + i.DOS目标.需减库存 + ' 台，停止进货消化 ' + i.DOS目标.停止进货消化周数 + ' 周' : '') + (i.主推候选 ? '，主推候选' + (i.提示 && i.提示.length ? '（提示：' + i.提示.join('、') + '）' : '') : '，剔除（' + i.剔除原因.join('、') + '）'); }).filter(Boolean).join('；');
+          const brief = '数据截至 ' + out.数据截至 + '，到年底剩余 ' + out.到年底剩余周数 + ' 周。' + key + '排名前 5：' + top + '。全年预测前 3：' + out.全年预测排名.slice(0, 3).map(i => i.name + ' ' + i.全年预测_中性).join('、') + '。断货风险清单：' + (out.断货风险清单.length ? out.断货风险清单.join('、') : '无') + '；库存可支撑周数最少：' + out.库存可支撑周数_升序.slice(0, 3).map(i => i.name + ' ' + i.可支撑周数 + ' 周').join('、') + '。主推候选（按预测量）：' + (out.主推候选_按预测量.length ? out.主推候选_按预测量.map(i => i.name + ' ' + i.中性).join('、') : '无') + '；剔除：' + (out.剔除清单.length ? out.剔除清单.map(i => i.name + '（' + i.原因.join('、') + '）').join('、') : '无') + (out.DOS目标_需减库存降序 ? '。DOS 目标 ' + args.dosTarget + ' 天需减库存：' + out.DOS目标_需减库存降序.slice(0, 5).map(i => i.name + ' 需减 ' + i.需减库存 + ' 台/' + i.停止进货消化周数 + ' 周').join('、') : '') + (focusTxt ? '。点名对象：' + focusTxt : '');
+          const slim = { dim: out.dim, 数据截至: out.数据截至, 预测周数: out.预测周数, 到年底剩余周数: out.到年底剩余周数, [key + '排名']: out[key + '排名'].slice(0, 12), 全年预测排名: out.全年预测排名.slice(0, 12), 库存可支撑周数_升序: out.库存可支撑周数_升序.slice(0, 12), 断货风险清单: out.断货风险清单, 主推候选_按预测量: out.主推候选_按预测量, 剔除清单: out.剔除清单, DOS目标_需减库存降序: out.DOS目标_需减库存降序 ? out.DOS目标_需减库存降序.slice(0, 12) : null, 口径: out.口径, 假设与风险: out.假设与风险 };
+          const msg = '【代码前瞻·数字以此为准】摘要：' + brief + String.fromCharCode(10) + 'outlook(' + JSON.stringify(args) + ') → ' + JSON.stringify(slim) + String.fromCharCode(10) + '前瞻结论只能引用上面的预测/全年/可支撑周数/需减库存/候选与剔除清单，不得自己外推或换算；主推/砍掉只能在候选/剔除清单里选并引用原因；口径与假设一并告诉用户。题里的「清/清库存/砍/停」都是业务动作（去库存、停止投入），不是删数据，不要提「只读/无法修改」。';
+          tasks.forEach(t => { t.preOut = msg; });
+          if (deps.onProgress) deps.onProgress({ type: 'preoutlook', dim: dim, weeks: out.预测周数, top: out[key + '排名'][0] ? { name: out[key + '排名'][0].name, 中性: out[key + '排名'][0].中性 } : null, dosTarget: args.dosTarget || null, filters: filters });
+        }
+      }
+    } catch (e) { preOut = null; }
     // 门禁题面(2026-09-01 场景F验尸): forceTasks 的材料在子任务里,不拼进题面会被溯源门禁全拦,专家被逼答「无法回答」
     // 上传文档/材料里的数字是合法出处（用户给的题面数据），必须进溯源语料，否则会被门禁当成「编造」抹掉
     // （2026-09-04 实测：docx 里"2026年11月18日"的 11、18 被标成"(未取到)"）。provCorpus 显式携带文档正文。
@@ -1203,6 +1398,30 @@
       } catch (e) { }
     }
 
+    /* 结论核对闸（2026-09-11 用户：「100% 的数据准确性」）：数字有出处只是第一道，
+       「谁第一/谁最高/谁风险最大」还得和代码排名一致。不一致 → 让模型按代码排名改一稿；
+       改完仍不一致或没法改 → 把代码排名钉在答案最前面，用户先看到对的。 */
+    const conclusionGate = async (ans, verified) => {
+      const CC = _CC(); if (!CC) return { answer: ans, verified: verified };
+      let cc; try { cc = CC.check({ question: qIntent, answer: ans, toolLog: toolLog }); if (cc && cc.ok && cc.skipped && qIntent !== question) cc = CC.check({ question: question, answer: ans, toolLog: toolLog }); } catch (e) { return { answer: ans, verified: verified }; }
+      if (cc.ok) { if (verified) verified.conclusion = { ok: true, checked: !cc.skipped, expected: cc.expected || null }; return { answer: ans, verified: verified }; }
+      if (deps.onProgress) deps.onProgress({ type: 'verify', ok: false, line: cc.line });
+      let fixed = null;
+      if (typeof deps.chat === 'function') {
+        try {
+          const r = await deps.chat({ system: '你是综合分析师。只能用下面给出的数字，不得引入新数字、不得自己换算。', messages: [{ role: 'user', content: '用户问题：' + question + String.fromCharCode(10) + String.fromCharCode(10) + '你上一稿：' + String.fromCharCode(10) + String(ans).slice(0, 3000) + String.fromCharCode(10) + String.fromCharCode(10) + cc.line + ((tasks[0] && (tasks[0].preEst || tasks[0].preCmp || tasks[0].preRank || tasks[0].preDiag || tasks[0].preOut)) ? (String.fromCharCode(10) + '【代码已算好的本题数据】' + String.fromCharCode(10) + [tasks[0].preRank, tasks[0].preDiag, tasks[0].preCmp, tasks[0].preEst, tasks[0].preOut].filter(Boolean).join(String.fromCharCode(10)).slice(0, 8000)) : '') + String.fromCharCode(10) + (cc.kind === 'value' ? ('请修改：结论第一句点明 ' + cc.expected + ' 并直接引用上面代码口径的数值（原样照抄，不换算；预估题写出区间与中位，已在售先写实际累计），其余内容保持，直接输出完整回答，不要解释修改过程。') : ('请按代码排名改正结论：第一句就点第 1 名 ' + cc.expected + '，其余数字保持不变，直接输出完整回答，不要解释修改过程。')) }], tools: [], maxTokens: BUDGET.synthTokens });
+          const t = r && !r.error ? splitThink(r.content || '').answer : '';
+          if (t && !isProcessOnly(t)) {
+            let cc2 = CC.check({ question: qIntent, answer: t, toolLog: toolLog }); if (cc2 && cc2.ok && cc2.skipped && qIntent !== question) cc2 = CC.check({ question: question, answer: t, toolLog: toolLog });
+            if (cc2.ok) { const g = enforceProvenance(t, toolTrace, provQ, { placeholder: '(未取到)' }); fixed = g.answer || t; }
+          }
+        } catch (e) { fixed = null; }
+      }
+      if (fixed) { if (deps.onProgress) deps.onProgress({ type: 'verify', ok: true, fixed: true, expected: cc.expected }); return { answer: fixed, verified: Object.assign({}, verified || {}, { conclusion: { ok: true, checked: true, fixed: true, expected: cc.expected, was: cc.named } }) }; }
+      if (deps.onProgress) deps.onProgress({ type: 'verify', ok: false, pinned: true, expected: cc.expected, was: cc.named });
+      return { answer: cc.line + String.fromCharCode(10) + String.fromCharCode(10) + ans, verified: Object.assign({}, verified || {}, { ok: false, conclusion: { ok: false, expected: cc.expected, was: cc.named, line: cc.line } }) };
+    };
+
     // 单专家 → 直接返回它的结论，省掉综合那次 30B 调用（本地模型上这一次就是几十秒~几分钟）
     if (results.length === 1 && !results[0].error) {
       const only = results[0];
@@ -1222,7 +1441,8 @@
         if (rw) { text = rw; det = enforceProvenance(text, toolTrace, provQ, { detectOnly: true }); }
       }
       const g1 = det.blocked.length ? enforceProvenance(text, toolTrace, provQ, { placeholder: '(未取到)' }) : { answer: text, blocked: [] };
-      return { answer: g1.answer || honestEmpty(results, toolTrace), results, verified: { ok: g1.blocked.length === 0, unsupported: g1.blocked }, singleAgent: true, provenanceBlocked: g1.blocked };
+      const cg1 = await conclusionGate(g1.answer || honestEmpty(results, toolTrace), { ok: g1.blocked.length === 0, unsupported: g1.blocked });
+      return { answer: cg1.answer, results, verified: cg1.verified, singleAgent: true, provenanceBlocked: g1.blocked };
     }
 
     if (deps.onProgress) deps.onProgress({ type: 'synth' });
@@ -1243,6 +1463,14 @@
       return { answer: gf.answer || '(综合失败)', results, verified: { ok: gf.blocked.length === 0, unsupported: gf.blocked }, synthError: (resp && resp.error) || '无响应', provenanceBlocked: gf.blocked };
     }
     let answer = splitThink(resp.content || '').answer;
+    /* 30 题实测 #6/#27：综合器（没有工具）也会交一句「I'll re-pull the data…」当答案，
+       下游门禁重写又拒收过程话，这句就原样出门了。综合层的过程话同样要揪：再来一次，仍是过程话就直接给各专家的结论。 */
+    if (isProcessOnly(answer)) {
+      let resp2 = null;
+      try { resp2 = await deps.chat({ system: '你是综合分析师。你没有工具、不能取数；只能用下面已给出的数字写最终结论。禁止输出「让我/我需要/I will/Let me」这类过程句。', messages: [{ role: 'user', content: sp + String.fromCharCode(10) + String.fromCharCode(10) + '上一稿只写了一句过程话。现在直接给最终结论：先一句话结论，再分点给关键数字（只用上面给的数）。' }], tools: [], maxTokens: BUDGET.synthTokens }); } catch (e) { resp2 = null; }
+      const a2 = resp2 && !resp2.error ? splitThink(resp2.content || '').answer : '';
+      answer = (a2 && !isProcessOnly(a2)) ? a2 : honestEmpty(results, toolTrace);
+    }
     let det2 = enforceProvenance(answer, toolTrace, provQ, { detectOnly: true });
     if (det2.blocked.length && deps.provRetry) {
       const rw2 = await provenanceRetry(question, answer, det2.blocked, deps, currentBoard, results);
@@ -1254,7 +1482,8 @@
       verified.ok = false;
       verified.unsupported = [...new Set([].concat(verified.unsupported || [], g2.blocked))].slice(0, 12);
     }
-    return { answer: g2.answer || honestEmpty(results, toolTrace), results, verified, provenanceBlocked: g2.blocked };
+    const cg2 = await conclusionGate(g2.answer || honestEmpty(results, toolTrace), verified);
+    return { answer: cg2.answer, results, verified: cg2.verified, provenanceBlocked: g2.blocked };
   }
 
   /* 空回复的诚实兜底（2026-09-10 追问实测偶发「(空回复)」）：用户看到四个字什么都不知道。
